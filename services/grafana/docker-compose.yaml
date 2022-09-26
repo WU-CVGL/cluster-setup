@@ -1,0 +1,27 @@
+version: '3'
+
+networks:
+  traefik_traefik:
+    external: true
+  traefik_monitor:
+    external: true
+
+services:
+  grafana:
+    image: grafana/grafana
+    container_name: grafana
+    restart: unless-stopped
+    user: "472:0"
+    environment:
+      - DS_PROMETHEUS=prometheus
+      - TZ=Asia/Shanghai
+    volumes:
+      - ./data:/var/lib/grafana
+      - ./provisioning:/etc/grafana/provisioning
+    networks:
+      - traefik_traefik
+      - traefik_monitor
+    labels:
+      traefik.enable: true
+      traefik.http.routers.grafana.rule: Host(`grafana.test.cvgl.lab`)
+      traefik.http.routers.grafana.entrypoints: web

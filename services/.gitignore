@@ -1,0 +1,5 @@
+xray/*/config/*.json
+*/log
+*/data
+*.env
+*.log

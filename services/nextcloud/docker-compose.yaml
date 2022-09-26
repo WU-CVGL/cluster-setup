@@ -1,0 +1,78 @@
+version: '3'
+
+# Declare networks at the high level to avoid confusion and to access those
+#   not initially started by this document.
+networks:
+  traefik_traefik:
+    external: true
+  # Internal facing network for Nextcloud Docker containers
+  nextcloud:
+    driver: bridge
+
+services:
+  db:
+    image: postgres:alpine
+    restart: always
+    networks:
+      - nextcloud
+    volumes:
+      - /srv/nfs/var/nextcloud/var/lib/postgresql/data:/var/lib/postgresql/data
+    env_file:
+      - db.env
+
+  redis:
+    image: redis:alpine
+    restart: always
+    networks:
+      - nextcloud
+
+  app:
+    image: nextcloud:fpm-alpine
+    restart: always
+    networks:
+      - nextcloud
+    expose:
+      - 9000
+    volumes:
+      - /srv/nfs/var/nextcloud/var/www/html:/var/www/html
+    environment:
+      - POSTGRES_HOST=db
+      - REDIS_HOST=redis
+    env_file:
+      - db.env
+      - nextcloud.env
+    depends_on:
+      - db
+      - redis
+
+  nginx:
+    image: nginx:alpine
+    restart: always
+    networks:
+      - traefik_traefik
+      - nextcloud
+    expose:
+      - 80
+    volumes:
+      - ./nginx.conf:/etc/nginx/nginx.conf:ro
+      - /srv/nfs/var/nextcloud/var/www/html:/var/www/html:ro
+    depends_on:
+      - app
+    labels:
+      traefik.enable: true
+      traefik.docker.network: traefik_traefik
+      traefik.http.routers.nextcloud.rule: Host(`pan.test.cvgl.lab`)
+      traefik.http.routers.nextcloud.entrypoints: web
+      traefik.http.services.nextcloud.loadbalancer.passHostHeader: true
+
+  cron:
+    image: nextcloud:fpm-alpine
+    restart: always
+    networks:
+      - traefik_traefik
+    volumes:
+      -  /srv/nfs/var/nextcloud/var/www/html:/var/www/html
+    entrypoint: /cron.sh
+    depends_on:
+      - db
+      - redis

@@ -1,0 +1,35 @@
+version: '3'
+
+networks:
+  traefik_traefik:
+    external: true
+  traefik_monitor:
+      external: true
+
+services:
+  xray-us-west:
+    image: teddysun/xray
+    container_name: xray-us-west
+    restart: unless-stopped
+    environment:
+      TZ: Asia/Shanghai
+    networks:
+      - traefik_monitor
+    ports:
+      - 1089:1089
+      - 8889:8889
+    volumes: 
+      - ./us-west/config:/etc/xray
+      - ./us-west/log:/var/log/xray
+    expose:
+      - 10085
+
+  xray-us-west-exporter:
+    image: wi1dcard/v2ray-exporter:master
+    container_name: xray-us-west-exporter
+    environment:
+      TZ: Asia/Shanghai
+    networks:
+      - traefik_monitor
+    restart: unless-stopped
+    command: 'v2ray-exporter --v2ray-endpoint "xray-us-west:10085" --listen ":9550"'
