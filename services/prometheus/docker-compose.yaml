@@ -1,7 +1,7 @@
 version: '3'
 
 networks:
-  traefik_monitor:
+  grafana_monitor:
     external: true
 
 services:
@@ -16,7 +16,7 @@ services:
       - ./data:/prometheus
       - ./config:/etc/prometheus
     networks:
-      - traefik_monitor
+      - grafana_monitor
     command:
         - '--config.file=/etc/prometheus/prometheus.yml'
         - '--web.enable-admin-api'

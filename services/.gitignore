@@ -1,5 +1,6 @@
 xray/*/config/*.json
 nginx/ssl/
+harbor/*
 */log
 */data
 *.env
