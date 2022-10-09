@@ -1,4 +1,5 @@
 xray/*/config/*.json
+nginx/ssl/
 */log
 */data
 *.env
