@@ -4,19 +4,19 @@
 
 ### NGINX web service
 - homepage
-    - `http://cvgl.lab`
+    - `https://cvgl.lab`
 - nextcloud
-    - `http://pan.cvgl.lab`
+    - `https://pan.cvgl.lab`
 - gpu
-    - `http://grafana.cvgl.lab`
+    - `https://grafana.cvgl.lab`
 - gitea
-    - `http://git.cvgl.lab`
+    - `https://git.cvgl.lab`
 - harbor
-    - `http://harbor.cvgl.lab`
+    - `https://harbor.cvgl.lab`
 - portainer
-    - `http://portainer.cvgl.lab`
+    - `https://portainer.cvgl.lab`
 - grafana
-    - `http://grafana.cvgl.lab`
+    - `https://grafana.cvgl.lab`
 
 ### inner monitor service
 
