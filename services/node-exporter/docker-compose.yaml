@@ -1,9 +1,5 @@
 version: '3'
 
-networks:
-  traefik_monitor:
-      external: true
-
 services:
   node-exporter:
     image: prom/node-exporter:latest
@@ -15,8 +11,8 @@ services:
       - /proc:/host/proc:ro
       - /sys:/host/sys:ro
       - /:/rootfs:ro
-    networks:
-      - traefik_monitor
+    ports:
+      - "9100:9100"
     command:
       - '--path.procfs=/host/proc'
       - '--path.rootfs=/rootfs'
