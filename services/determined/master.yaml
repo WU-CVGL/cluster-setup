@@ -11,7 +11,7 @@ resource_manager:
   type: agent
   scheduler:
     type: fair_share
-    fitting_policy: worst
+    fitting_policy: best
   default_cpu_resource_pool: 48c96t_512_3090
   default_gpu_resource_pool: 32c64t_256_3090
 

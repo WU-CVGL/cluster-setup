@@ -8,7 +8,7 @@
 - nextcloud
     - `https://pan.cvgl.lab`
 - gpu
-    - `https://grafana.cvgl.lab`
+    - `https://gpu.cvgl.lab`
 - gitea
     - `https://git.cvgl.lab`
 - harbor
