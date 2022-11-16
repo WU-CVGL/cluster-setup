@@ -28,6 +28,18 @@
 
 https://github.com/stefan0us/xray-traefik
 
+https://github.com/nginx/nginx
+
+https://github.com/determined-ai/determined
+
+https://github.com/nextcloud/server
+
+https://github.com/portainer/portainer
+
+https://github.com/go-gitea/gitea
+
+https://github.com/goharbor/harbor
+
 https://github.com/traefik/traefik
 
 https://github.com/XTLS/Xray-core
