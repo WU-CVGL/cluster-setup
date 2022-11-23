@@ -2,20 +2,20 @@
 
 ## Folder Structure
 
-- `<inbound server1>`
+- `<outbound server1>`
 
-    - config
+  - config
 
-        - `config.json`
+    - `config.json`
 
-    - log
+  - log
 
-- `<inbound server2>`
+- `<outbound server2>`
 
-    - config
+  - config
 
-        - `config.json`
+    - `config.json`
 
-    - log
+  - log
 
 - ...
