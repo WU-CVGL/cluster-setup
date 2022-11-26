@@ -26,7 +26,7 @@ links:
   category: cate-id-0
 
 - name: Cluster Tutorial
-  link: https://github.com/LINs-lab/cluster_tutorial
+  link: https://git.cvgl.lab/Cluster_User_Group/cluster-user-guide/wiki
   icon: github
   category: cate-id-1
 
