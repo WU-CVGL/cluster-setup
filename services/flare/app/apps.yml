@@ -1,0 +1,31 @@
+links:
+
+- name: GPU cluster
+  link: https://gpu.cvgl.lab
+  icon: expansionCard
+  desc: Determined AI
+
+- name: Harbor
+  link: https://harbor.cvgl.lab
+  icon: docker
+  desc: Container registry
+
+- name: Nextcloud
+  link: https://pan.cvgl.lab
+  icon: appleIcloud
+  dect: Personal storage & easy share
+
+- name: Gitea
+  link: https://git.cvgl.lab
+  icon: git
+  dect: Git with a cup of tea
+
+- name: Grafana
+  link: https://grafana.cvgl.lab
+  icon: monitorDashboard
+  desc: Statistics and visualization
+
+- name: Root Certificate
+  link: https://cvgl.lab/cvgl-lab.crt
+  icon: certificateOutline
+  desc: cvgl Lab's Root Certificate

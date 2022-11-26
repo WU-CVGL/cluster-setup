@@ -1,0 +1,19 @@
+Title: flare
+Footer: Powered by <a href="https://github.com/soulteary/docker-flare">Flare</a> with ❤️
+OpenAppNewTab: true
+OpenBookmarkNewTab: true
+ShowTitle: true
+Greetings: Welcome to the CVGL lab!
+ShowSearchComponent: true
+DisabledSearchAutoFocus: false
+ShowDateTime: true
+ShowApps: true
+ShowBookmarks: true
+HideSettingButton: false
+HideHelpButton: false
+Theme: blackboard
+ShowWeather: true
+Location: 浙江省杭州市
+EnableEncryptedLink: false
+IconMode: DEFAULT
+KeepLetterCase: false

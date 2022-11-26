@@ -1,0 +1,46 @@
+categories:
+- id: cate-id-0
+  title: 链接分类1
+- id: cate-id-1
+  title: 链接分类2
+- id: cate-id-2
+  title: 链接分类3
+- id: cate-id-3
+  title: 链接分类4
+
+links:
+
+- name: Google
+  link: https://google.com/
+  icon: google
+  category: cate-id-0
+
+- name: Google Scholar
+  link: https://scholar.google.com/
+  icon: school
+  category: cate-id-0
+
+- name: Google Translate
+  link: https://translate.google.com/
+  icon: googleTranslate
+  category: cate-id-0
+
+- name: Cluster Tutorial
+  link: https://github.com/LINs-lab/cluster_tutorial
+  icon: github
+  category: cate-id-1
+
+- name: arxiv
+  link: https://arxiv.org/search/cs
+  icon: newspaperVariantMultipleOutline
+  category: cate-id-2
+
+- name: Stack Exchange
+  link: https://stackexchange.com/
+  icon: stackExchange
+  category: cate-id-3
+
+- name: Stack Overflow
+  link: https://stackoverflow.com/
+  icon: stackOverflow
+  category: cate-id-3

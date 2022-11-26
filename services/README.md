@@ -3,22 +3,23 @@
 ## Services
 
 ### NGINX web service
-- homepage
-    - `https://cvgl.lab`
-- nextcloud
-    - `https://pan.cvgl.lab`
-- gpu
-    - `https://gpu.cvgl.lab`
-- gitea
-    - `https://git.cvgl.lab`
-- harbor
-    - `https://harbor.cvgl.lab`
-- portainer
-    - `https://portainer.cvgl.lab`
-- grafana
-    - `https://grafana.cvgl.lab`
 
-### inner monitor service
+- homepage
+  - https://cvgl.lab
+- nextcloud
+  - https://pan.cvgl.lab
+- gpu
+  - https://gpu.cvgl.lab
+- gitea
+  - https://git.cvgl.lab
+- harbor
+  - https://harbor.cvgl.lab
+- portainer
+  - https://portainer.cvgl.lab
+- grafana
+  - https://grafana.cvgl.lab
+
+### monitoring service
 
 - prometheus
 - node-exporter
@@ -49,3 +50,5 @@ https://github.com/grafana/grafana
 https://github.com/prometheus/prometheus
 
 https://github.com/wi1dcard/v2ray-exporter
+
+https://github.com/soulteary/docker-flare
