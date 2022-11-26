@@ -26,6 +26,6 @@ links:
   desc: Statistics and visualization
 
 - name: Root Certificate
-  link: https://cvgl.lab/cvgl-lab.crt
+  link: https://cvgl.lab/cvgl.crt
   icon: certificateOutline
   desc: cvgl Lab's Root Certificate
