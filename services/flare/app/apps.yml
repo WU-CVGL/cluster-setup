@@ -13,12 +13,12 @@ links:
 - name: Nextcloud
   link: https://pan.cvgl.lab
   icon: appleIcloud
-  dect: Personal storage & easy share
+  desc: Personal storage & easy share
 
 - name: Gitea
   link: https://git.cvgl.lab
   icon: git
-  dect: Git with a cup of tea
+  desc: Git with a cup of tea
 
 - name: Grafana
   link: https://grafana.cvgl.lab
