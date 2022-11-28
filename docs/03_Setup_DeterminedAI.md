@@ -55,7 +55,7 @@ apt install nfs-kernel-server
 systemctl enable nfs-kernel-server --now
 vim /etc/exports
 ################################################
-/data   192.168.123.0/24(rw,sync,no_subtree_check,no_root_squash)
+/data   192.168.233.0/24(rw,sync,no_subtree_check,no_root_squash)
 #################################################
 exportfs -ar
 
@@ -67,16 +67,16 @@ mount -a
 sudo su
 apt install nfs-common
 mkdir -p /shared-data
-echo "192.168.123.162:/data /shared-data nfs defaults,noatime,hard,nointr,rsize=32768,wsize=32768,_netdev 0 2" >> /etc/fstab
+echo "192.168.233.162:/data /shared-data nfs defaults,noatime,hard,nointr,rsize=32768,wsize=32768,_netdev 0 2" >> /etc/fstab
 mount -a
 ```
 
 Notes:
 
-1) In the server configuration, we did not expose our NFS service to the campus network (`10.0.2.160/27`) to comply with security rules.
-We only expose the NFS service to the private 10GbE network `192.168.123.0/24`.
-2) In the client configuration, `192.168.123.162` is the IP of the `NFS Server`.
-You can first check the availability of the NFS service on the client using the command `showmount -e 192.168.123.162`.
+1) In the server configuration, we did not expose our NFS service to the campus network (`10.0.1.64/27`) to comply with security rules.
+We only expose the NFS service to the private 10GbE network `192.168.233.0/24`.
+2) In the client configuration, `192.168.233.233` is the IP of the `NFS Server`.
+You can first check the availability of the NFS service on the client using the command `showmount -e 192.168.233.233`.
 
 ## Scale to multi-node: configure Determined AI
 

@@ -32,7 +32,7 @@
     - [Forums / Q\&As](#forums--qas)
     - [Media](#media)
 
-## To make the system more reliable 
+## To make the system more reliable
 
 ### Disable unattended-updates
 
@@ -69,11 +69,7 @@ network:
   ethernets:
     ens114f0:
       addresses:
-      - 192.168.123.62/24
-      optional: true
-    ens114f1:
-      addresses:
-      - 192.168.123.162/24
+      - 192.168.233.10/24
       optional: true
 ```
 
@@ -81,7 +77,7 @@ network:
 
 Problem description:
 
-Only 4/8 GPUs showes up in nvidia-smi. Kernel messege `dmesg` showes:
+Only 4/8 GPUs showes up in `nvidia-smi`. Kernel messege `dmesg` showes:
 ```log
 [   37.010658] NVRM: This PCI I/O region assigned to your NVIDIA device is invalid:
                NVRM: BAR1 is 0M @ 0x0 (PCI:0000:56:00.0)
@@ -208,12 +204,12 @@ The open-source project `Project X` originates from XTLS protocol, and provides 
 
 First, launch an HTTP proxy on the node (or in the LAN).
 
-For example, **suppose** you have such a proxy service http://192.168.123.62:18889.
+For example, **suppose** you have such a proxy service http://192.168.233.8:18889.
 
 To verify it:
 
 ```bash
-export https_proxy=http://192.168.123.62:18889
+export https_proxy=http://192.168.233.8:18889
 curl https://google.com.hk
 ```
 
@@ -238,11 +234,11 @@ it shows that the proxy service is working.
 2) Add environment variables to the configuration file `/etc/systemd/system/docker.service.d/proxy.conf`:
     ```conf
     [Service]
-    Environment="HTTP_PROXY=http://192.168.123.62:18889"
-    Environment="HTTPS_PROXY=http://192.168.123.62:18889"
+    Environment="HTTP_PROXY=http://192.168.233.8:18889"
+    Environment="HTTPS_PROXY=http://192.168.233.8:18889"
     Environment="NO_PROXY=localhost,127.0.0.1,nvcr.io,aliyuncs.com,cvgl.lab"
     ```
-    You should change `192.168.123.62` and `18889` to the actual proxy address and port respectively.
+    You should change `192.168.233.8` and `18889` to the actual proxy address and port respectively.
 
     Note that the `http` is intentionally used in `HTTPS_PROXY` - this is how most HTTP proxies work.
 

@@ -161,28 +161,27 @@ Finally, we configure the virtual networks in the virtual machine's `netplan`.
 
 For example, the host has these NICs and corresponding IPs:
 
-|  Device  |        IP       |
-| :------: | :------------:  |
-|   eno1   |   10.0.2.162    |
-| ens114f0 | 192.168.123.62  |
-| ens114f1 | 192.168.123.162 |
-|  virbr0  | 192.168.122.1   |
+|  Device  |        IP      |
+| :------: | :------------: |
+|   eno1   |    10.0.1.67   |
+| ens114f0 | 192.168.233.7  |
+|  virbr0  | 192.168.122.1  |
 
 We assign these IPs to the guest's virtual NICs:
 
-|  Device                   |        IP       |
-| :------:                  | :------------:  |
-| enp1s0 (eno1-macvtap)     |   10.0.2.166    |
-| enp2s0 (ens114f1-macvtap) | 192.168.123.166 |
-| enp3s0 (NAT)              | 192.168.122.166 |
+|  Device                   |        IP      |
+| :------:                  | :------------: |
+| enp1s0 (eno1-macvtap)     |    10.0.1.67   |
+| enp2s0 (ens114f0-macvtap) | 192.168.233.7  |
+| enp3s0 (NAT)              | 192.168.122.7  |
 
 <img src="./images/02_KVM_09.png" alt="KVM09" style="width:50vw;"/>
 
-As a result, users in the campus network can use IP `10.0.2.166` to connect to the login node;
+As a result, users in the campus network can use IP `10.0.1.67` to connect to the login node;
 
-The host server can connect to it using IP `192.168.122.166`;
+The host server can connect to it using IP `192.168.122.7`;
 
-Other servers can connect to it using IP `192.168.123.166` (or the slower 1GbE `10.0.2.166`).
+Other servers can connect to it using IP `192.168.233.7` (or the slower 1GbE `10.0.1.67`).
 
 ### Post-installation configurations
 
@@ -195,7 +194,7 @@ Other servers can connect to it using IP `192.168.123.166` (or the slower 1GbE `
     We should set the `DET_MASTER` for Determined AI's master node, so that the users won't need to set it by themselves. Append this line to `/etc/environment`:
 
     ```sh
-    DET_MASTER="192.168.123.62"
+    DET_MASTER="192.168.233.66"
     ```
 
 

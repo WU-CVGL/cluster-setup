@@ -217,10 +217,10 @@ You can add the `CA.cer` created above to your browser (or the whole system) to 
 Finally add the corresponding HOSTS to your PC:
 
 ```text
-10.0.2.162 cvgl.lab
-10.0.2.162 gpu.cvgl.lab
-10.0.2.162 grafana.cvgl.lab
-10.0.2.162 harbor.cvgl.lab
+10.0.1.68 cvgl.lab
+10.0.1.68 gpu.cvgl.lab
+10.0.1.68 grafana.cvgl.lab
+10.0.1.68 harbor.cvgl.lab
 ```
 
 Open the URLs in your browser:
@@ -265,11 +265,11 @@ docker-compose up -d --force-recreate --remove-orphans
 
 1) Install Harbor. You can start from the official docs [here](https://goharbor.io/docs/2.6.0/install-config/configure-yml-file/). Also, check out the notes [here](https://git.cvgl.lab/Cluster_User_Group/CVGL-Services/src/branch/nginx/harbor/README.md) to customize.
 
-2) Configure HOSTS on each node. Add the following lines:
+2) Configure HOSTS on each node. Make sure these lines exist:
 
     ```text
-    192.168.123.162 cvgl.lab
-    192.168.123.162 harbor.cvgl.lab
+    192.168.233.8 cvgl.lab
+    192.168.233.8 harbor.cvgl.lab
     ```
 
 3) Trust the CA certificate on each node:
@@ -284,7 +284,7 @@ docker-compose up -d --force-recreate --remove-orphans
 
     ```nginx
     upstream harbor {
-        server 192.168.123.164:50000;
+        server 192.168.233.8:50000;
     }
     ```
 
