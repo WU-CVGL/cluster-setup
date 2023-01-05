@@ -236,7 +236,7 @@ it shows that the proxy service is working.
     [Service]
     Environment="HTTP_PROXY=http://192.168.233.8:8889"
     Environment="HTTPS_PROXY=http://192.168.233.8:8889"
-    Environment="NO_PROXY=localhost,127.0.0.1,nvcr.io,aliyuncs.com,cvgl.lab"
+    Environment="NO_PROXY=localhost,127.0.0.1,nvcr.io,aliyuncs.com,edu.cn,cvgl.lab"
     ```
     You should change `192.168.233.8` and `8889` to the actual proxy address and port respectively.
 
