@@ -13986,6 +13986,7 @@
   "style": "dark",
   "tags": [
     "prometheus",
+    "system",
     "node-exporter"
   ],
   "templating": {

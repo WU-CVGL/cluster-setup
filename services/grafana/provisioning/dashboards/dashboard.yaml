@@ -17,3 +17,21 @@ providers:
     editable: true
     options:
       path: /etc/grafana/provisioning/dashboards/json/v2ray-dashboard_rev4.json
+  # - name: 'NVIDIA DCGM Exporter v2'
+  # # https://grafana.com/grafana/dashboards/15117-nvidia-dcgm-exporter/
+  #   type: file
+  #   editable: true
+  #   options:
+  #     path: /etc/grafana/provisioning/dashboards/json/nvidia-dcgm-exporter_rev2.json
+  - name: 'NVIDIA DCGM Exporter Dashboard'
+  # https://github.com/NVIDIA/dcgm-exporter/blob/main/grafana/dcgm-exporter-dashboard.json
+    type: file
+    editable: true
+    options:
+      path: /etc/grafana/provisioning/dashboards/json/dcgm-exporter-dashboard.json
+  - name: 'Determined Cluster Hardware Utilization (cAdvisor and dcgm-exporter)'
+  # https://github.com/determined-ai/works-with-determined/blob/master/observability/grafana/determined-hardware-grafana.json
+    type: file
+    editable: true
+    options:
+      path: /etc/grafana/provisioning/dashboards/json/determined-hardware-grafana.json

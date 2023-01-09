@@ -25,6 +25,14 @@ scrape_configs:
           - "cvgl-node02.lan:9080"
           - "cvgl-node03.lan:9080"
           - "cvgl-node04.lan:9080"
+  - job_name: "dcgm"
+    scrape_interval: 15s
+    static_configs:
+      - targets:
+          - "cvgl-node01.lan:9400"
+          - "cvgl-node02.lan:9400"
+          - "cvgl-node03.lan:9400"
+          - "cvgl-node04.lan:9400"
   - job_name: "v2ray"
     metrics_path: /scrape
     static_configs:

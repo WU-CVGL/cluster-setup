@@ -807,7 +807,9 @@
   "schemaVersion": 36,
   "style": "dark",
   "tags": [
-    "prometheus"
+    "prometheus",
+    "network",
+    "proxy"
   ],
   "templating": {
     "list": [

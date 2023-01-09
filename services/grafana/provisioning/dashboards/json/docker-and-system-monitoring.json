@@ -1643,11 +1643,10 @@
     "schemaVersion": 20,
     "style": "dark",
     "tags": [
-      "docker",
       "prometheus",
-      "node-exporter",
-      "cadvisor"
-    ],
+      "docker",
+      "cAdvisor"
+      ],
     "templating": {
       "list": [
         {
@@ -1825,7 +1824,7 @@
       ]
     },
     "timezone": "browser",
-    "title": "Docker Monitoring",
+    "title": "Docker Monitoring (cAdvisor)",
     "uid": "64nrElFmk",
     "version": 2
   }
