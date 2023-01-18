@@ -1,6 +1,6 @@
 global:
   scrape_interval: 5s
-  scrape_timeout: 5s
+  scrape_timeout: 1s
 scrape_configs:
   - job_name: "prometheus"
     static_configs:
@@ -33,9 +33,46 @@ scrape_configs:
           - "cvgl-node02.lan:9400"
           - "cvgl-node03.lan:9400"
           - "cvgl-node04.lan:9400"
+    metrics_path: /metrics
+    scheme: http
+    follow_redirects: true
+    metric_relabel_configs:
+    - source_labels: [id]
+      separator: ;
+      regex: /docker/(.*)
+      target_label: container_runtime_id
+      replacement: $1
+      action: replace
+    - source_labels: [__name__, UUID]
+      separator: ;
+      regex: DCGM.*;(.*)
+      target_label: gpu_uuid
+      replacement: $1
+      action: replace
+    http_sd_configs:
+    - follow_redirects: true
+      refresh_interval: 1m
+      url: http://cvglcorevm.lan:8080/prom/det-http-sd-config
   - job_name: "v2ray"
     metrics_path: /scrape
     static_configs:
       - targets:
           - "xray-jp-central-exporter:9550"
           - "xray-us-west-exporter:9550"
+  - job_name: det-master
+    honor_timestamps: true
+    scrape_interval: 15s
+    metrics_path: prom/det-state-metrics
+    scheme: http
+    follow_redirects: true
+    metric_relabel_configs:
+    - source_labels: [task_actor]
+      separator: ;
+      regex: /experiments/(.+)\/.*\/.*
+      target_label: experiment_id
+      replacement: $1
+      action: replace
+    static_configs:
+    - targets:
+      - cvglcorevm.lan:8080
+    bearer_token: v2.public.eyJpZCI6NzU5LCJ1c2VyX2lkIjoxLCJleHBpcnkiOiIyMDIzLTAxLTI1VDEwOjEzOjEzLjkyMDA0NzYxNVoifZMKs9LXhTx1knb29hvw9yriCz5T1lX53k-YADiadxdUa9q90qJ3SYLOOETD650IQYfzcvfVcak9vX2EvP6pkQU.bnVsbA
