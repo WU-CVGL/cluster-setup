@@ -26,6 +26,7 @@ scrape_configs:
           - "cvgl-node03.lan:9080"
           - "cvgl-node04.lan:9080"
   - job_name: "dcgm"
+    honor_timestamps: true
     scrape_interval: 15s
     static_configs:
       - targets:

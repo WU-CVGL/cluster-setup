@@ -7,7 +7,7 @@
 Scraping Determined-AI-master's metrics (`/prom/det-state-metrics`) with Determined-AI API needs a `bearer_token`. You can get this token by:
 
 ```bash
-curl -s "https://10.0.1.66:8080/api/v1/auth/login" \ 
+curl -s "http://10.0.1.66:8080/api/v1/auth/login" \
   -H 'Content-Type: application/json' \
   --data-binary '{"username":"admin","password":"********"}'
 ```
