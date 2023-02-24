@@ -41,11 +41,6 @@ Current IP assignment:
 |10.0.1.85|BMC of GPU Node 05|
 |10.0.1.90 / 192.168.233.233(passthru) / 192.168.233.234(virtual)|TrueNAS on storage server|
 
-<img src="./docs/images/00_rack.jpg" alt="drawing" style="height:50vh;"/>
-<img src="./docs/images/00_rack2.jpg" alt="drawing" style="height:50vh;"/>
-<img src="./docs/images/00_gpus.jpg" alt="drawing" style="height:50vh;"/>
-<img src="./docs/images/00_gpus2.jpg" alt="drawing" style="height:50vh;"/>
-
 System Topology:
 
 ```text
@@ -77,6 +72,13 @@ System Topology:
 │                                                                         │
 └─────────────────────────────────────────────────────────────────────────┘
 ```
+<details>
+<summary> Click to show photo </summary>
+<img src="./docs/images/00_rack.jpg" alt="drawing" style="height:50vh;"/>
+<img src="./docs/images/00_rack2.jpg" alt="drawing" style="height:50vh;"/>
+<img src="./docs/images/00_gpus.jpg" alt="drawing" style="height:50vh;"/>
+<img src="./docs/images/00_gpus2.jpg" alt="drawing" style="height:50vh;"/>
+</details>
 
 ### Hardware Information
 
