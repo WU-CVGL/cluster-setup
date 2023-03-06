@@ -1,0 +1,33 @@
+version: '3'
+
+networks:
+  monitor:
+    driver: bridge
+
+services:
+  grafana:
+    image: grafana/grafana
+    container_name: grafana
+    restart: unless-stopped
+    user: "472:0"
+    environment:
+      - DS_PROMETHEUS=prometheus
+      - TZ=Asia/Shanghai
+      - GF_RENDERING_SERVER_URL=http://renderer:8081/render
+      - GF_RENDERING_CALLBACK_URL=http://grafana:3000/
+      - GF_LOG_FILTERS=rendering:debug
+    volumes:
+      - ./custom.ini:/etc/grafana/grafana.ini
+      - ./data:/var/lib/grafana
+      - ./provisioning:/etc/grafana/provisioning
+    networks:
+      - monitor
+    ports:
+      - "10080:3000"
+
+  renderer:
+    image: grafana/grafana-image-renderer:latest
+    networks:
+      - monitor
+    ports:
+      - 8081
