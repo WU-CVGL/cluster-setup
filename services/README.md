@@ -2,7 +2,7 @@
 
 ## Services
 
-### NGINX web service
+### Web service
 
 - homepage
   - https://cvgl.lab
@@ -19,8 +19,9 @@
 - grafana
   - https://grafana.cvgl.lab
 
-### monitoring service
+### Background services
 
+- NGINX
 - prometheus
 - node-exporter
 - cAdvisor
@@ -55,7 +56,7 @@ to collect data from every machine.
 
 Update `static_configs[targets]` in `prometheus/config/prometheus.yml` if any new nodes are added to the cluster.
 
-## Acknowledgements
+## Acknowledgments
 
 https://github.com/stefan0us/xray-traefik
 
