@@ -1,38 +1,59 @@
-# CVGL Docker-based Services
+# Supplementary Services
+
+These are container-based supplementary services.
+
+- [Supplementary Services](#supplementary-services)
+  - [Services](#services)
+    - [Core service](#core-service)
+    - [Web service](#web-service)
+    - [Background services](#background-services)
+  - [HOW-TO](#how-to)
+    - [Most supplementary services](#most-supplementary-services)
+    - [Harbor](#harbor)
+    - [Xray](#xray)
+    - [System-configurations](#system-configurations)
+    - [Node-exporter endpoint](#node-exporter-endpoint)
+  - [Acknowledgments](#acknowledgments)
 
 ## Services
+
+We use NGINX as our reverse proxy, which forwards users' HTTPS requests from their web browsers to our various backend services.
+
+### Core service
+
+- Determined AI Master
+  - [Notes](determined/README.md)
+  - [Master configuration](determined/master.yaml)
 
 ### Web service
 
 - homepage
   - https://cvgl.lab
-- nextcloud
+- Nextcloud
   - https://pan.cvgl.lab
-- gpu
+- Determined AI
   - https://gpu.cvgl.lab
-- gitea
+- Gitea
   - https://git.cvgl.lab
-- harbor
+- Harbor
   - https://harbor.cvgl.lab
-- portainer
-  - https://portainer.cvgl.lab
-- grafana
+- Grafana
   - https://grafana.cvgl.lab
 
 ### Background services
 
 - NGINX
-- prometheus
+- Prometheus
 - node-exporter
 - cAdvisor
-- dcgm-exporter
-- v2ray-exporter
+- DCGM-Exporter
+- V2Ray Exporter
 
 ## HOW-TO
 
 ### Most supplementary services
 
-On management node:
+On the management node, use the all-in-one docker-compose file:
 
 ```bash
 sudo chown -R 472:0 grafana/*
@@ -41,6 +62,18 @@ sudo chown -R 1000:1000 prometheus/*
 
 docker-compose up -d
 ```
+
+### Harbor
+
+Check the [notes to install and start Harbor](harbor/README.md).
+
+### Xray
+
+Check the [note to add the configuration files](xray/README.md)
+
+### System-configurations
+
+Contains some [key configurations](system-configurations/etc) in `/etc`
 
 ### Node-exporter endpoint
 
@@ -66,13 +99,9 @@ https://github.com/determined-ai/determined
 
 https://github.com/nextcloud/server
 
-https://github.com/portainer/portainer
-
 https://github.com/go-gitea/gitea
 
 https://github.com/goharbor/harbor
-
-https://github.com/traefik/traefik
 
 https://github.com/XTLS/Xray-core
 

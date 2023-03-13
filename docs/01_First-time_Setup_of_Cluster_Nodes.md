@@ -4,12 +4,31 @@
 
 - [First-time setup of Cluster Nodes](#first-time-setup-of-cluster-nodes)
   - [Contents](#contents)
-  - [To make the system more reliable](#to-make-the-system-more-reliable)
+- [System Topology](#system-topology)
+- [Set Up the Storage \& Management Server](#set-up-the-storage--management-server)
+  - [Install VMware ESXi](#install-vmware-esxi)
+  - [Configure VMware ESXi](#configure-vmware-esxi)
+    - [Configure PCI passthrough](#configure-pci-passthrough)
+    - [Configure networks](#configure-networks)
+  - [Install VMs](#install-vms)
+  - [Configure TrueNAS](#configure-truenas)
+    - [Configure storage Pools](#configure-storage-pools)
+    - [Add public datasets](#add-public-datasets)
+    - [Configure NFS share for public datasets](#configure-nfs-share-for-public-datasets)
+    - [Configure cron jobs](#configure-cron-jobs)
+      - [Scrubbing](#scrubbing)
+      - [S.M.A.R.T. test](#smart-test)
+      - [Snapshots](#snapshots)
+      - [Replication](#replication)
+- [Set Up the GPU Nodes (Agents)](#set-up-the-gpu-nodes-agents)
+  - [Notes on Ubuntu](#notes-on-ubuntu)
     - [Disable unattended-updates](#disable-unattended-updates)
     - [Disable GUI](#disable-gui)
     - [Disable network\*-wait-online](#disable-network-wait-online)
+    - [SSH Keep-Alive](#ssh-keep-alive)
     - [Only 4/8 GPUs show up in nvidia-smi](#only-48-gpus-show-up-in-nvidia-smi)
     - [In case you forgot Server BMC (IPMI) password](#in-case-you-forgot-server-bmc-ipmi-password)
+    - [Prevent Docker and VPN IP address conflicts](#prevent-docker-and-vpn-ip-address-conflicts)
     - [Security Related Rules](#security-related-rules)
   - [Setup Open Source Mirrors \& nvidia-docker](#setup-open-source-mirrors--nvidia-docker)
     - [Apt](#apt)
@@ -32,7 +51,206 @@
     - [Forums / Q\&As](#forums--qas)
     - [Media](#media)
 
-## To make the system more reliable
+# System Topology
+
+System Topology:
+
+```text
+┌───────────────────────────────────┐ ┌──────────────────────────────────┐
+│             Login Node            │ │        NGINX Reverse Proxy       │
+└─────────────┬─────────────────────┘ └────────┬────────┬────────────────┘
+              │                                │        │
+            Access      ┌────────Access────────┘      Access
+              │         │                               │
+┌─────────────▼─────────▼───────────┐ ┌─────────────────▼─────────────────┐
+│     Determined AI GPU Cluster     │ │      Supplementary Services       │
+├───────────────────────────────────┤ ├───────────────────────────────────┤
+│                                   │ │                                   │
+│ ┌──────┐ ┌────┐ ┌────┐ ┌────┐     │ │  ┌──────┐ ┌───────┐ ┌───────┐     │
+│ │Master│ │GPU │ │GPU │ │GPU │     │ │  │      │ │       │ │       │     │
+│ │      │ │    │ │    │ │    │ ... │ │  │Harbor│ │Grafana│ │ Other │ ... │
+│ │ Node │ │Node│ │Node│ │Node│     │ │  │      │ │       │ │       │     │
+│ └──────┘ └────┘ └────┘ └────┘     │ │  └──────┘ └───────┘ └───────┘     │
+│                                   │ │                                   │
+└───────────────────┬───────────────┘ └──────────┬────────────────────────┘
+                    │                            │
+                  Access                       Access
+                    │                            │
+┌───────────────────▼────────────────────────────▼────────────────────────┐
+│                              TrueNAS - NFS                              │
+├─────────────────────────────────────────────────────────────────────────┤
+│                                                                         │
+│                              Storage Server                             │
+│                                                                         │
+└─────────────────────────────────────────────────────────────────────────┘
+```
+
+GPU Nodes: bare metal servers running Ubuntu;
+
+Storage & Management Server: running VMware ESXi, holding 4 VMs:
+
+- Core Services VM, running Determined AI Master Node;
+- Supplementary Services VM, holding supplementary services;
+- Login Node VM, the login node, which works as the entry point of the cluster;
+- TrueNAS VM, provides ZFS file storage and NFS sharing service.
+
+# Set Up the Storage & Management Server
+
+## Install VMware ESXi
+
+[Reference](https://docs.vmware.com/en/VMware-vSphere/7.0/com.vmware.esxi.install.doc/GUID-B2F01BF5-078A-4C7E-B505-5DFFED0B8C38.html)
+
+## Configure VMware ESXi
+
+### Configure PCI passthrough
+
+Configure PCI passthrough for SAS controllers, PCIe (NVMe) SSDs and a 10GbE port.
+All of these will be used in the TrueNAS VM.
+
+![Passthru](./images/01_ESXI_PASSTHRU.png)
+
+### Configure networks
+
+Create a vSwitch for 10GbE LAN:
+![VSwitch](./images/01_ESXI_INIT.png)
+
+Create a port group for 10GbE LAN:
+![PG](./images/01_ESXI_INIT_02.png)
+
+Configure VMs:
+
+![Core node](./images/01_ESXI_INIT_03.png)
+
+![TrueNas configuration](./images/01_ESXI_INIT_04.png)
+
+Set up reservations for critical workloads:
+
+![Core service reservation](./images/01_ESXI_INIT_05.png)
+
+![TrueNAS reservation](./images/01_ESXI_INIT_06.png)
+
+## Install VMs
+
+ ![Init](images/01_ESXI.png)
+
+ For Ubuntu, uncheck the box *Set up this disk as an LVM group*.
+
+ ![noLVM](images/01_ESXI_02.png)
+
+ Configure Networks:
+
+ ![Network](images/01_ESXI_03.png)
+
+ Set up hostnames and usernames then continue:
+
+ ![Names](images/01_ESXI_04.png)
+
+ Post-installation:
+
+ Add the IP of the core service VM to the login node's `/etc/environment`:
+
+ ```bash
+ DET_MASTER="192.168.233.6"
+ ```
+
+## Configure TrueNAS
+
+### Configure storage Pools
+
+Create the SSD pool:
+
+![Create SSD Pool](./images/01_NAS.png)
+
+The SSD pool is a JBOD (stripe) pool.
+
+Create the HDD pool:
+
+![Create HDD Pool](./images/01_NAS_02.png)
+
+The HDD pool is a RAID-Z2 pool with six-18T-disk data-VDev(s) and two mirrored SATA SSDs mirrored as one metadata-VDev.
+
+### Add public datasets
+
+ Go to Storage -> Pools, and create a dataset under either pool `HDD` or `SSD`:
+
+ ![Create dataset](./images/01_NAS_03.png)
+
+ Then edit the permission of the dataset.
+ To make it public, set `User` and `Group` to `nobody` and `nogroup`.
+ Remember to click the checkboxes of  **Apply User** and **Apply Group**.
+ Also, click the checkboxes of **Write** and **Execute** **Access** on the right.
+
+ ![Public dataset settings on TrueNAS](./images/01_NAS_04.png)
+
+### Configure NFS share for public datasets
+
+First, enable NFS service:
+
+![Enable NFS](./images/01_NAS_05.png)
+
+Go to `Sharing/NFS/Add`, and select the dataset just created above.
+In **Networks**, let `Authorized Networks = 192.168.233.0/24`.
+Click **SUBMIT** at the bottom of the page.
+
+![Public dataset NFS Share](./images/01_NAS_06.png)
+
+### Configure cron jobs
+
+Cron jobs are scheduled at recurring intervals, specified using a format based on [unix-cron](https://crontab.cronhub.io/). You can define a schedule so that your job runs multiple times.
+
+#### Scrubbing
+
+The scrubbing is auto-configured by the TrueNAS system.
+
+![Scrubbing](images/01_NAS_CRON.png)
+
+#### S.M.A.R.T. test
+
+The S.M.A.R.T. test is configured to do a **SHORT** test at 00:00 every Sunday
+and to do a **LONG** test at 03:00 on the first day of every month.
+
+![SMART](images/01_NAS_CRON_02.png)
+
+#### Snapshots
+
+Add a periodic snapshot task for the `HDD` dataset.
+The `HDD/labdata0` will be used for replication thus excluded.
+
+![HDD snapshot](./images/01_NAS_CRON_03.png)
+
+Add a periodic snapshot task for the `SSD/labdata0` sub-dataset.
+This task will be used to auto-trigger the replication.
+
+![SSD snapshot](./images/01_NAS_CRON_04.png)
+
+The snapshots are configured to execute at 05:00 every day.
+
+The snapshots can be found here:
+
+![SSD snapshots](./images/01_NAS_CRON_05.png)
+
+You can use these snapshots to export or rollback the mis-deleted files.
+
+#### Replication
+
+![Replication from SSD to HDD](./images/01_NAS_CRON_06.png)
+
+The Replication from the unprotected SSD pool to the RAID-Z2 HDD pool is set
+to synchronize with the periodic snapshot task of `SSD/labdata0`.
+
+After a successful replication, the report and logs can be seen here:
+
+![Replication successful](./images/01_NAS_CRON_07.png)
+
+References:
+
+> https://www.truenas.com/docs/core/coretutorials/tasks/creatingreplicationtasks/localreplication/
+>
+> https://www.truenas.com/docs/core/coretutorials/tasks/creatingreplicationtasks/advancedreplication/
+
+# Set Up the GPU Nodes (Agents)
+
+## Notes on Ubuntu
 
 ### Disable unattended-updates
 
@@ -73,6 +291,22 @@ network:
       optional: true
 ```
 
+### SSH Keep-Alive
+
+Change these values in `/etc/ssh/sshd_config`:
+
+```text
+TCPKeepAlive yes
+ClientAliveInterval 30
+ClientAliveCountMax 3
+```
+
+Restart `sshd` to take effect:
+
+```bash
+sudo systemctl restart sshd
+```
+
 ### Only 4/8 GPUs show up in nvidia-smi
 
 Problem description:
@@ -107,6 +341,27 @@ You can use the Supermicro `IPMICFG` tool, which can be downloaded here:
 
 The default password can be found on the motherboard:
 > https://www.supermicro.com/support/BMC_Unique_Password_Guide.pdf
+
+### Prevent Docker and VPN IP address conflicts
+
+The IP range 172.20.0.0/16 is used by the school VPN, but sometimes it is also used by Docker, which has already caused an online accident:
+
+![Docker subnet](images/01_Docker_VPN.png)
+
+![Chat history](images/01_Docker_VPN_02.png)
+
+To prevent these conflicts, add this entity to `/etc/docker/daemon.json`:
+
+```json
+  "default-address-pools" : [
+    {
+      "base" : "172.240.0.0/16",
+      "size" : 24
+    }
+  ]
+```
+
+Reference: [Fixing Docker and VPN IP Address Conflicts](https://www.lullabot.com/articles/fixing-docker-and-vpn-ip-address-conflicts)
 
 ### Security Related Rules
 

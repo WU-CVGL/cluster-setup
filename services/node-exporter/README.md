@@ -30,7 +30,7 @@ docker compose up -d --force-recreate --remove-orphans
 
 ## Notes
 
-Although Determined-AI's [det-state-metrics](https://gpu.lins.lab/prom/det-state-metrics) (to view it in your browser you need to log in to https://gpu.lins.lab first) provides enough information about tasks and containers, the [official document](https://docs.determined.ai/latest/integrations/prometheus/prometheus.html) and [repo](https://github.com/determined-ai/works-with-determined) did not provide a Grafana dashboard that integrates these data with `cAdvisor` and `dcgm-exporter` to stats usage by individual users or tasks. Further development is required for more precise cluster management.
+Although Determined-AI's [det-state-metrics](https://gpu.cvgl.lab/prom/det-state-metrics) (to view it in your browser you need to log in to https://gpu.cvgl.lab first) provides enough information about tasks and containers, the [official document](https://docs.determined.ai/latest/integrations/prometheus/prometheus.html) and [repo](https://github.com/determined-ai/works-with-determined) did not provide a Grafana dashboard that integrates these data with `cAdvisor` and `dcgm-exporter` to provide usage statistics by individual users or tasks. Further development is required for more precise cluster management.
 
 For example, in `https://gpu.cvgl.lab/prom/det-state-metrics`, each job will have an `allocation_id`. With this `allocation_id`, you can get the corresponding `container_id` in `det_container_id_allocation_id`.
 
@@ -42,3 +42,8 @@ With this `container_id`, you can:
 With `container_runtime_id`, you can get container stats of this job with `cAdvisor`;`
 
 With `gpu_uuid`, you can get GPU stats of this job with `dcgm-exporter`.
+
+TODOs:
+
+- A Grafana dashboard that integrates and visualizes these data
+- A management watchdog that utilizes these data and kills tasks

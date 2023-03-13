@@ -1,0 +1,221 @@
+version: '3'
+
+networks:
+  grafana_monitor:
+    driver: bridge
+  gitea:
+    external: false
+  nextcloud:
+    external: false
+
+services:
+  nginx:
+    build: ./nginx/build
+    image: reverseproxy
+    ports:
+        - "80:80"
+        - "443:443"
+        - "33322:22"
+    restart: always
+    volumes:
+      - ./nginx/data/html:/usr/share/nginx/html:ro
+      - /etc/ssl/private:/opt/ssl:ro
+
+  flare:
+    image: soulteary/flare
+    restart: always
+    command: flare
+    ports:
+      - "5005:5005"
+    volumes:
+      - ./flare/app:/app
+
+  xray-jp-central:
+    image: teddysun/xray
+    restart: unless-stopped
+    environment:
+      TZ: Asia/Shanghai
+    networks:
+      - grafana_monitor
+    ports:
+      - 1089:1089
+      - 8889:8889
+    volumes: 
+      - ./xray/jp-central/config:/etc/xray
+      - ./xray/jp-central/log:/var/log/xray
+    expose:
+      - 10085
+
+  xray-us-west:
+    image: teddysun/xray
+    restart: unless-stopped
+    environment:
+      TZ: Asia/Shanghai
+    networks:
+      - grafana_monitor
+    ports:
+      - 20089:1089
+      - 28889:8889
+    volumes: 
+      - ./xray/us-west/config:/etc/xray
+      - ./xray/us-west/log:/var/log/xray
+    expose:
+      - 10086
+
+  xray-jp-central-exporter:
+    image: wi1dcard/v2ray-exporter:master
+    container_name: xray-jp-central-exporter
+    environment:
+      TZ: Asia/Shanghai
+    networks:
+      - grafana_monitor
+    restart: unless-stopped
+    command: 'v2ray-exporter --v2ray-endpoint "jp-central:10085" --listen ":9550"'
+    expose:
+      - 9550
+
+  xray-us-west-exporter:
+    image: wi1dcard/v2ray-exporter:master
+    container_name: xray-us-west-exporter
+    environment:
+      TZ: Asia/Shanghai
+    networks:
+      - grafana_monitor
+    restart: unless-stopped
+    command: 'v2ray-exporter --v2ray-endpoint "us-west:10086" --listen ":9550"'
+    expose:
+      - 9550
+
+  grafana:
+    image: grafana/grafana
+    container_name: grafana
+    restart: unless-stopped
+    user: "472:0"
+    environment:
+      - DS_PROMETHEUS=prometheus
+      - TZ=Asia/Shanghai
+      - GF_RENDERING_SERVER_URL=http://grafana-renderer:8081/render
+      - GF_RENDERING_CALLBACK_URL=http://grafana:3000/
+      - GF_LOG_FILTERS=rendering:debug
+    volumes:
+      - ./grafana/custom.ini:/etc/grafana/grafana.ini
+      - ./grafana/data:/var/lib/grafana
+      - ./grafana/provisioning:/etc/grafana/provisioning
+    networks:
+      - grafana_monitor
+    ports:
+      - "10080:3000"
+
+  grafana-renderer:
+    image: grafana/grafana-image-renderer:latest
+    networks:
+      - grafana_monitor
+    ports:
+      - 8081
+
+  prometheus:
+    image: prom/prometheus
+    user: "1000:1000"
+    container_name: prometheus
+    restart: unless-stopped
+    networks:
+      - grafana_monitor
+    environment:
+      TZ: Asia/Shanghai
+    volumes:
+      - ./prometheus/data:/prometheus
+      - ./prometheus/config:/etc/prometheus
+    command:
+        - '--config.file=/etc/prometheus/prometheus.yml'
+        - '--web.enable-admin-api'
+        - '--web.enable-lifecycle'
+        - '--storage.tsdb.path=/prometheus'
+        - '--web.console.libraries=/etc/prometheus/console_libraries'
+        - '--web.console.templates=/etc/prometheus/consoles'
+  gitea-server:
+    image: gitea/gitea
+    container_name: gitea
+    env_file:
+      - gitea/gitea.env
+    restart: always
+    networks:
+      - gitea
+    volumes:
+      - /srv/nfs/var/Docker/gitea/data:/data
+      - /etc/timezone:/etc/timezone:ro
+      - /etc/localtime:/etc/localtime:ro
+    ports:
+      - "3000:3000"
+      - "222:22"
+    depends_on:
+      - gitea-db
+
+  gitea-db:
+    image: postgres:13
+    restart: always
+    environment:
+      - POSTGRES_USER=gitea
+      - POSTGRES_PASSWORD=gitea
+      - POSTGRES_DB=gitea
+    networks:
+      - gitea
+    volumes:
+      - /srv/nfs/var/Docker/gitea/postgres:/var/lib/postgresql/data
+  
+  nextcloud-db:
+    image: postgres:alpine
+    restart: always
+    networks:
+      - nextcloud
+    volumes:
+      - /srv/nfs/var/nextcloud/var/lib/postgresql/data:/var/lib/postgresql/data
+    env_file:
+      - nextcloud/db.env
+
+  nextcloud-redis:
+    image: redis:alpine
+    restart: always
+    networks:
+      - nextcloud
+
+  nextcloud-app:
+    image: nextcloud:fpm-alpine
+    restart: always
+    networks:
+      - nextcloud
+    volumes:
+      - /srv/nfs/var/nextcloud/var/www/html:/var/www/html
+    environment:
+      - POSTGRES_HOST=nextcloud-db
+      - REDIS_HOST=nextcloud-redis
+    env_file:
+      - nextcloud/db.env
+      - nextcloud/nextcloud.env
+    depends_on:
+      - nextcloud-db
+      - nextcloud-redis
+
+  nextcloud-nginx:
+    image: nginx:alpine
+    restart: always
+    networks:
+      - nextcloud
+    ports:
+      - 8008:80
+    volumes:
+      - ./nginx.conf:/etc/nginx/nginx.conf:ro
+      - /srv/nfs/var/nextcloud/var/www/html:/var/www/html:ro
+    depends_on:
+      - nextcloud-app
+
+  nextcloud-cron:
+    image: nextcloud:fpm-alpine
+    restart: always
+    networks:
+      - nextcloud
+    volumes:
+      -  /srv/nfs/var/nextcloud/var/www/html:/var/www/html
+    entrypoint: /cron.sh
+    depends_on:
+      - nextcloud-db
+      - nextcloud-redis

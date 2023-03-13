@@ -6,6 +6,9 @@
   - [Contents](#contents)
   - [Introduction](#introduction)
   - [Proxy as a service](#proxy-as-a-service)
+  - [Configure proxy service on the login node](#configure-proxy-service-on-the-login-node)
+      - [Proxychains](#proxychains)
+      - [Environment variable](#environment-variable)
   - [SSL, HTTPS and reverse proxy](#ssl-https-and-reverse-proxy)
     - [Background knowledge](#background-knowledge)
     - [Create an SSL certificate](#create-an-ssl-certificate)
@@ -104,6 +107,72 @@ services:
     expose:
       - 9550
 ```
+
+## Configure proxy service on the login node
+
+#### Proxychains
+
+[Proxychains](https://github.com/rofl0r/proxychains-ng) is a useful CLI tool that hooks network-related libc functions
+in DYNAMICALLY LINKED programs via a preloaded DLL (dlsym(), LD_PRELOAD) and redirects the connections through SOCKS4a/5 or HTTP proxies.
+
+1. Installation
+
+    ```bash
+    sudo apt install proxychains4
+    ```
+
+2. Configuration
+
+    Edit `/etc/proxychains4.conf`, change the last line into
+
+    ```text
+    socks5 192.168.233.6 10089
+    ```
+
+3. Check the configuration
+
+    ```text
+    cvgladmin@cvgl-loginnode:~$ proxychains curl google.com
+    [proxychains] config file found: /etc/proxychains4.conf
+    [proxychains] preloading /usr/lib/x86_64-linux-gnu/libproxychains.so.4
+    [proxychains] DLL init: proxychains-ng 4.14
+    [proxychains] Strict chain  ...  192.168.233.6:10089  ...  google.com:80  ...  OK
+    <HTML><HEAD><meta http-equiv="content-type" content="text/html;charset=utf-8">
+    <TITLE>301 Moved</TITLE></HEAD><BODY>
+    <H1>301 Moved</H1>
+    The document has moved
+    <A HREF="http://www.google.com/">here</A>.
+    </BODY></HTML>
+    ```
+
+    It shows that the configuration is successful.
+
+#### Environment variable
+
+Export these environment variables before program execution.
+
+This is useful when some programs that do not use `libc` cannot be hooked by `proxychains`,
+such as many programs written in `python` or `golang`.
+
+```bash
+export http_proxy=http://192.168.233.6:18889 &&\
+export https_proxy=http://192.168.233.6:18889 &&\
+export HTTP_PROXY=http://192.168.233.6:18889 &&\
+export HTTPS_PROXY=http://192.168.233.6:18889
+curl google.com
+```
+
+Outputs:
+
+```text
+<HTML><HEAD><meta http-equiv="content-type" content="text/html;charset=utf-8">
+<TITLE>301 Moved</TITLE></HEAD><BODY>
+<H1>301 Moved</H1>
+The document has moved
+<A HREF="http://www.google.com/">here</A>.
+</BODY></HTML>
+```
+
 
 ## SSL, HTTPS and reverse proxy
 
@@ -225,7 +294,7 @@ Finally add the corresponding HOSTS to your PC:
 
 Open the URLs in your browser:
 
-![NGINX running](images/02_NGINX.png)
+![NGINX running](images/04_NGINX.png)
 
 Note: You can copy the `CA.cer` to NGINX data for occasional downloads:
 

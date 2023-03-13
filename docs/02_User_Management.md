@@ -11,10 +11,15 @@
     - [KVM/Networking](#kvmnetworking)
     - [Post-installation configurations](#post-installation-configurations)
   - [Add New User to the cluster](#add-new-user-to-the-cluster)
-    - [Linux](#linux)
-    - [Determined AI](#determined-ai)
-    - [NFS and ACLs](#nfs-and-acls)
-    - [Other services](#other-services)
+  - [Create a Linux account on the login node](#create-a-linux-account-on-the-login-node)
+  - [Grant docker permission](#grant-docker-permission)
+  - [Create a Determined AI account](#create-a-determined-ai-account)
+  - [Create TrueNAS NFS share](#create-truenas-nfs-share)
+    - [Creating home dataset for the new user](#creating-home-dataset-for-the-new-user)
+    - [Create NFS share for the new user](#create-nfs-share-for-the-new-user)
+    - [Set up NFS client on every node](#set-up-nfs-client-on-every-node)
+  - [Create and configure a Harbor account](#create-and-configure-a-harbor-account)
+  - [References](#references)
 
 ## (Temporary) Setup a KVM virtual machine as a temporary login node
 
@@ -34,7 +39,7 @@ Then install `ubuntu-minimal-desktop` using `tasksel`
 sudo tasksel
 ```
 
-Uninstall `unattended-upgrades` according to [First-time Setup: To make the system more reliable](./01_First-time_Setup_of_Cluster_Nodes.md#disable-unattend-updates):
+Uninstall `unattended-upgrades` according to [First-time Setup: To make the system more reliable](./01_First-time_Setup_of_Cluster_Nodes.md#disable-unattended-updates):
 
 ```bash
 sudo apt purge unattended-upgrades
@@ -216,19 +221,175 @@ Other servers can connect to it using IP `192.168.233.7` (or the slower 1GbE `10
 └─────────────────────────────────────────────────────────────────┘
 ```
 
-### Linux
+## Create a Linux account on the login node
 
-* [How to Create Users and Groups in Linux from the Command Line](https://www.techrepublic.com/article/how-to-create-users-and-groups-in-linux-from-the-command-line/)
-* [How to Change Directory Permissions in Linux with `chmod`](https://www.pluralsight.com/blog/it-ops/linux-file-permissions)
-* [How To Set or Change Linux User Password](https://www.cyberciti.biz/faq/linux-set-change-password-how-to/)
+First, create a Linux account for the new user on the login node:
 
-### Determined AI
+```bash
+export USERNAME=<username> # Change to new user's name
+sudo useradd $USERNAME -s /usr/bin/bash
+sudo passwd $USERNAME
+```
 
-* [How to Create Users and Change Password](https://docs.determined.ai/latest/cluster-setup-guide/users.html)
-* [Run Tasks as Specific Agent Users](https://docs.determined.ai/latest/cluster-setup-guide/users.html?highlight=det%20user)
-  
-### NFS and ACLs
+Then check out the `UID` and `GID` in `/etc/passwd`, which will be useful in the next section:
 
-* [Introduce Parameters of Configuration File `/etc/exports` on NFS Server](https://blog.csdn.net/weixin_34346099/article/details/89793704)
+```bash
+cat /etc/passwd
+```
 
-### Other services
+For example, the output is:
+
+```bash
+$USERNAME:x:1005:1005::/home/$USERNAME:/bin/bash
+```
+
+Then the user's `UID` and `GID` are both `1005`.
+
+## Grant docker permission
+
+On Login node:
+
+```bash
+sudo usermod -aG docker $USERNAME
+```
+
+## Create a Determined AI account
+
+```bash
+det user create $USERNAME
+det user change-password $USERNAME # Or the user can change password on the web dashboard
+det user link-with-agent-user $USERNAME --agent-uid $UID --agent-user $USERNAME --agent-gid $GID --agent-group $USERNAME
+```
+
+## Create TrueNAS NFS share
+
+### Creating home dataset for the new user
+
+In the previous section, we have configured a **Dataset** `home`
+that will be used to store user files.
+Now we need to create NFS share for every user separately.
+
+1. Open the TrueNAS web dashboard. In **Storage->Pools**,
+   click the **three dots icon** of the Dataset `HDD/home`,
+   then click the **Add Dataset** to add a sub-dataset of it
+   (or you can directly [click this URL](http://10.0.1.90/ui/storage/pools/id/HDD%2Fhome/dataset/add/HDD%2Fhome))
+
+   ![NAS_01](images/02_NAS.png)
+
+2. In the **Add Dataset** page, in the **Name and Options**, let `Name=<username>`.
+   Then click **ADVANCED OPTIONS**, in **This Dataset**,
+   let `Quota for this dataset = 4TiB`.
+
+   ![NAS_02](images/02_NAS_02.png)
+
+3. Click **SUBMIT** at the bottom to commit these changes.
+
+4. Click the **three dots icon** of the newly create sub-dataset,
+   and select **Edit Permissions**.
+   On the new **Edit Permissions** page, click **USE ACL MANAGER**,
+   then in the new pop-up window, select **HOME** as the preset ACL.
+   On the new **Edit ACL** page, edit the `User` and `Group` to the `UID` and `GID` of the user
+   on the login node. Also, enable the `Apply User` and `Apply Group` options to take effect.
+   ![NAS_03](images/02_NAS_03.png)
+
+5. Click **SAVE** at the bottom to commit these changes.
+
+### Create NFS share for the new user
+
+1. Go to `Sharing/NFS/Add`, and select the sub-dataset just created above.
+2. In **Networks**, let `Authorized Networks = 192.168.233.0/24`.
+3. Click **SUBMIT** at the bottom of the page.
+![NAS_04](images/02_NAS_04.png)
+
+### Set up NFS client on every node
+
+1. Install NFS client
+
+   ```bash
+   sudo apt install nfs-common
+   ```
+
+2. Set up hosts
+
+   On the login node:
+
+   Append this line to `/etc/hosts`:
+
+   ```text
+   192.168.233.234 nas.cvgl.lab
+   ```
+
+   While on every GPU (agent) node:
+
+   Append this line to `/etc/hosts`:
+
+   ```text
+   192.168.233.233 nas.cvgl.lab
+   ```
+
+3. Set up `fstab`
+
+   On the login node and every GPU (agent) node:
+
+   First, create the mount point for the new user
+
+   ```bash
+   sudo mkdir /workspace/<username>
+   ```
+
+   Edit the file `/etc/fstab`, add this new line for the new user
+
+   ```text
+   nas.cvgl.lab:/mnt/Peter/Workspace/<username> /workspace/<username> nfs defaults,noatime,hard,nointr,rsize=32768,wsize=32768,_netdev 0 0
+   ```
+
+   To take effect, execute
+
+   ```bash
+   sudo mount -a
+   ```
+
+   Check if the configuration is successful, execute
+
+   ```bash
+   df -H
+   ```
+
+   If the output shows:
+
+   ```text
+   nas.cvgl.lab:/mnt/Peter/Workspace/<username>        8.8T   99k  8.8T   1% /workspace/<username>
+   ```
+
+   then the configuration is a success.
+
+## Create and configure a Harbor account
+
+1. Add a new user in **Administration -> Users -> NEW USER** (URL: https://harbor.cvgl.lab/harbor/users)
+
+    ![Harbor new user](images/02_HARBOR.png)
+
+2. Add the new user to the maintainers of the public library, in **Projects -> libaray -> Members** (URL: https://harbor.cvgl.lab/harbor/projects/1/members)
+
+    ![Harbor library maintainer](images/02_HARBOR_02.png)
+
+## References
+
+1. Linux
+
+   - [How to Create Users and Groups in Linux from the Command Line](https://www.techrepublic.com/article/how-to-create-users-and-groups-in-linux-from-the-command-line/)
+   - [How to Change Directory Permissions in Linux with `chmod`](https://www.pluralsight.com/blog/it-ops/linux-file-permissions)
+   - [How To Set or Change Linux User Password](https://www.cyberciti.biz/faq/linux-set-change-password-how-to/)
+
+2. Determined AI
+
+   - [How to Create Users and Change Password](https://docs.determined.ai/latest/cluster-setup-guide/users.html)
+   - [Run Tasks as Specific Agent Users](https://docs.determined.ai/latest/cluster-setup-guide/users.html?highlight=det%20user)
+
+3. NFS and ACLs
+
+   - [Introduce Parameters of Configuration File `/etc/exports` on NFS Server](https://blog.csdn.net/weixin_34346099/article/details/89793704)
+
+4. Other services
+
+   - [Harbor Administration](https://goharbor.io/docs/2.1.0/administration/)

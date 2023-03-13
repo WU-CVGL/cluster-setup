@@ -7,11 +7,15 @@
   - [Deploy a Determined AI Single-Node Cluster](#deploy-a-determined-ai-single-node-cluster)
   - [Scale to multi-node: configure NFS export \& NFS client](#scale-to-multi-node-configure-nfs-export--nfs-client)
   - [Scale to multi-node: configure Determined AI](#scale-to-multi-node-configure-determined-ai)
+  - [TL;DR](#tldr)
+    - [Installation](#installation)
+    - [Launch master \& agents](#launch-master--agents)
   - [Conduct an experiment with `Determined AI`](#conduct-an-experiment-with-determined-ai)
     - [`ssh` to a remote server](#ssh-to-a-remote-server)
     - [Log in `Determined AI`](#log-in-determined-ai)
     - [Upload code and data to the server](#upload-code-and-data-to-the-server)
     - [Configure your virtual environment](#configure-your-virtual-environment)
+  - [Maintainance](#maintainance)
 
 ## Deploy a Determined AI Single-Node Cluster
 
@@ -82,6 +86,18 @@ You can first check the availability of the NFS service on the client using the 
 
 > https://docs.determined.ai/latest/cluster-setup-guide/deploy-cluster/sysadmin-deploy-on-prem/deploy.html#deploy-a-standalone-master
 
+## TL;DR
+
+### Installation
+
+```bash
+pip install -U determined-cli
+```
+
+### Launch master & agents
+
+See [notes](../services/determined/README.md) and the [master configuration file](../services/determined/master.yaml).
+
 ## Conduct an experiment with `Determined AI`
 
 `Determined AI` provides a solution for creating a virtual environment with some computing resources (e.g., GPUs, memory, and CPUs).
@@ -135,3 +151,9 @@ det shell start --config-file config.yaml
 ```
 
 Then, `cd` to `/run/determined/workdir/xxx/` inside the container and run your code.
+
+## Maintainance
+
+See [Maintainance: Upgrade APT packages & `Determined AI`](./01_First-time_Setup_of_Cluster_Nodes.md#maintainance-upgrade-apt-packages--determined-ai).
+
+Warning: Do not upgrade when the cluster is in use! Upgrading packages especially those related to the kernel, DKMS, GPU drivers and containers will kill running tasks.
