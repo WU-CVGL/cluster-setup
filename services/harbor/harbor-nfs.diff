@@ -1,0 +1,44 @@
+15c15
+<       - /data/harbor/log/:/var/log/docker/:z
+---
+>       - /srv/nfs/var/harbor/data/log/:/var/log/docker/:z
+37c37
+<       - /data/harbor/data/registry:/storage:z
+---
+>       - /srv/nfs/var/harbor/data/registry:/storage:z
+40c40
+<         source: /data/harbor/data/secret/registry/root.crt
+---
+>         source: /srv/nfs/var/harbor/data/secret/registry/root.crt
+67c67
+<       - /data/harbor/data/registry:/storage:z
+---
+>       - /srv/nfs/var/harbor/data/registry:/storage:z
+96c96
+<       - /data/harbor/data/database:/var/lib/postgresql/data:z
+---
+>       - /srv/nfs/var/harbor/database:/var/lib/postgresql/data:z
+121,122c121,122
+<       - /data/harbor/data/ca_download/:/etc/core/ca/:z
+<       - /data/harbor/data/:/data/:z
+---
+>       - /srv/nfs/var/harbor/data/ca_download/:/etc/core/ca/:z
+>       - /srv/nfs/var/harbor/data/:/data/:z
+128c128
+<         source: /data/harbor/data/secret/core/private_key.pem
+---
+>         source: /srv/nfs/var/harbor/data/secret/core/private_key.pem
+131c131
+<         source: /data/harbor/data/secret/keys/secretkey
+---
+>         source: /srv/nfs/var/harbor/data/secret/keys/secretkey
+186,187c186,187
+<       - /data/harbor/data/job_logs:/var/log/jobs:z
+<       - /data/harbor/data/scandata_exports:/var/scandata_exports:z
+---
+>       - /srv/nfs/var/harbor/data/job_logs:/var/log/jobs:z
+>       - /srv/nfs/var/harbor/data/scandata_exports:/var/scandata_exports:z
+214c214
+<       - /data/harbor/data/redis:/var/lib/redis
+---
+>       - /srv/nfs/var/harbor/data/redis:/var/lib/redis
