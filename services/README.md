@@ -8,10 +8,12 @@ These are container-based supplementary services.
     - [Web service](#web-service)
     - [Background services](#background-services)
   - [HOW-TO](#how-to)
-    - [Most supplementary services](#most-supplementary-services)
-    - [Harbor](#harbor)
-    - [Xray](#xray)
-    - [System-configurations](#system-configurations)
+    - [First-time configurations](#first-time-configurations)
+      - [Gitea](#gitea)
+      - [Harbor](#harbor)
+      - [Xray](#xray)
+      - [System-configurations](#system-configurations)
+    - [Start all-in-one services (except Harbor and node-exporter)](#start-all-in-one-services-except-harbor-and-node-exporter)
     - [Node-exporter endpoint](#node-exporter-endpoint)
   - [Acknowledgments](#acknowledgments)
 
@@ -51,7 +53,27 @@ We use NGINX as our reverse proxy, which forwards users' HTTPS requests from the
 
 ## HOW-TO
 
-### Most supplementary services
+### First-time configurations
+
+#### Gitea
+
+Check the notes [to start gitea](gitea/README.md).
+
+#### Harbor
+
+Check the [notes to install and start Harbor](harbor/README.md).
+
+P.S. The Harbor service is not in the all-in-one file, thus needs to be launched separately.
+
+#### Xray
+
+Check the [note to add the configuration files](xray/README.md)
+
+#### System-configurations
+
+Contains some [key configurations](system-configurations/etc) in `/etc`
+
+### Start all-in-one services (except Harbor and node-exporter)
 
 On the management node, use the all-in-one docker-compose file:
 
@@ -63,21 +85,9 @@ sudo chown -R 1000:1000 prometheus/*
 docker-compose up -d
 ```
 
-### Harbor
-
-Check the [notes to install and start Harbor](harbor/README.md).
-
-### Xray
-
-Check the [note to add the configuration files](xray/README.md)
-
-### System-configurations
-
-Contains some [key configurations](system-configurations/etc) in `/etc`
-
 ### Node-exporter endpoint
 
-On every node:
+On every node that needs to be monitored:
 
 Copy `docker-compose.yaml` in `node-exporter` to every node, run
 

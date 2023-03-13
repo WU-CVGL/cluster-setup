@@ -2,7 +2,7 @@
 
 # The IP address or hostname to access admin UI and registry service.
 # DO NOT use localhost or 127.0.0.1, because Harbor needs to be accessed by external clients.
-hostname: harbor.lins.lab
+hostname: harbor.cvgl.lab
 
 # http related config
 http:
@@ -10,12 +10,12 @@ http:
   port: 50000
 
 # https related config
-#https:
-  # https port for harbor, default is 443
-#  port: 443
-  # The path of cert and key files for nginx
-#  certificate: /your/certificate/path
-#  private_key: /your/private/key/path
+# https:
+#   # https port for harbor, default is 443
+#   port: 443
+#   # The path of cert and key files for nginx
+#   certificate: /srv/nfs/var/Docker/ssl/Server.cer
+#   private_key: /srv/nfs/var/Docker/ssl/Server-unsecure.pvk
 
 # # Uncomment following will enable tls communication between all harbor components
 # internal_tls:
@@ -26,17 +26,17 @@ http:
 
 # Uncomment external_url if you want to enable external proxy
 # And when it enabled the hostname will no longer used
-external_url: https://harbor.lins.lab
+external_url: https://harbor.cvgl.lab
 
 # The initial password of Harbor admin
 # It only works in first time to install harbor
 # Remember Change the admin password from UI after launching Harbor.
-harbor_admin_password: Harbor12345
+harbor_admin_password: CVGLHarbor12345
 
 # Harbor DB configuration
 database:
   # The password for the root user of Harbor DB. Change this before any production use.
-  password: XdcF@b8ZKr97@huc
+  password: CVGLroot123!
   # The maximum number of connections in the idle connection pool. If it <=0, no idle connections are retained.
   max_idle_conns: 100
   # The maximum number of open connections to the database. If it <= 0, then there is no limit on the number of open connections.
@@ -44,7 +44,7 @@ database:
   max_open_conns: 900
 
 # The default data volume
-data_volume: /data/harbor/data
+data_volume: /srv/nfs/var/harbor/data
 
 # Harbor Storage settings by default is using /data dir on local filesystem
 # Uncomment storage_service setting If you want to using external storage
@@ -86,9 +86,6 @@ trivy:
   # This option doesn’t affect DB download. You need to specify "skip-update" as well as "offline-scan" in an air-gapped environment.
   offline_scan: false
   #
-  # Comma-separated list of what security issues to detect. Possible values are `vuln`, `config` and `secret`. Defaults to `vuln`.
-  security_check: vuln
-  #
   # insecure The flag to skip verifying registry certificate
   insecure: false
   # github_token The GitHub access token to download Trivy DB
@@ -128,7 +125,7 @@ log:
     # are all valid.
     rotate_size: 200M
     # The directory on your host that store log
-    location: /data/harbor/log
+    location: /srv/nfs/var/harbor/log
 
   # Uncomment following lines to enable external syslog endpoint.
   # external_endpoint:
