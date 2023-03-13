@@ -31,7 +31,7 @@
     - [Prevent Docker and VPN IP address conflicts](#prevent-docker-and-vpn-ip-address-conflicts)
     - [Security Related Rules](#security-related-rules)
   - [Setup Open Source Mirrors \& nvidia-docker](#setup-open-source-mirrors--nvidia-docker)
-    - [Apt](#apt)
+    - [APT](#apt)
     - [Python PyPI (pip)](#python-pypi-pip)
   - [Install Docker-CE](#install-docker-ce)
   - [Install Nvidia-docker](#install-nvidia-docker)
@@ -155,6 +155,10 @@ Set up reservations for critical workloads:
 
 ## Configure TrueNAS
 
+Here is an example of configuring a typical TrueNAS storage for lab use.
+
+This example shows how to create a RAID-Z2 HDD pool for warm storage and a JBOD PCIe SSD pool for hot storage, as well as cron job configurations: data scrubbing, S.M.A.R.T. testing, snapshots, and replication.
+
 ### Configure storage Pools
 
 Create the SSD pool:
@@ -229,7 +233,7 @@ The snapshots can be found here:
 
 ![SSD snapshots](./images/01_NAS_CRON_05.png)
 
-You can use these snapshots to export or rollback the mis-deleted files.
+You can use these snapshots to export or rollback the accidentally deleted files.
 
 #### Replication
 
@@ -312,19 +316,23 @@ sudo systemctl restart sshd
 Problem description:
 
 Only 4/8 GPUs showes up in `nvidia-smi`. Kernel messege `dmesg` showes:
+
 ```log
 [   37.010658] NVRM: This PCI I/O region assigned to your NVIDIA device is invalid:
                NVRM: BAR1 is 0M @ 0x0 (PCI:0000:56:00.0)
 ```
 
 Solution:
+
 ```bash
 sudo -e /etc/default/grub
 ```
+
 Edit grub configuration, add kernel boot parameter
 `GRUB_CMDLINE_LINUX_DEFAULT="pci=realloc"`
 
 To take effect,
+
 ```bash
 sudo update-grub
 ```
@@ -395,17 +403,15 @@ Reference: [Fixing Docker and VPN IP Address Conflicts](https://www.lullabot.com
 
 ## Setup Open Source Mirrors & nvidia-docker
 
-### Apt
+### APT
 
 Note: `mirrors.bfsu.edu.cn` is a mirror of `mirrors.tuna.tsinghua.edu.cn`, but a lot faster.
 
 `mirrors.ustc.edu.cn` is also fast but lacks `pypi`, `anaconda`, etc.
 
 > https://mirrors.bfsu.edu.cn/help/ubuntu/
-
+>
 > https://mirrors.ustc.edu.cn/help/ubuntu.html
-
-
 
 ```bash
 sudo sed -i 's/archive.ubuntu.com/mirrors.ustc.edu.cn/g' /etc/apt/sources.list
@@ -478,6 +484,7 @@ curl https://google.com.hk
 ```
 
 if there are output lines with an HTTP response like:
+
 ```html
 <HTML><HEAD><meta http-equiv="content-type" content="text/html;charset=utf-8">
 <TITLE>301 Moved</TITLE></HEAD><BODY>
@@ -492,29 +499,37 @@ it shows that the proxy service is working.
 ### Configure `Docker` to use the proxy
 
 1) To proceed, recursively create the folder:
+
     ```sh
     sudo mkdir -p /etc/systemd/system/docker.service.d
     ```
+
 2) Add environment variables to the configuration file `/etc/systemd/system/docker.service.d/proxy.conf`:
+
     ```conf
     [Service]
     Environment="HTTP_PROXY=http://192.168.233.8:8889"
     Environment="HTTPS_PROXY=http://192.168.233.8:8889"
     Environment="NO_PROXY=localhost,127.0.0.1,nvcr.io,aliyuncs.com,edu.cn,cvgl.lab"
     ```
+
     You should change `192.168.233.8` and `8889` to the actual proxy address and port respectively.
 
     Note that the `http` is intentionally used in `HTTPS_PROXY` - this is how most HTTP proxies work.
 
 3) Update configuration and restart `Docker`:
+
     ```sh
     systemctl daemon-reload
     systemctl restart docker
     ```
+
 4) Check the proxy:
+
     ```sh
     docker info
     ```
+
 ## Install Determined AI Systemwide
 
 ```sh
@@ -536,6 +551,7 @@ TypeError: deprecated() got an unexpected keyword argument 'name'
 ```
 
 Solution:
+
 ```bash
 sudo rm -rf /usr/local/lib/python3.8/dist-packages/OpenSSL
 sudo rm -rf /usr/local/lib/python3.8/dist-packages/pyOpenSSL-22.1.0.dist-info/
@@ -580,10 +596,11 @@ sudo pip install -U determined-cli
 
 ### Wikis / DBs / KBs
 
-- [Archlinux Wiki](https://wiki.archlinux.org/)
+- [ArchWiki](https://wiki.archlinux.org/)
 - [TechPowerUp - CPU Specs Database](https://www.techpowerup.com/cpu-specs/)
-- [TechPowerUp - GPU Sepcs Database](https://www.techpowerup.com/gpu-specs/)
+- [TechPowerUp - GPU Specs Database](https://www.techpowerup.com/gpu-specs/)
 - [Intel Product Specifications](https://ark.intel.com/content/www/us/en/ark.html)
+- [TrueNAS Docs Hub](https://www.truenas.com/docs/)
 - [napp-it ZFS server manual](https://www.napp-it.org/manuals/index_en.html)
 - [VMware Knowledge Base](https://kb.vmware.com/s/)
 - [NVIDIA Docs](https://docs.nvidia.com/)
@@ -600,6 +617,10 @@ sudo pip install -U determined-cli
 
 - [Serve the Home Forum](https://forums.servethehome.com/index.php)
 - [Linus Tech Tips Forum](https://linustechtips.com/)
+- [Ubuntu Forums](https://ubuntuforums.org/)
+- [Arch Linux Forums](https://bbs.archlinux.org/)
+- [StackOverflow](https://stackoverflow.com/)
+- [StackExchange](https://stackexchange.com/)
 - [ServerFault](https://serverfault.com/)
 - [AskUbuntu](https://askubuntu.com/)
 - [Reddit - HomeServer](https://www.reddit.com/r/HomeServer/)
@@ -613,10 +634,10 @@ sudo pip install -U determined-cli
 - [Linus Tech Tips - Youtube](https://www.youtube.com/@LinusTechTips)
 - [Linus Tech Tips - Bilibili](https://space.bilibili.com/12434430)
 - [LYYCloud - VMware, K8S](https://new.llycloud.com/)
-- [跟李沐学AI](https://space.bilibili.com/1567748478)
-- [无情开评](https://space.bilibili.com/514160575)
 - [司波图](https://space.bilibili.com/28457)
 - [钱韦德](https://space.bilibili.com/20274090)
 - [Sagit](https://space.bilibili.com/171459855)
+- [无情开评](https://space.bilibili.com/514160575)
+- [跟李沐学AI](https://space.bilibili.com/1567748478)
 - [科技宅小明](https://space.bilibili.com/5626102)
 - [爱折腾的老高](https://space.bilibili.com/455976991/)

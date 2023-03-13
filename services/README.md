@@ -12,14 +12,17 @@ These are container-based supplementary services.
       - [Gitea](#gitea)
       - [Harbor](#harbor)
       - [Xray](#xray)
+      - [Grafana and Prometheus](#grafana-and-prometheus)
       - [System-configurations](#system-configurations)
-    - [Start all-in-one services (except Harbor and node-exporter)](#start-all-in-one-services-except-harbor-and-node-exporter)
+    - [All-in-one services (except Harbor and node-exporter)](#all-in-one-services-except-harbor-and-node-exporter)
     - [Node-exporter endpoint](#node-exporter-endpoint)
   - [Acknowledgments](#acknowledgments)
 
 ## Services
 
 We use NGINX as our reverse proxy, which forwards users' HTTPS requests from their web browsers to our various backend services.
+
+We are currently offering these web services:
 
 ### Core service
 
@@ -29,7 +32,7 @@ We use NGINX as our reverse proxy, which forwards users' HTTPS requests from the
 
 ### Web service
 
-- homepage
+- Homepage
   - https://cvgl.lab
 - Nextcloud
   - https://pan.cvgl.lab
@@ -57,7 +60,7 @@ We use NGINX as our reverse proxy, which forwards users' HTTPS requests from the
 
 #### Gitea
 
-Check the notes [to start gitea](gitea/README.md).
+Check the notes [to start Gitea](gitea/README.md).
 
 #### Harbor
 
@@ -69,27 +72,51 @@ P.S. The Harbor service is not in the all-in-one file, thus needs to be launched
 
 Check the [note to add the configuration files](xray/README.md)
 
-#### System-configurations
+#### Grafana and Prometheus
 
-Contains some [key configurations](system-configurations/etc) in `/etc`
-
-### Start all-in-one services (except Harbor and node-exporter)
-
-On the management node, use the all-in-one docker-compose file:
+Fix the ACL permissions:
 
 ```bash
 sudo chown -R 472:0 grafana/*
 
 sudo chown -R 1000:1000 prometheus/*
+```
 
+#### System-configurations
+
+Contains some [key configurations](system-configurations/etc) in `/etc`
+
+### All-in-one services (except Harbor and node-exporter)
+
+To launch the all-in-one services, simply run the command on the management node:
+
+```bash
 docker compose up -d
+```
+
+To rebuild one service, for example, the NGINX reverse proxy, run
+
+```bash
+docker compose build nginx
+```
+
+To force recreate some services (when changed some configurations), run
+
+```bash
+docker compose up -d --force-recreate --remove-orphans [service1 service2 ...]
+```
+
+To force recreate all services:
+
+```bash
+docker compose up -d --force-recreate --remove-orphans
 ```
 
 ### Node-exporter endpoint
 
 On every node that needs to be monitored:
 
-Copy `docker-compose.yaml` in `node-exporter` to every node, run
+Copy [`docker-compose.yaml` in `node-exporter`](./node-exporter/docker-compose.yaml) to every node, then run
 
 ```bash
 docker compose up -d

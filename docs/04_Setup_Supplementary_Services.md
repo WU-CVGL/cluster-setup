@@ -18,22 +18,6 @@
 
 ## Introduction
 
-We are currently offering these web services:
-
-- Homepage
-  - `https://cvgl.lab`
-- GPU cluster dashboard
-  - `https://gpu.cvgl.lab`
-- Harbor
-  - `https://harbor.cvgl.lab`
-- Grafana
-  - `https://grafana.cvgl.lab`
-
-- Background services:
-  - prometheus
-  - node-exporter
-  - v2ray-exporter
-
 System Topology:
 
 ```text
@@ -283,7 +267,7 @@ You can add the `CA.cer` created above to your browser (or the whole system) to 
 
 - [Tutorial from Ubuntu - Installing a root CA certificate](https://ubuntu.com/server/docs/security-trust-store)
 
-Finally add the corresponding HOSTS to your PC:
+Finally, add the corresponding HOSTS to your PC:
 
 ```text
 10.0.1.68 cvgl.lab
@@ -308,23 +292,7 @@ This will be useful in the [following section](#harbor).
 
 We have constructed an all-in-one [docker-compose file](../services/docker-compose.yml) to launch most supplementary services mentioned above except `Harbor` the container registry which will be discussed in the next section.
 
-To launch the all-in-one services, simply run the command in the `CVGL-Services` folder:
-
-```bash
-docker compose up -d
-```
-
-To rebuild one service, for example, the NGINX reverse proxy, run
-
-```bash
-docker-compose build reverseproxy
-```
-
-To force recreate the services (when changed some configurations), run
-
-```bash
-docker compose up -d --force-recreate --remove-orphans
-```
+More details can be found in the [README of services](../services/README.md).
 
 ## Harbor
 
@@ -358,7 +326,7 @@ docker compose up -d --force-recreate --remove-orphans
 5) Rebuild and restart NGINX
 
     ```bash
-    docker-compose build reverseproxy
+    docker compose build reverseproxy
     docker compose up -d --force-recreate --no-deps reverseproxy
     ```
 
