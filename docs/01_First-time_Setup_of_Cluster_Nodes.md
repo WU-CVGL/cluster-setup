@@ -460,7 +460,7 @@ The open-source project `Project X` originates from XTLS protocol, and provides 
 
 1) Download and extract the latest release of `Xray-core` [from here](https://github.com/XTLS/Xray-core/releases). (Note that you should choose `Xray-linux-64.zip`)
 
-2) Create a client configuration file `config.json`. An off-the-shelf configuration is available at [here (TODO)](https://git.cvgl.lab/Cluster_User_Group/CVGL-Services/src/branch/nginx/xray/jp-central/config/config.json), which will open SOCKS5 proxy on port `1089` and HTTP proxy on port `8889`. More examples can be found at [XTLS/Xray-examples](https://github.com/XTLS/Xray-examples)
+2) Create a client configuration file `config.json`. An off-the-shelf configuration is available at [here (TBA)](../services/xray/jp-central/config/config.json), which will open SOCKS5 proxy on port `1089` and HTTP proxy on port `8889`. More examples can be found at [XTLS/Xray-examples](https://github.com/XTLS/Xray-examples)
 
 3) Execute `./xray -config ./config.json`.
 

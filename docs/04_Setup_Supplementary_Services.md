@@ -249,7 +249,7 @@ The certificates will be stored in `/etc/ssl/private`.
 
 ### Configure NGINX
 
-`Configurations` and `Dockerfile` can be found [here](https://git.cvgl.lab/Cluster_User_Group/CVGL-Services/src/branch/nginx/nginx/).
+`Configurations` and `Dockerfile` can be found [here](../services/nginx/).
 
 You can add a temporary `docker-compose.yaml` in the `nginx` folder to test the configurations:
 
@@ -306,9 +306,7 @@ This will be useful in the [following section](#harbor).
 
 ## All-in-one
 
-(TODO)
-
-We have constructed an all-in-one [docker-compose file](https://git.cvgl.lab/Cluster_User_Group/CVGL-Services/src/branch/nginx/docker-compose.yaml) to launch most supplementary services mentioned above except `Harbor` the container registry which will be discussed in the next section.
+We have constructed an all-in-one [docker-compose file](../services/docker-compose.yml) to launch most supplementary services mentioned above except `Harbor` the container registry which will be discussed in the next section.
 
 To launch the all-in-one services, simply run the command in the `CVGL-Services` folder:
 
@@ -332,7 +330,7 @@ docker compose up -d --force-recreate --remove-orphans
 
  In this section, we will discuss how to install and configure Harbor in our cluster.
 
-1) Install Harbor. You can start from the official docs [here](https://goharbor.io/docs/2.6.0/install-config/configure-yml-file/). Also, check out the notes [here](https://git.cvgl.lab/Cluster_User_Group/CVGL-Services/src/branch/nginx/harbor/README.md) to customize.
+1) Install Harbor. You can start from the official docs [here](https://goharbor.io/docs/2.6.0/install-config/configure-yml-file/). Also, check out the notes [here](../services/harbor/README.md) to customize.
 
 2) Configure HOSTS on each node. Make sure these lines exist:
 
