@@ -4,18 +4,16 @@
 # [1]: https://www.ibm.com/support/pages/better-performance-nfs-server-and-client
 # [2]: https://nfs.sourceforge.net/nfs-howto/ar01s05.html
 ### --- NAS exports starts here ---
-nas.cvgl.lab:/mnt/Peter/Datasets            /datasets           nfs rw,hard,intr,rsize=8192,wsize=8192,timeo=14,_netdev 0 0
-nas.cvgl.lab:/mnt/Peter/Workspace/lzzhao    /workspace/lzzhao   nfs rw,hard,intr,rsize=8192,wsize=8192,timeo=14,_netdev 0 0
-nas.cvgl.lab:/mnt/Peter/Workspace/wangpeng  /workspace/wangpeng nfs rw,hard,intr,rsize=8192,wsize=8192,timeo=14,_netdev 0 0
-nas.cvgl.lab:/mnt/Peter/Workspace/mrj       /workspace/mrj      nfs rw,hard,intr,rsize=8192,wsize=8192,timeo=14,_netdev 0 0
-nas.cvgl.lab:/mnt/Peter/Workspace/lyh       /workspace/lyh      nfs rw,hard,intr,rsize=8192,wsize=8192,timeo=14,_netdev 0 0
-nas.cvgl.lab:/mnt/Peter/Workspace/lmy       /workspace/lmy      nfs rw,hard,intr,rsize=8192,wsize=8192,timeo=14,_netdev 0 0
-nas.cvgl.lab:/mnt/Peter/Workspace/lzq       /workspace/lzq      nfs rw,hard,intr,rsize=8192,wsize=8192,timeo=14,_netdev 0 0
-nas.cvgl.lab:/mnt/Peter/Workspace/zzj       /workspace/zzj      nfs rw,hard,intr,rsize=8192,wsize=8192,timeo=14,_netdev 0 0
-### SSD test
-nas.cvgl.lab:/mnt/SSD/test                  /test               nfs vers=3,rw,hard,intr,rsize=8192,wsize=8192,timeo=14,_netdev 0 0
+nas.cvgl.lab:/mnt/Peter/Datasets            /datasets           nfs defaults,noatime,hard,nointr,rsize=32768,wsize=32768,_netdev 0 0
+nas.cvgl.lab:/mnt/Peter/Workspace/lzzhao    /workspace/lzzhao   nfs defaults,noatime,hard,nointr,rsize=32768,wsize=32768,_netdev 0 0
+nas.cvgl.lab:/mnt/Peter/Workspace/wangpeng  /workspace/wangpeng nfs defaults,noatime,hard,nointr,rsize=32768,wsize=32768,_netdev 0 0
+nas.cvgl.lab:/mnt/Peter/Workspace/mrj       /workspace/mrj      nfs defaults,noatime,hard,nointr,rsize=32768,wsize=32768,_netdev 0 0
+nas.cvgl.lab:/mnt/Peter/Workspace/lyh       /workspace/lyh      nfs defaults,noatime,hard,nointr,rsize=32768,wsize=32768,_netdev 0 0
+nas.cvgl.lab:/mnt/Peter/Workspace/lmy       /workspace/lmy      nfs defaults,noatime,hard,nointr,rsize=32768,wsize=32768,_netdev 0 0
+nas.cvgl.lab:/mnt/Peter/Workspace/lzq       /workspace/lzq      nfs defaults,noatime,hard,nointr,rsize=32768,wsize=32768,_netdev 0 0
+nas.cvgl.lab:/mnt/Peter/Workspace/zzj       /workspace/zzj      nfs defaults,noatime,hard,nointr,rsize=32768,wsize=32768,_netdev 0 0
 ### Supplementary services
-nas.cvgl.lab:/mnt/Peter/SupplementaryServices/Docker            /srv/nfs/var/Docker             nfs vers=4,rw,hard,intr,rsize=8192,wsize=8192,timeo=14,_netdev 0 0
-nas.cvgl.lab:/mnt/Peter/SupplementaryServices/nextcloud         /srv/nfs/var/nextcloud          nfs vers=4,rw,hard,intr,rsize=8192,wsize=8192,timeo=14,_netdev 0 0
-nas.cvgl.lab:/mnt/Peter/SupplementaryServices/harbor/data       /srv/nfs/var/harbor/data        nfs vers=4,rw,hard,intr,rsize=8192,wsize=8192,timeo=14,_netdev 0 0
-nas.cvgl.lab:/mnt/Peter/SupplementaryServices/harbor/database   /srv/nfs/var/harbor/database    nfs vers=3,rw,hard,intr,rsize=8192,wsize=8192,timeo=14,_netdev 0 0
+nas.cvgl.lab:/mnt/Peter/SupplementaryServices/Docker            /srv/nfs/var/Docker             nfs vers=4,defaults,noatime,hard,nointr,rsize=32768,wsize=32768,_netdev 0 0
+nas.cvgl.lab:/mnt/Peter/SupplementaryServices/nextcloud         /srv/nfs/var/nextcloud          nfs vers=4,defaults,noatime,hard,nointr,rsize=32768,wsize=32768,_netdev 0 0
+nas.cvgl.lab:/mnt/Peter/SupplementaryServices/harbor/data       /srv/nfs/var/harbor/data        nfs vers=4,defaults,noatime,hard,nointr,rsize=32768,wsize=32768,_netdev 0 0
+nas.cvgl.lab:/mnt/Peter/SupplementaryServices/harbor/database   /srv/nfs/var/harbor/database    nfs vers=3,defaults,noatime,hard,nointr,rsize=32768,wsize=32768,_netdev 0 0

@@ -353,12 +353,21 @@ The IP range 172.20.0.0/16 is used by the school VPN, but sometimes it is also u
 To prevent these conflicts, add this entity to `/etc/docker/daemon.json`:
 
 ```json
+{
+  // Other configs...,
   "default-address-pools" : [
     {
       "base" : "172.240.0.0/16",
       "size" : 24
     }
   ]
+}
+```
+
+Then restart Docker to take effect:
+
+```bash
+sudo systemctl restart docker
 ```
 
 Reference: [Fixing Docker and VPN IP Address Conflicts](https://www.lullabot.com/articles/fixing-docker-and-vpn-ip-address-conflicts)

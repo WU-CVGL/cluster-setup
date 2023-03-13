@@ -272,7 +272,7 @@ services:
 Then run the following command to test it:
 
 ```bash
-docker-compose up
+docker compose up
 ```
 
 You can add the `CA.cer` created above to your browser (or the whole system) to depress the warning:
@@ -313,7 +313,7 @@ We have constructed an all-in-one [docker-compose file](https://git.cvgl.lab/Clu
 To launch the all-in-one services, simply run the command in the `CVGL-Services` folder:
 
 ```bash
-docker-compose up -d
+docker compose up -d
 ```
 
 To rebuild one service, for example, the NGINX reverse proxy, run
@@ -325,7 +325,7 @@ docker-compose build reverseproxy
 To force recreate the services (when changed some configurations), run
 
 ```bash
-docker-compose up -d --force-recreate --remove-orphans
+docker compose up -d --force-recreate --remove-orphans
 ```
 
 ## Harbor
@@ -361,7 +361,7 @@ docker-compose up -d --force-recreate --remove-orphans
 
     ```bash
     docker-compose build reverseproxy
-    docker-compose up -d --force-recreate --no-deps reverseproxy
+    docker compose up -d --force-recreate --no-deps reverseproxy
     ```
 
 6) Log in with the URL `https://harbor.cvgl.lab`. Change the default password.
@@ -391,5 +391,5 @@ latest: digest: sha256:f54a58bc1aac5ea1a25d796ae155dc228b3f0e11d046ae276b39c4bf2
 Note: to restart the Harbor services, go to the installation folder and use `docker-compose` commands:
 
 ```bash
-sudo docker-compose up -d --force-recreate --remove-orphans
+sudo docker compose up -d --force-recreate --remove-orphans
 ```

@@ -82,7 +82,7 @@ sudo chown -R 472:0 grafana/*
 
 sudo chown -R 1000:1000 prometheus/*
 
-docker-compose up -d
+docker compose up -d
 ```
 
 ### Node-exporter endpoint
@@ -92,7 +92,7 @@ On every node that needs to be monitored:
 Copy `docker-compose.yaml` in `node-exporter` to every node, run
 
 ```bash
-docker-compose up -d
+docker compose up -d
 ```
 
 to collect data from every machine.

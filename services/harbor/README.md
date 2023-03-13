@@ -7,7 +7,7 @@
 - Run `sudo install.sh`
 - Run `docker-compose down`
 - Edit `docker-compose.yml`, update PostgreSQL database volume path
-- Run `docker-compose up -d`
+- Run `docker compose up -d`
 
 ## Notes
 
