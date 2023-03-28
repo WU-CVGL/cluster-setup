@@ -372,6 +372,12 @@ To prevent these conflicts, add this entity to `/etc/docker/daemon.json`:
 }
 ```
 
+Remove the conflicting Docker network:
+
+```bash
+docker network rm 1d97d71fdb01
+```
+
 Then restart Docker to take effect:
 
 ```bash
