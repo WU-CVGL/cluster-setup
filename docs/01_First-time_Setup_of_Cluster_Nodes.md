@@ -384,6 +384,8 @@ Then restart Docker to take effect:
 sudo systemctl restart docker
 ```
 
+P.S. Remember to restart the services related to the removed Docker network.
+
 Reference: [Fixing Docker and VPN IP Address Conflicts](https://www.lullabot.com/articles/fixing-docker-and-vpn-ip-address-conflicts)
 
 ### Security Related Rules
