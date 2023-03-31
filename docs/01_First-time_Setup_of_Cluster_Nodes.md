@@ -150,7 +150,7 @@ Set up reservations for critical workloads:
  Add the IP of the core service VM to the login node's `/etc/environment`:
 
  ```bash
- DET_MASTER="192.168.233.6"
+ DET_MASTER="10.0.1.66"
  ```
 
 ## Configure TrueNAS
@@ -193,7 +193,7 @@ First, enable NFS service:
 ![Enable NFS](./images/01_NAS_05.png)
 
 Go to `Sharing/NFS/Add`, and select the dataset just created above.
-In **Networks**, let `Authorized Networks = 192.168.233.0/24`.
+In **Networks**, let `Authorized Networks = 10.0.1.64/27,192.168.233.0/24`.
 Click **SUBMIT** at the bottom of the page.
 
 ![Public dataset NFS Share](./images/01_NAS_06.png)
@@ -482,12 +482,12 @@ The open-source project `Project X` originates from XTLS protocol, and provides 
 
 First, launch an HTTP proxy on the node (or in the LAN).
 
-For example, **suppose** you have such a proxy service http://192.168.233.8:8889.
+For example, **suppose** you have such a proxy service http://10.0.1.68:8889.
 
 To verify it:
 
 ```bash
-export https_proxy=http://192.168.233.8:8889
+export https_proxy=http://10.0.1.68:8889
 curl https://google.com.hk
 ```
 
@@ -516,12 +516,12 @@ it shows that the proxy service is working.
 
     ```conf
     [Service]
-    Environment="HTTP_PROXY=http://192.168.233.8:8889"
-    Environment="HTTPS_PROXY=http://192.168.233.8:8889"
+    Environment="HTTP_PROXY=http://10.0.1.68:8889"
+    Environment="HTTPS_PROXY=http://10.0.1.68:8889"
     Environment="NO_PROXY=localhost,127.0.0.1,nvcr.io,aliyuncs.com,edu.cn,cvgl.lab"
     ```
 
-    You should change `192.168.233.8` and `8889` to the actual proxy address and port respectively.
+    You should change `10.0.1.68` and `8889` to the actual proxy address and port respectively.
 
     Note that the `http` is intentionally used in `HTTPS_PROXY` - this is how most HTTP proxies work.
 

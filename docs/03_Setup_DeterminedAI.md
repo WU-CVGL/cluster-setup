@@ -108,7 +108,7 @@ See [notes](../services/determined/README.md) and the [master configuration file
 ssh user_name@host_name
 ```
 
-then, input `password` to complete `ssh`. You can ask sp12138sp@gmail.com for the `user_name`, `host_name` and `password`.
+then, input `password` to complete `ssh`. You can ask the system admin for the `user_name`, `host_name` and `password`.
 
 ### Log in `Determined AI`
 
@@ -131,7 +131,7 @@ description: your_task_name
 resources:
     slots: number_of_GPUs
 bind_mounts:
-  - host_path: /labdata0/xxx/
+  - host_path: /workspace/xxx/
     container_path: /run/determined/workdir/xxx/
 environment:
     image: determinedai/environments:cuda-11.3-pytorch-1.10-tf-2.8-gpu-0.19.4

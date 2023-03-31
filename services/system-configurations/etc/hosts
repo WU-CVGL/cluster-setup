@@ -1,8 +1,3 @@
-192.168.233.8 cvgl.lab
-192.168.233.8 git.cvgl.lab
-192.168.233.8 gpu.cvgl.lab
-192.168.233.8 harbor.cvgl.lab
-
 192.168.233.6  cvglcorevm.lan
 192.168.233.8  cvglsuppvm.lan
 192.168.233.10 cvglloginnode.lan
@@ -10,10 +5,9 @@
 192.168.233.12 cvgl-node02.lan
 192.168.233.13 cvgl-node03.lan
 192.168.233.14 cvgl-node04.lan
+192.168.233.15 cvgl-node05.lan
 
-# to passthru ix0
 192.168.233.233 nas.cvgl.lab
-# to virtual vmx1 (Used in Supplementary VMs)
 # 192.168.233.234 nas.cvgl.lab
 
 ### Campus Network
@@ -23,11 +17,11 @@
 10.0.1.68 gpu.cvgl.lab
 10.0.1.68 git.cvgl.lab
 10.0.1.68 portainer.cvgl.lab
-10.0.1.68 registry.cvgl.lab
-
-10.0.1.68 traefik.cvgl.lab
 10.0.1.68 grafana.cvgl.lab
-10.0.1.68 whoami.cvgl.lab
-10.0.1.68 apache.cvgl.lab
-10.0.1.68 nginx.cvgl.lab
 10.0.1.68 harbor.cvgl.lab
+10.0.1.70 nas.cvgl.lab
+10.0.1.71 cvgl-node01.lan
+10.0.1.72 cvgl-node02.lan
+10.0.1.73 cvgl-node03.lan
+10.0.1.74 cvgl-node04.lan
+10.0.1.75 cvgl-node05.lan

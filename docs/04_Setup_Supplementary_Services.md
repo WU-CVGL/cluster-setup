@@ -110,7 +110,7 @@ in DYNAMICALLY LINKED programs via a preloaded DLL (dlsym(), LD_PRELOAD) and red
     Edit `/etc/proxychains4.conf`, change the last line into
 
     ```text
-    socks5 192.168.233.6 10089
+    socks5 10.0.1.68 10089
     ```
 
 3. Check the configuration
@@ -120,7 +120,7 @@ in DYNAMICALLY LINKED programs via a preloaded DLL (dlsym(), LD_PRELOAD) and red
     [proxychains] config file found: /etc/proxychains4.conf
     [proxychains] preloading /usr/lib/x86_64-linux-gnu/libproxychains.so.4
     [proxychains] DLL init: proxychains-ng 4.14
-    [proxychains] Strict chain  ...  192.168.233.6:10089  ...  google.com:80  ...  OK
+    [proxychains] Strict chain  ...  10.0.1.68:10089  ...  google.com:80  ...  OK
     <HTML><HEAD><meta http-equiv="content-type" content="text/html;charset=utf-8">
     <TITLE>301 Moved</TITLE></HEAD><BODY>
     <H1>301 Moved</H1>
@@ -139,10 +139,10 @@ This is useful when some programs that do not use `libc` cannot be hooked by `pr
 such as many programs written in `python` or `golang`.
 
 ```bash
-export http_proxy=http://192.168.233.6:18889 &&\
-export https_proxy=http://192.168.233.6:18889 &&\
-export HTTP_PROXY=http://192.168.233.6:18889 &&\
-export HTTPS_PROXY=http://192.168.233.6:18889
+export http_proxy=http://10.0.1.68:18889 &&\
+export https_proxy=http://10.0.1.68:18889 &&\
+export HTTP_PROXY=http://10.0.1.68:18889 &&\
+export HTTPS_PROXY=http://10.0.1.68:18889
 curl google.com
 ```
 
@@ -303,8 +303,8 @@ More details can be found in the [README of services](../services/README.md).
 2) Configure HOSTS on each node. Make sure these lines exist:
 
     ```text
-    192.168.233.8 cvgl.lab
-    192.168.233.8 harbor.cvgl.lab
+    10.0.1.68 cvgl.lab
+    10.0.1.68 harbor.cvgl.lab
     ```
 
 3) Trust the CA certificate on each node:
@@ -319,7 +319,7 @@ More details can be found in the [README of services](../services/README.md).
 
     ```nginx
     upstream harbor {
-        server 192.168.233.8:50000;
+        server 10.0.1.68:50000;
     }
     ```
 
