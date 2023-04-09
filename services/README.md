@@ -8,14 +8,19 @@ These are container-based supplementary services.
     - [Web service](#web-service)
     - [Background services](#background-services)
   - [HOW-TO](#how-to)
+    - [Requirements](#requirements)
     - [First-time configurations](#first-time-configurations)
-      - [Gitea](#gitea)
-      - [Harbor](#harbor)
-      - [Xray](#xray)
-      - [Grafana and Prometheus](#grafana-and-prometheus)
-      - [System-configurations](#system-configurations)
-    - [All-in-one services (except Harbor and node-exporter)](#all-in-one-services-except-harbor-and-node-exporter)
-    - [Node-exporter endpoint](#node-exporter-endpoint)
+      - [1. Gitea](#1-gitea)
+      - [2. Harbor](#2-harbor)
+      - [3. Xray](#3-xray)
+      - [4. Grafana and Prometheus](#4-grafana-and-prometheus)
+      - [5. System-configurations](#5-system-configurations)
+      - [6. All-in-one services (except Harbor and node-exporter)](#6-all-in-one-services-except-harbor-and-node-exporter)
+      - [7. Set up endpoints for Node-exporter and other monitoring services](#7-set-up-endpoints-for-node-exporter-and-other-monitoring-services)
+        - [7.1. Introduction](#71-introduction)
+        - [7.2. Run](#72-run)
+        - [7.3. Prometheus authentication for Determined AI (Bearer token)](#73-prometheus-authentication-for-determined-ai-bearer-token)
+  - [Notes](#notes)
   - [Acknowledgments](#acknowledgments)
 
 ## Services
@@ -56,23 +61,32 @@ We are currently offering these web services:
 
 ## HOW-TO
 
+### Requirements
+
+Install the [Compose plugin](https://docs.docker.com/compose/install/linux/#install-using-the-repository)
+to enable [GPU support](https://docs.docker.com/compose/gpu-support/) instead of using the older version of `docker-compose` in Ubuntu (20.04).
+
+```bash
+sudo apt install docker-compose-plugin
+```
+
 ### First-time configurations
 
-#### Gitea
+#### 1. Gitea
 
-Check the notes [to start Gitea](gitea/README.md).
+Check the notes [to configure env variables for Gitea](gitea/README.md).
 
-#### Harbor
+#### 2. Harbor
 
-Check the [notes to install and start Harbor](harbor/README.md).
+Check the [notes to install Harbor](harbor/README.md).
 
 P.S. The Harbor service is not in the all-in-one file, thus needs to be launched separately.
 
-#### Xray
+#### 3. Xray
 
 Check the [note to add the configuration files](xray/README.md)
 
-#### Grafana and Prometheus
+#### 4. Grafana and Prometheus
 
 Fix the ACL permissions:
 
@@ -82,11 +96,11 @@ sudo chown -R 472:0 grafana/*
 sudo chown -R 1000:1000 prometheus/*
 ```
 
-#### System-configurations
+#### 5. System-configurations
 
 Contains some [key configurations](system-configurations/etc) in `/etc`
 
-### All-in-one services (except Harbor and node-exporter)
+#### 6. All-in-one services (except Harbor and node-exporter)
 
 To launch the all-in-one services, simply run the command on the management node:
 
@@ -100,7 +114,7 @@ To rebuild one service, for example, the NGINX reverse proxy, run
 docker compose build nginx
 ```
 
-To force recreate some services (when changed some configurations), run
+To force recreate some services (when changing some configurations), run
 
 ```bash
 docker compose up -d --force-recreate --remove-orphans [service1 service2 ...]
@@ -112,19 +126,73 @@ To force recreate all services:
 docker compose up -d --force-recreate --remove-orphans
 ```
 
-### Node-exporter endpoint
+#### 7. Set up endpoints for Node-exporter and other monitoring services
+
+##### 7.1. Introduction
+
+This `docker-compose.yaml` starts monitoring tools similar to the [Determined AI Docs - Configure Determined with Prometheus and Grafana](https://docs.determined.ai/latest/integrations/prometheus/prometheus.html), except that in [configure cAdvisor and dcgm-exporter](https://docs.determined.ai/latest/integrations/prometheus/prometheus.html#configure-cadvisor-and-dcgm-exporter), the official document uses `provider: startup_script: |` that only works with GCP and Azure provider, while we use our own on-premise cluster.
+
+Instead of using that start-up script, we need to manually launch this `docker-compose.yaml` on each agent node (Maybe we can use Ansible in the future).
+
+Monitoring tools:
+
+- [node-exporter](https://github.com/prometheus/node_exporter)
+- [cAdvisor](https://github.com/google/cadvisor)
+- [dcgm-exporter](https://github.com/NVIDIA/dcgm-exporter)
+
+These tools will run on the cluster agents to be monitored.
+
+##### 7.2. Run
 
 On every node that needs to be monitored:
 
 Copy [`docker-compose.yaml` in `node-exporter`](./node-exporter/docker-compose.yaml) to every node, then run
 
 ```bash
-docker compose up -d
+# Using `docker compose` instead of `docker-compose`
+docker compose up -d --force-recreate --remove-orphans
 ```
 
 to collect data from every machine.
 
 Update `static_configs[targets]` in `prometheus/config/prometheus.yml` if any new nodes are added to the cluster.
+
+##### 7.3. Prometheus authentication for Determined AI (Bearer token)
+
+Scraping Determined-AI-master's metrics (`/prom/det-state-metrics`) with Determined-AI API needs a `bearer_token`. You can get this token by:
+
+```bash
+curl -s "http://10.0.1.66:8080/api/v1/auth/login" \
+  -H 'Content-Type: application/json' \
+  --data-binary '{"username":"admin","password":"********"}'
+```
+
+Then you can use this token in `prometheus.yaml`.
+
+Reference: 
+> [Determined AI Docs - Configure Determined with Prometheus and Grafana](https://docs.determined.ai/latest/integrations/prometheus/prometheus.html)
+>
+> [Determined AI Docs - REST API - Authentication](https://docs.determined.ai/latest/reference/rest-api.html?highlight=api%20login#authentication)
+
+## Notes
+
+Although Determined-AI's [det-state-metrics](https://gpu.cvgl.lab/prom/det-state-metrics) (to view it in your browser you need to log in to https://gpu.cvgl.lab first) provides enough information about tasks and containers, the [official document](https://docs.determined.ai/latest/integrations/prometheus/prometheus.html) and [repo](https://github.com/determined-ai/works-with-determined) did not provide a Grafana dashboard that integrates these data with `cAdvisor` and `dcgm-exporter` to provide usage statistics by individual users or tasks. Further development is required for more precise cluster management.
+
+For example, in `https://gpu.cvgl.lab/prom/det-state-metrics`, each job will have an `allocation_id`. With this `allocation_id`, you can get the corresponding `container_id` in `det_container_id_allocation_id`.
+
+With this `container_id`, you can:
+
+- Get `container_runtime_id` in `det_container_id_runtime_container_id`
+- Get `gpu_uuid` in `det_gpu_uuid_container_id`
+
+With `container_runtime_id`, you can get container stats of this job with `cAdvisor`;`
+
+With `gpu_uuid`, you can get GPU stats of this job with `dcgm-exporter`.
+
+TODOs:
+
+- A Grafana dashboard that integrates and visualizes these data
+- A management watchdog that utilizes these data and kills tasks
 
 ## Acknowledgments
 
