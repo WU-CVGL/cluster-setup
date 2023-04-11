@@ -33,7 +33,6 @@ We are currently offering these web services:
 
 - Determined AI Master
   - [Notes](determined/README.md)
-  - [Master configuration](determined/master.yaml)
 
 ### Web service
 
