@@ -77,7 +77,7 @@ Check the notes [to configure env variables for Gitea](gitea/README.md).
 
 #### 2. Harbor
 
-Check the [notes to install Harbor](harbor/README.md).
+Check the [notes to install Harbor](../docs/04_Setup_Supplementary_Services.md#harbor).
 
 P.S. The Harbor service is not in the all-in-one file, thus needs to be launched separately.
 
