@@ -1,6 +1,6 @@
 # Determined Configuration Files
 
-- Configuration file location: /etc/determined
+- [Configuration file](../system-configurations/etc/determined/master.yaml) location: /etc/determined/master.yaml
 
 ## Master-up command
 

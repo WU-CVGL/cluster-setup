@@ -21,7 +21,8 @@ resource_pools:
     description: "2x AMD Epyc 7302 16c32t 3.0-3.3GHz CPU; 256GiB RAM; RTX 3090 24G GPU."
   - pool_name: 48c96t_512_3090
     description: "2x AMD Epyc 7402 24c48t 2.8-3.35GHz CPU; 512GiB RAM; RTX 3090 24G GPU."
-
+  - pool_name: 64c128t_512_4090
+    description: "2x AMD Epyc 7543 32c64t 2.8-3.7GHz CPU; 512GB RAM; RTX 4090 24G GPU."
 ## The maximum CPU containers for the agent. Defaults to 100.
 #    max_cpu_containers_per_agent: 100
 
