@@ -15,7 +15,7 @@
     - [Configure NGINX](#configure-nginx)
   - [All-in-one](#all-in-one)
   - [Harbor](#harbor)
-    - [Install Harbor on the supplementary services node.](#install-harbor-on-the-supplementary-services-node)
+    - [Install Harbor on the supplementary services node](#install-harbor-on-the-supplementary-services-node)
       - [Steps](#steps)
       - [Notes for NFS storage](#notes-for-nfs-storage)
       - [Provided configuration and patch](#provided-configuration-and-patch)
@@ -303,7 +303,7 @@ More details can be found in the [README of services](../services/README.md).
 
 In this section, we will discuss how to install and configure Harbor in our cluster.
 
-### Install Harbor on the supplementary services node. 
+### Install Harbor on the supplementary services node
 
 #### Steps
 
