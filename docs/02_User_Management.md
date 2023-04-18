@@ -340,7 +340,7 @@ Now we need to create NFS share for every user separately.
    Edit the file `/etc/fstab`, add this new line for the new user
 
    ```text
-   nas.cvgl.lab:/mnt/Peter/Workspace/<username> /workspace/<username> nfs defaults,noatime,hard,nointr,rsize=32768,wsize=32768,_netdev 0 0
+   nas.cvgl.lab:/mnt/Peter/Workspace/<username> /workspace/<username> nfs defaults,noatime,hard,nointr,rsize=32768,wsize=32768,_netdev 0 2
    ```
 
    To take effect, execute
