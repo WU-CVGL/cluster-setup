@@ -360,8 +360,8 @@ sudo docker compose up -d
 Current settings:
 
 ```yml
-hostname: harbor.lins.lab
-external_url: https://harbor.lins.lab
+hostname: harbor.cvgl.lab
+external_url: https://harbor.cvgl.lab
 database.password: <secrect>
 data_volume: /srv/nfs/var/harbor/data
 log.location: /srv/nfs/var/harbor/log

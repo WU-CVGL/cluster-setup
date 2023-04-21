@@ -455,9 +455,9 @@ newgrp docker # Or re-login
 Also [set up certification for Harbor](./04_Setup_Supplementary_Services.md#harbor).
 
 ```bash
-sudo mkdir -p /etc/docker/certs.d/harbor.lins.lab
-cd /etc/docker/certs.d/harbor.lins.lab
-sudo wget https://lins.lab/lins-lab.crt --no-check-certificate
+sudo mkdir -p /etc/docker/certs.d/harbor.cvgl.lab
+cd /etc/docker/certs.d/harbor.cvgl.lab
+sudo wget https://cvgl.lab/cvgl.crt --no-check-certificate
 ```
 
 
