@@ -297,7 +297,7 @@ Now we need to create NFS share for every user separately.
 ### Create NFS share for the new user
 
 1. Go to `Sharing/NFS/Add`, and select the sub-dataset just created above.
-2. In **Networks**, let `Authorized Networks = 192.168.233.0/24`.
+2. In **Networks**, let `Authorized Networks = [192.168.233.0/24, 10.0.1.64/27]` (Click the **ADD** button to add the second entity).
 3. Click **SUBMIT** at the bottom of the page.
 ![NAS_04](images/02_NAS_04.png)
 
