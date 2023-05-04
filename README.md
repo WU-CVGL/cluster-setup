@@ -95,7 +95,7 @@ GPU Node 1：
 |  RAM   | Samsung M393A2K43DB2-CVF DDR4 256G (16G*16) 2933MT/s ECC REG|
 |  GPU   | MSI (0x1462) RTX 3090 Turbo * 8 |
 |  SSD   | Intel P4510 2TB * 1 |
-|  NIC   | Intel I350-T2 Dual Port|
+|  NIC   | Intel I350-T2 1GbE Dual Port|
 |  NIC   | Intel X520-SR2 (82599ES) 10GbE Dual Port |
 |  RAID  | LSI MegaRAID SAS-3 3108 |
 
@@ -108,7 +108,7 @@ GPU Node 2, 3, 4:
 |  RAM   | SK Hynix† / Samsung‡ / Samsung‡ DDR4 512G (32G*16) 3200MT/s ECC REG|
 |  GPU   | NVIDIA (0x10DE) / MSI (0x1462) / MSI (0x1462) RTX 3090 * 8 |
 |  SSD   | Intel P4510 2TB * 1 |
-|  NIC   | Intel I350-T2 Dual Port|
+|  NIC   | Intel I350-T2 1GbE Dual Port|
 |  NIC   | Intel X520-SR2 (82599ES) 10GbE Dual Port |
 
 > † SK Hynix 3200: HMA84GR7DJR4N-XN
@@ -124,7 +124,7 @@ GPU Node 5:
 |  RAM   | Samsung M393A4K40EB3-CWE DDR4 512G (32G*16) 3200MT/s ECC REG|
 |  GPU   | MANLI (NVIDIA/0x10DE) RTX 4090 * 8 |
 |  SSD   | Intel S4610 (SSDSC2KG96) 960G * 2 (RAID 1) |
-|  NIC   | Intel I350-T4 Quad Port|
+|  NIC   | Intel I350-T4 1GbE Quad Port|
 |  NIC   | Intel X520-SR2 (82599ES) 10GbE Dual Port |
 |  RAID  | LSI SAS3008 PCI-Express Fusion-MPT SAS-3 |
 
@@ -150,5 +150,5 @@ Management Server
 |  CPU   | Intel Xeon Silver 4210R * 2 (20C/40T, 2.4-3.2GHz) |
 |  RAM   | Samsung M393A4K40EB3-CWE DDR4 64G (32G*2) 3200MT/s @ 2400MT/s ECC REG |
 |  SSD   | Intel S4610 (SSDSC2KG96) 960G * 2 (RAID 1) |
-|  NIC   | Intel i350-AM2 Dual Port |
+|  NIC   | Intel i350-AM2 1GbE Dual Port |
 |  RAID  | LSI SAS3008 PCI-Express Fusion-MPT SAS-3 |

@@ -51,6 +51,7 @@
     - [Benchmarks](#benchmarks)
     - [Forums / Q\&As](#forums--qas)
     - [Media](#media)
+    - [Courses](#courses)
 
 # System Topology
 
@@ -665,3 +666,8 @@ sudo pip install -U determined-cli
 - [跟李沐学AI](https://space.bilibili.com/1567748478)
 - [科技宅小明](https://space.bilibili.com/5626102)
 - [爱折腾的老高](https://space.bilibili.com/455976991/)
+
+### Courses
+
+- [南京大学蒋炎岩](https://space.bilibili.com/202224425)
+- [MIT - Missing Semester of Your CS Education](https://missing.csail.mit.edu/)
