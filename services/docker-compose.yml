@@ -16,6 +16,7 @@ services:
         - "80:80"
         - "443:443"
         - "33322:22"
+        - "8080:8080"
     restart: always
     volumes:
       - ./nginx/data/html:/usr/share/nginx/html:ro
