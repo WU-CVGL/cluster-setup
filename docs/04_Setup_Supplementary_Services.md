@@ -15,6 +15,11 @@
     - [Configure NGINX](#configure-nginx)
   - [All-in-one](#all-in-one)
   - [Harbor](#harbor)
+    - [Install Harbor on the supplementary services node](#install-harbor-on-the-supplementary-services-node)
+      - [Steps](#steps)
+      - [Notes for NFS storage](#notes-for-nfs-storage)
+      - [Provided configuration and patch](#provided-configuration-and-patch)
+    - [Post-installation](#post-installation)
 
 ## Introduction
 
@@ -296,18 +301,82 @@ More details can be found in the [README of services](../services/README.md).
 
 ## Harbor
 
- In this section, we will discuss how to install and configure Harbor in our cluster.
+In this section, we will discuss how to install and configure Harbor in our cluster.
 
-1) Install Harbor. You can start from the official docs [here](https://goharbor.io/docs/2.6.0/install-config/configure-yml-file/). Also, check out the notes [here](../services/harbor/README.md) to customize.
+### Install Harbor on the supplementary services node
 
-2) Configure HOSTS on each node. Make sure these lines exist:
+#### Steps
+
+- First download Harbor's [installer](https://github.com/goharbor/harbor/releases)
+- Edit `harbor.yaml`, update `hostname`, `http.port`, `external_url`, `data_volume`, `log.location`
+- Run `sudo install.sh`
+- Run `docker compose down`
+- Edit `docker-compose.yml`, update PostgreSQL database volume path
+- Run `docker compose up -d`
+
+#### Notes for NFS storage
+
+- Move PostgreSQL's `database` folder outside of `data` to set separate ACL
+- Set ACL `10000:10000` for `data` & `999:999` for `database`
+- In NFS share configuration, enable map-root
+- Use NFSv3 for the `database` (to avoid stale file handle)
+
+Edit ACL for data:
+![Edit ACL for data](./images/04_Harbor_edit-acl-data.png)
+
+Edit ACL for database:
+![Edit ACL for database](./images/04_Harbor_edit-acl-database.png)
+
+Create NFS share for data:
+![Create NFS share for data](./images/04_Harbor_nfs-data.png)
+
+Create NFS share for database:
+![Create NFS share for database](./images/04_Harbor_nfs-database.png)
+
+Set up both NFSv4 and v3 compatablity:
+![Set up both NFSv4 and v3 compatablity](./images/04_Harbor_nfsv4.png)
+
+Example of `/etc/fstab`:
+
+```text
+nas.cvgl.lab:/mnt/HDD/SupplementaryServices/harbor/data       /srv/nfs/var/harbor/data        nfs vers=4,rw,hard,intr,rsize=8192,wsize=8192,timeo=14,_netdev 0 2
+
+nas.cvgl.lab:/mnt/HDD/SupplementaryServices/harbor/database   /srv/nfs/var/harbor/database    nfs vers=3,rw,hard,intr,rsize=8192,wsize=8192,timeo=14,_netdev 0 2
+```
+
+#### Provided configuration and patch
+
+You can use the provided [`harbor.yml`](../services/harbor/harbor.yml) and the patch file [`harbor-nfs.diff`](../services/harbor/harbor-nfs.diff) to install [Harbor](https://github.com/goharbor/harbor/releases/tag/v2.7.0) and switch to NFS:
+
+```bash
+tar -xvzf /path/to/harbor-offline-installer-v2.7.0.tgz    # tested version
+mv harbor installer && cd installer
+sudo bash ./install.sh
+sudo docker compose down
+sudo patch docker-compose.yml ../harbor-nfs.diff
+sudo docker compose up -d
+```
+
+Current settings:
+
+```yml
+hostname: harbor.cvgl.lab
+external_url: https://harbor.cvgl.lab
+database.password: <secrect>
+data_volume: /srv/nfs/var/harbor/data
+log.location: /srv/nfs/var/harbor/log
+```
+
+### Post-installation
+
+1) Configure HOSTS on each node. Make sure these lines exist:
 
     ```text
     10.0.1.68 cvgl.lab
     10.0.1.68 harbor.cvgl.lab
     ```
 
-3) Trust the CA certificate on each node:
+2) Trust the CA certificate on each node:
 
     ```bash
     sudo mkdir -p /etc/docker/certs.d/harbor.cvgl.lab
@@ -315,7 +384,7 @@ More details can be found in the [README of services](../services/README.md).
     sudo wget https://cvgl.lab/cvgl.crt --no-check-certificate
     ```
 
-4) Update the NGINX upstream
+3) Update the NGINX upstream
 
     ```nginx
     upstream harbor {
@@ -323,14 +392,14 @@ More details can be found in the [README of services](../services/README.md).
     }
     ```
 
-5) Rebuild and restart NGINX
+4) Rebuild and restart NGINX
 
     ```bash
     docker compose build reverseproxy
     docker compose up -d --force-recreate --no-deps reverseproxy
     ```
 
-6) Log in with the URL `https://harbor.cvgl.lab`. Change the default password.
+5) Log in with the URL `https://harbor.cvgl.lab`. Change the default password.
 
     ![Harbor](./images/04_Harbor.png)
 

@@ -35,8 +35,9 @@
     - [Python PyPI (pip)](#python-pypi-pip)
   - [Install Docker-CE](#install-docker-ce)
   - [Install Nvidia-docker](#install-nvidia-docker)
+  - [Set up hosts](#set-up-hosts)
   - [Configure a Proxy for Docker](#configure-a-proxy-for-docker)
-    - [Setup a temporary proxy service](#setup-a-temporary-proxy-service)
+    - [(Deprecated) Setup a temporary proxy service](#deprecated-setup-a-temporary-proxy-service)
     - [Verify the proxy service](#verify-the-proxy-service)
     - [Configure `Docker` to use the proxy](#configure-docker-to-use-the-proxy)
   - [Install Determined AI Systemwide](#install-determined-ai-systemwide)
@@ -50,6 +51,7 @@
     - [Benchmarks](#benchmarks)
     - [Forums / Q\&As](#forums--qas)
     - [Media](#media)
+    - [Courses](#courses)
 
 # System Topology
 
@@ -451,6 +453,15 @@ sudo usermod -aG docker $USER
 newgrp docker # Or re-login
 ```
 
+Also [set up certification for Harbor](./04_Setup_Supplementary_Services.md#harbor).
+
+```bash
+sudo mkdir -p /etc/docker/certs.d/harbor.cvgl.lab
+cd /etc/docker/certs.d/harbor.cvgl.lab
+sudo wget https://cvgl.lab/cvgl.crt --no-check-certificate
+```
+
+
 ## Install Nvidia-docker
 
 > https://docs.nvidia.com/datacenter/cloud-native/container-toolkit/install-guide.html
@@ -466,9 +477,13 @@ sudo apt-get install -y nvidia-docker2
 sudo systemctl restart docker
 ```
 
+## Set up hosts
+
+[link to hosts file](../system-configurations/etc/hosts)
+
 ## Configure a Proxy for Docker
 
-### Setup a temporary proxy service
+### (Deprecated) Setup a temporary proxy service
 
 The open-source project `Project X` originates from XTLS protocol, and provides a set of network tools such as `Xray-core`, supporting the most popular protocols/configurations: `shadowsocks`(deprecated), `vmess`, `vless` and `trojan`. In this section, we will use it to provide an example of how to set up a temporary proxy service.
 
@@ -477,6 +492,8 @@ The open-source project `Project X` originates from XTLS protocol, and provides 
 2) Create a client configuration file `config.json`. An off-the-shelf configuration is available at [here (TBA)](../services/xray/jp-central/config/config.json), which will open SOCKS5 proxy on port `1089` and HTTP proxy on port `8889`. More examples can be found at [XTLS/Xray-examples](https://github.com/XTLS/Xray-examples)
 
 3) Execute `./xray -config ./config.json`.
+
+> Note: Just use the proxy service on the supplementary node (http://10.0.1.68:8889)
 
 ### Verify the proxy service
 
@@ -649,3 +666,8 @@ sudo pip install -U determined-cli
 - [跟李沐学AI](https://space.bilibili.com/1567748478)
 - [科技宅小明](https://space.bilibili.com/5626102)
 - [爱折腾的老高](https://space.bilibili.com/455976991/)
+
+### Courses
+
+- [南京大学蒋炎岩](https://space.bilibili.com/202224425)
+- [MIT - Missing Semester of Your CS Education](https://missing.csail.mit.edu/)
