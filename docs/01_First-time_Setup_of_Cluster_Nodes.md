@@ -610,6 +610,8 @@ sudo pip install -U determined-cli
 
 - [Determined AI](https://docs.determined.ai/latest/)
 - [Microsoft OpenPAI](https://github.com/microsoft/pai)
+- [Kubeflow](https://github.com/kubeflow/kubeflow)
+- [HAI Platform](https://github.com/HFAiLab/hai-platform)
 
 ### System & Design Reference
 
