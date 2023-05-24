@@ -21,6 +21,7 @@
       - [Snapshots](#snapshots)
       - [Replication](#replication)
 - [Set Up the GPU Nodes (Agents)](#set-up-the-gpu-nodes-agents)
+  - [Netplan template](#netplan-template)
   - [Notes on Ubuntu](#notes-on-ubuntu)
     - [Disable unattended-updates](#disable-unattended-updates)
     - [Disable GUI](#disable-gui)
@@ -44,14 +45,14 @@
     - [Pypi cryptography \& pyOpenSSL dependency conflict](#pypi-cryptography--pyopenssl-dependency-conflict)
   - [Do stress test](#do-stress-test)
   - [Maintainance: Upgrade APT packages \& `Determined AI`](#maintainance-upgrade-apt-packages--determined-ai)
-  - [Common References](#common-references)
-    - [Cluster Management System](#cluster-management-system)
-    - [System \& Design Reference](#system--design-reference)
-    - [Wikis / DBs / KBs](#wikis--dbs--kbs)
-    - [Benchmarks](#benchmarks)
-    - [Forums / Q\&As](#forums--qas)
-    - [Media](#media)
-    - [Courses](#courses)
+- [Common References](#common-references)
+  - [Cluster Management System](#cluster-management-system)
+  - [System \& Design Reference](#system--design-reference)
+  - [Wikis / DBs / KBs](#wikis--dbs--kbs)
+  - [Benchmarks](#benchmarks)
+  - [Forums / Q\&As](#forums--qas)
+  - [Media](#media)
+  - [Courses](#courses)
 
 # System Topology
 
@@ -255,6 +256,34 @@ References:
 > https://www.truenas.com/docs/core/coretutorials/tasks/creatingreplicationtasks/advancedreplication/
 
 # Set Up the GPU Nodes (Agents)
+
+## Netplan template
+
+First we will set up the IP addresses for both the 1GbE campus network (10.0.1.64/27) and our private 10GbE network (192.168.233.0/24).
+
+Edit the netplan `yaml` file in `/etc/netplan`, and remember to change the IP addresses accordingly. Here is a template:
+
+```yaml
+network:
+  ethernets:
+    enp194s0f0:
+      addresses: [10.0.1.75/27]
+      gateway4: 10.0.1.65
+      nameservers:
+        addresses: [10.10.10.10, 223.5.5.5]
+    enp34s0f0:
+      addresses: [192.168.233.15/24]
+      optional: true
+    enp34s0f1:
+      addresses: [192.168.233.115/24]
+      optional: true
+```
+
+Then execute the command to take effect:
+
+```bash
+sudo netplan apply
+```
 
 ## Notes on Ubuntu
 
@@ -604,16 +633,16 @@ sudo pip install -U pip
 sudo pip install -U determined-cli
 ```
 
-## Common References
+# Common References
 
-### Cluster Management System
+## Cluster Management System
 
 - [Determined AI](https://docs.determined.ai/latest/)
 - [Microsoft OpenPAI](https://github.com/microsoft/pai)
 - [Kubeflow](https://github.com/kubeflow/kubeflow)
 - [HAI Platform](https://github.com/HFAiLab/hai-platform)
 
-### System & Design Reference
+## System & Design Reference
 
 - [Lambda Echelon GPU Cluster for AI - Reference Design Whitepaper](https://lambdalabs.com/gpu-cluster/echelon)
 - [Lambda Labs - How to build a GPU cluster from scratch for your ML team](http://files.lambdalabs.com/How%20to%20build%20a%20GPU%20cluster%20from%20scratch%20for%20your%20ML%20team.pdf)
@@ -621,7 +650,7 @@ sudo pip install -U determined-cli
 - [ETH Zürich - Getting started with scientific clusters](https://scicomp.ethz.ch/w/images/c/c1/Getting_started_with_scientific_clusters_CVL.pdf)
 - [CECI documentation](https://support.ceci-hpc.be/doc/index.html)
 
-### Wikis / DBs / KBs
+## Wikis / DBs / KBs
 
 - [ArchWiki](https://wiki.archlinux.org/)
 - [TechPowerUp - CPU Specs Database](https://www.techpowerup.com/cpu-specs/)
@@ -632,7 +661,7 @@ sudo pip install -U determined-cli
 - [VMware Knowledge Base](https://kb.vmware.com/s/)
 - [NVIDIA Docs](https://docs.nvidia.com/)
 
-### Benchmarks
+## Benchmarks
 
 - [Lambda Labs - Deep Learning GPU Benchmarks](https://lambdalabs.com/gpu-benchmarks)
 - [PassMark - CPU Mark](https://www.cpubenchmark.net/high_end_cpus.html)
@@ -640,7 +669,7 @@ sudo pip install -U determined-cli
 - [Geekbench - Top Multi-Core Geekbench 5 CPU Results](https://browser.geekbench.com/v5/cpu/multicore)
 - [AudoDL帮助文档 - 性能实测](https://www.autodl.com/docs/gpu_perf/)
 
-### Forums / Q&As
+## Forums / Q&As
 
 - [Serve the Home Forum](https://forums.servethehome.com/index.php)
 - [Linus Tech Tips Forum](https://linustechtips.com/)
@@ -654,7 +683,7 @@ sudo pip install -U determined-cli
 - [Reddit - HomeLab](https://www.reddit.com/r/homelab/)
 - [TrueNAS Community](https://www.truenas.com/community/)
 
-### Media
+## Media
 
 - [Serve the Home - Homepage](https://www.servethehome.com/)
 - [Serve the Home - Youtube](https://www.youtube.com/channel/UCv6J_jJa8GJqFwQNgNrMuww)
@@ -669,7 +698,7 @@ sudo pip install -U determined-cli
 - [科技宅小明](https://space.bilibili.com/5626102)
 - [爱折腾的老高](https://space.bilibili.com/455976991/)
 
-### Courses
+## Courses
 
 - [南京大学蒋炎岩](https://space.bilibili.com/202224425)
 - [MIT - Missing Semester of Your CS Education](https://missing.csail.mit.edu/)
