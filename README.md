@@ -12,6 +12,8 @@ This is a manual for system admin.
 
 [4. Setup Supplementary Services](docs/04_Setup_Supplementary_Services.md)
 
+[Notes on Supplementary Services](services/README.md)
+
 ## Cluster Information
 
 Our cluster is located in the core server room, E6-106.
