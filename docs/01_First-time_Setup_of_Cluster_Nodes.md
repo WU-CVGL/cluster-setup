@@ -265,10 +265,14 @@ Edit the netplan `yaml` file in `/etc/netplan`, and remember to change the IP ad
 
 ```yaml
 network:
+  version: 2
+  renderer: networkd
   ethernets:
     enp194s0f0:
       addresses: [10.0.1.75/27]
-      gateway4: 10.0.1.65
+      routes:
+      - to: default
+        via: 10.0.1.65
       nameservers:
         addresses: [10.10.10.10, 223.5.5.5]
     enp34s0f0:
