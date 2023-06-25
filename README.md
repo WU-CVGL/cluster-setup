@@ -83,7 +83,6 @@ System Topology:
 <img src="./docs/images/00_gpus.jpg" alt="drawing" style="height:50vh;"/>
 <img src="./docs/images/00_gpus3.jpg" alt="drawing" style="height:50vh;"/>
 <img src="./docs/images/00_gpus2.jpg" alt="drawing" style="height:50vh;"/>
-<img src="./docs/images/00_gpus4.jpg" alt="drawing" style="height:50vh;"/>
 </details>
 
 ### Hardware Information
