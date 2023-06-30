@@ -234,16 +234,21 @@ sudo passwd $USERNAME
 Then check out the `UID` and `GID` in `/etc/passwd`, which will be useful in the next section:
 
 ```bash
-cat /etc/passwd
+id $USERNAME
 ```
 
 For example, the output is:
 
 ```bash
-$USERNAME:x:1005:1005::/home/$USERNAME:/bin/bash
+uid=1014(wanpian) gid=1014(wanpian) groups=1014(wanpian)
 ```
 
-Then the user's `UID` and `GID` are both `1005`.
+Then the user's `UID` and `GID` are both `1014`. Set env var for the next section:
+
+```bash
+export USERUID=1014
+export USERGID=1014
+```
 
 ## Grant docker permission
 
@@ -258,7 +263,7 @@ sudo usermod -aG docker $USERNAME
 ```bash
 det user create $USERNAME
 det user change-password $USERNAME # Or the user can change password on the web dashboard
-det user link-with-agent-user $USERNAME --agent-uid $UID --agent-user $USERNAME --agent-gid $GID --agent-group $USERNAME
+det user link-with-agent-user $USERNAME --agent-uid $USERUID --agent-user $USERNAME --agent-gid $USERGID --agent-group $USERNAME
 ```
 
 ## Create TrueNAS NFS share
@@ -272,13 +277,13 @@ Now we need to create NFS share for every user separately.
 1. Open the TrueNAS web dashboard. In **Storage->Pools**,
    click the **three dots icon** of the Dataset `HDD/home`,
    then click the **Add Dataset** to add a sub-dataset of it
-   (or you can directly [click this URL](http://10.0.1.90/ui/storage/pools/id/HDD%2Fhome/dataset/add/HDD%2Fhome))
+   (or you can directly [click this URL](http://10.0.1.70/ui/storage/pools/id/HDD%2Fhome/dataset/add/HDD%2Fhome))
 
    ![NAS_01](images/02_NAS.png)
 
 2. In the **Add Dataset** page, in the **Name and Options**, let `Name=<username>`.
    Then click **ADVANCED OPTIONS**, in **This Dataset**,
-   let `Quota for this dataset = 4TiB`.
+   let `Quota for this dataset = 8TiB`.
 
    ![NAS_02](images/02_NAS_02.png)
 
