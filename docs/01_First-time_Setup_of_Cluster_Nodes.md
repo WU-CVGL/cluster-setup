@@ -31,12 +31,12 @@
     - [In case you forgot Server BMC (IPMI) password](#in-case-you-forgot-server-bmc-ipmi-password)
     - [Prevent Docker and VPN IP address conflicts](#prevent-docker-and-vpn-ip-address-conflicts)
     - [Security Related Rules](#security-related-rules)
+  - [Set up hosts](#set-up-hosts)
   - [Setup Open Source Mirrors \& nvidia-docker](#setup-open-source-mirrors--nvidia-docker)
     - [APT](#apt)
     - [Python PyPI (pip)](#python-pypi-pip)
   - [Install Docker-CE](#install-docker-ce)
   - [Install Nvidia-docker](#install-nvidia-docker)
-  - [Set up hosts](#set-up-hosts)
   - [Configure a Proxy for Docker](#configure-a-proxy-for-docker)
     - [(Deprecated) Setup a temporary proxy service](#deprecated-setup-a-temporary-proxy-service)
     - [Verify the proxy service](#verify-the-proxy-service)
@@ -444,6 +444,10 @@ Reference: [Fixing Docker and VPN IP Address Conflicts](https://www.lullabot.com
     Port 22332
     ```
 
+## Set up hosts
+
+[link to hosts file](../services/system-configurations/etc/hosts)
+
 ## Setup Open Source Mirrors & nvidia-docker
 
 ### APT
@@ -492,8 +496,8 @@ Also [set up certification for Harbor](./04_Setup_Supplementary_Services.md#harb
 sudo mkdir -p /etc/docker/certs.d/harbor.cvgl.lab
 cd /etc/docker/certs.d/harbor.cvgl.lab
 sudo wget https://cvgl.lab/cvgl.crt --no-check-certificate
+sudo systemctl restart docker
 ```
-
 
 ## Install Nvidia-docker
 
@@ -509,10 +513,6 @@ sudo apt-get update
 sudo apt-get install -y nvidia-docker2
 sudo systemctl restart docker
 ```
-
-## Set up hosts
-
-[link to hosts file](../system-configurations/etc/hosts)
 
 ## Configure a Proxy for Docker
 
