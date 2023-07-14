@@ -32,7 +32,7 @@ services:
       - ./flare/app:/app
 
   xray-jp-central:
-    image: teddysun/xray
+    image: harbor.cvgl.lab/library/xray:1.7.5
     restart: unless-stopped
     environment:
       TZ: Asia/Shanghai
@@ -48,7 +48,7 @@ services:
       - 10085
 
   xray-us-west:
-    image: teddysun/xray
+    image: harbor.cvgl.lab/library/xray:1.7.5
     restart: unless-stopped
     environment:
       TZ: Asia/Shanghai
