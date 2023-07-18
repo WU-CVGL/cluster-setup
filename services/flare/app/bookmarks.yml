@@ -25,8 +25,8 @@ links:
   icon: googleTranslate
   category: cate-id-0
 
-- name: Cluster Tutorial
-  link: https://github.com/WU-CVGL/cluster-user-guide
+- name: Github
+  link: https://github.com/
   icon: github
   category: cate-id-1
 

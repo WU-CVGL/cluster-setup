@@ -15,10 +15,10 @@ links:
   icon: appleIcloud
   desc: Personal storage & easy share
 
-- name: Gitea
-  link: https://git.cvgl.lab
-  icon: git
-  desc: Git with a cup of tea
+- name: Cluster Wiki
+  link: https://github.com/WU-CVGL/cluster-user-guide
+  icon: github
+  desc: CVGL Cluster User Guide.
 
 - name: Grafana
   link: https://grafana.cvgl.lab
