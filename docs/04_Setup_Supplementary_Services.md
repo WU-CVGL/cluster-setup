@@ -307,12 +307,16 @@ In this section, we will discuss how to install and configure Harbor in our clus
 
 #### Steps
 
+This is a typical Harbor installation showcase:
+
 - First download Harbor's [installer](https://github.com/goharbor/harbor/releases)
 - Edit `harbor.yaml`, update `hostname`, `http.port`, `external_url`, `data_volume`, `log.location`
 - Run `sudo install.sh`
 - Run `docker compose down`
 - Edit `docker-compose.yml`, update PostgreSQL database volume path
 - Run `docker compose up -d`
+
+However, in our production environment, we need to deploy Harbor's storage on NFS. We will discuss the details in the following two sections:
 
 #### Notes for NFS storage
 
