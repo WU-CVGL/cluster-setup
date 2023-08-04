@@ -346,14 +346,16 @@ nas.cvgl.lab:/mnt/HDD/SupplementaryServices/harbor/database   /srv/nfs/var/harbo
 
 #### Provided configuration and patch
 
-You can use the provided [`harbor.yml`](../services/harbor/harbor.yml) and the patch file [`harbor-nfs.diff`](../services/harbor/harbor-nfs.diff) to install [Harbor](https://github.com/goharbor/harbor/releases/tag/v2.7.0) and switch to NFS:
+You can use the provided [`harbor.yml`](../services/harbor/harbor.yml) to install [Harbor](https://github.com/goharbor/harbor/releases/tag/v2.8.3) and switch to NFS by replacing `/srv/nfs/var/harbor/data/database` to `/srv/nfs/var/harbor/database` :
 
 ```bash
-tar -xvzf /path/to/harbor-offline-installer-v2.7.0.tgz    # tested version
+cd <project_root>/services/harbor
+tar -xvzf /path/to/harbor-offline-installer-v2.8.3.tgz    # tested version
 mv harbor installer && cd installer
+cp ../harbor.yml .
 sudo bash ./install.sh
 sudo docker compose down
-sudo patch docker-compose.yml ../harbor-nfs.diff
+sudo sed -i 's/\/srv\/nfs\/var\/harbor\/data\/database/\/srv\/nfs\/var\/harbor\/database/g' docker-compose.yml
 sudo docker compose up -d
 ```
 
