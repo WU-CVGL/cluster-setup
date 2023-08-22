@@ -32,7 +32,7 @@ services:
       - ./flare/app:/app
 
   xray-jp-central:
-    image: harbor.cvgl.lab/library/xray:1.7.5
+    image: teddysun/xray:latest
     restart: unless-stopped
     environment:
       TZ: Asia/Shanghai
@@ -47,8 +47,8 @@ services:
     expose:
       - 10085
 
-  xray-us-west:
-    image: harbor.cvgl.lab/library/xray:1.7.5
+  xray-singapore:
+    image: teddysun/xray:latest
     restart: unless-stopped
     environment:
       TZ: Asia/Shanghai
@@ -58,8 +58,8 @@ services:
       - 20089:1089
       - 28889:8889
     volumes: 
-      - ./xray/us-west/config:/etc/xray
-      - ./xray/us-west/log:/var/log/xray
+      - ./xray/singapore/config:/etc/xray
+      - ./xray/singapore/log:/var/log/xray
     expose:
       - 10086
 
@@ -74,14 +74,14 @@ services:
     expose:
       - 9550
 
-  xray-us-west-exporter:
+  xray-singapore-exporter:
     image: wi1dcard/v2ray-exporter:master
     environment:
       TZ: Asia/Shanghai
     networks:
       - grafana_monitor
     restart: unless-stopped
-    command: 'v2ray-exporter --v2ray-endpoint "xray-us-west:10086" --listen ":9550"'
+    command: 'v2ray-exporter --v2ray-endpoint "xray-singapore:10086" --listen ":9550"'
     expose:
       - 9550
 

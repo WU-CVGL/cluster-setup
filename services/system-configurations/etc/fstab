@@ -15,6 +15,15 @@ nas.cvgl.lab:/mnt/Peter/Workspace/zzj       /workspace/zzj      nfs defaults,noa
 nas.cvgl.lab:/mnt/Peter/Workspace/peter     /workspace/peter    nfs defaults,noatime,hard,nointr,rsize=32768,wsize=32768,_netdev 0 2
 nas.cvgl.lab:/mnt/Peter/Workspace/hj        /workspace/hj       nfs defaults,noatime,hard,nointr,rsize=32768,wsize=32768,_netdev 0 2
 nas.cvgl.lab:/mnt/Peter/Workspace/wujing    /workspace/wujing   nfs defaults,noatime,hard,nointr,rsize=32768,wsize=32768,_netdev 0 2
+nas.cvgl.lab:/mnt/Peter/Workspace/wanpian   /workspace/wanpian  nfs defaults,noatime,hard,nointr,rsize=32768,wsize=32768,_netdev 0 2
+nas.cvgl.lab:/mnt/Peter/Workspace/wanpian   /home/wanpian       nfs defaults,noatime,hard,nointr,rsize=32768,wsize=32768,_netdev 0 2
+nas.cvgl.lab:/mnt/Peter/Workspace/cym       /workspace/cym      nfs defaults,noatime,hard,nointr,rsize=32768,wsize=32768,_netdev 0 2
+nas.cvgl.lab:/mnt/Peter/Workspace/cym       /home/cym           nfs defaults,noatime,hard,nointr,rsize=32768,wsize=32768,_netdev 0 2
+nas.cvgl.lab:/mnt/Peter/Workspace/xulu      /workspace/xulu     nfs defaults,noatime,hard,nointr,rsize=32768,wsize=32768,_netdev 0 2
+nas.cvgl.lab:/mnt/Peter/Workspace/xulu      /home/xulu          nfs defaults,noatime,hard,nointr,rsize=32768,wsize=32768,_netdev 0 2
+nas.cvgl.lab:/mnt/Peter/Workspace/songwei   /workspace/songwei  nfs defaults,noatime,hard,nointr,rsize=32768,wsize=32768,_netdev 0 2
+nas.cvgl.lab:/mnt/Peter/Workspace/songwei   /home/songwei       nfs defaults,noatime,hard,nointr,rsize=32768,wsize=32768,_netdev 0 2
+
 ### Supplementary services
 nas.cvgl.lab:/mnt/Peter/SupplementaryServices/Docker            /srv/nfs/var/Docker             nfs vers=4,defaults,noatime,hard,nointr,rsize=32768,wsize=32768,_netdev 0 2
 nas.cvgl.lab:/mnt/Peter/SupplementaryServices/nextcloud         /srv/nfs/var/nextcloud          nfs vers=4,defaults,noatime,hard,nointr,rsize=32768,wsize=32768,_netdev 0 2
