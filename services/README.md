@@ -57,6 +57,7 @@ We are currently offering these web services:
 - cAdvisor
 - DCGM-Exporter
 - V2Ray Exporter
+- frp
 
 ## HOW-TO
 
@@ -222,3 +223,7 @@ https://github.com/NVIDIA/dcgm-exporter
 https://github.com/wi1dcard/v2ray-exporter
 
 https://github.com/soulteary/docker-flare
+
+https://github.com/fatedier/frp
+
+https://github.com/snowdreamtech/frp

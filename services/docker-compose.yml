@@ -9,6 +9,13 @@ networks:
     external: false
 
 services:
+  frp:
+    image: snowdreamtech/frps
+    network_mode: "host"
+    restart: always
+    volumes:
+      - ./frp/frps.ini:/etc/frp/frps.ini
+
   nginx:
     build: ./nginx/build
     image: reverseproxy
