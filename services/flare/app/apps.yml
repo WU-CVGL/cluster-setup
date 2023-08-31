@@ -25,7 +25,12 @@ links:
   icon: monitorDashboard
   desc: Statistics and visualization
 
+- name: frp Dashboard
+  link: https://frp.cvgl.lab
+  icon: wan
+  desc: Monitor & manage frp service status
+
 - name: Root Certificate
   link: https://cvgl.lab/cvgl.crt
   icon: certificateOutline
-  desc: cvgl Lab's Root Certificate
+  desc: CVGL Lab's Root Certificate
