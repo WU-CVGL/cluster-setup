@@ -29,6 +29,7 @@ Current IP assignment:
 |10.0.1.66|core node on management server|
 |10.0.1.67|login node on management server|
 |10.0.1.68|supplementary service node on management server|
+|10.0.1.69|Peng's Synology NAS|
 |10.0.1.70 / 192.168.233.233|TrueNAS on storage server|
 |10.0.1.71 / 192.168.233.11|GPU Node 01|
 |10.0.1.72 / 192.168.233.12|GPU Node 02|
