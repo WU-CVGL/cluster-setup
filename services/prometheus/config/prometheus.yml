@@ -79,4 +79,4 @@ scrape_configs:
     static_configs:
     - targets:
       - cvglcorevm.lan:8080
-    bearer_token: v2.public.eyJpZCI6MTI0NSwidXNlcl9pZCI6MSwiZXhwaXJ5IjoiMjAyMy0wNS0xNlQwNzo1OToxOS44OTkwNTE2NzVaIn3d6eufWZiX2FAn6Xuft3oY9uJmGHdyR8rtnUOFptNZpOzFyvOlU2JejdJsRhvdxNfFS1kL0EkcwszAcMZHbwkC.bnVsbA
+    bearer_token: v2.public.eyJpZCI6MjEzMSwidXNlcl9pZCI6MSwiZXhwaXJ5IjoiMjAyMy0wOS0xM1QwNjo0NDo0Mi43MTY1MDQxOFoifYxPb-hYRC4mX2uljTGmfxLU9_cstanZA8rBvVisjdarxm4hZOfSNdwJ9PhllhnXi9vHZwagvzv3UgBC9wfrfwQ.bnVsbA

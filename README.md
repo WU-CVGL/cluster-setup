@@ -149,6 +149,7 @@ Storage Server
 |  RAM   | Samsung M393A4K40DB2-CWE DDR4 256G (32G*8) 2933MT/s ECC REG |
 |  SSD   | INTEL 760p (SSDPEKKW256G8) 256G * 1|
 |  SSD   | Intel S4510 1.92TB * 2 |
+|  SSD   | WD Ultrastar DC SN640 (WUS4BB076D7P3E3) 7.68TB * 4 |
 |  HDD   | Seagate Exos X18 18TB * 14 |
 |  NIC   | Intel i210 * 2 |
 |  NIC   | Intel X520-SR2 (82599ES) 10GbE Dual Port |
@@ -163,4 +164,5 @@ Management Server
 |  RAM   | Samsung M393A4K40EB3-CWE DDR4 64G (32G*2) 3200MT/s @ 2400MT/s ECC REG |
 |  SSD   | Intel S4610 (SSDSC2KG96) 960G * 2 (RAID 1) |
 |  NIC   | Intel i350-AM2 1GbE Dual Port |
+|  NIC   | Intel 82599 10GbE |
 |  RAID  | LSI SAS3008 PCI-Express Fusion-MPT SAS-3 |
