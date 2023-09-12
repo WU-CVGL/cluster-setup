@@ -1,2 +1,8 @@
+# Secrects
 *.env
+
+# Logs
 *.log
+
+# Misc
+.vscode/
