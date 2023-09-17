@@ -9,6 +9,8 @@ DET_USERNAME = os.environ["DET_USERNAME"]
 DET_PASSWORD = os.environ["DET_PASSWORD"]
 GRAFANA_WEB_URL = os.environ["GRAFANA_WEB_URL"]
 GRAFANA_API_TOKEN = os.environ["GRAFANA_API_TOKEN"]
+PORTAINER_WEB_URL = os.environ["PORTAINER_WEB_URL"]
+PORTAINER_API_TOKEN = os.environ["PORTAINER_API_TOKEN"]
 SLACK_WEBHOOK_URL = os.environ["SLACK_WEBHOOK_URL"]
 SLACK_WEBHOOK_URL_DEBUG = os.environ["SLACK_WEBHOOK_URL_DEBUG"]
 
@@ -69,6 +71,8 @@ class Config(PrintableConfig):
     prom_cfg_path: Path = Path(PROMETHEUS_CONFIG_PATH)
     grafana_web: str = GRAFANA_WEB_URL
     grafana_api_token: str = GRAFANA_API_TOKEN
+    portainer_web: str = PORTAINER_WEB_URL
+    portainer_api_token: str = PORTAINER_API_TOKEN
     slack_webhook_url: str = SLACK_WEBHOOK_URL_DEBUG if is_debug else SLACK_WEBHOOK_URL
 
     sub_item: List["str"] = field(default_factory=lambda: [

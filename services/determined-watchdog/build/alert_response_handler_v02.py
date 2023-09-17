@@ -134,6 +134,34 @@ class MainApplication:
             return
         print("Prometheus is restarted!")
 
+    def restart_prometheus_container(self):
+        portainer_containers_api = urljoin(self.config.portainer_web, "api/endpoints/2/docker/containers/json?all=1")
+        headers = {"X-API-Key": self.config.portainer_api_token}
+        try:
+            response = requests.get(portainer_containers_api, headers=headers)
+        except Exception as e:
+            print(e)
+            print("Failed to get containers.")
+            return
+        data = json.loads(response.text)
+        id = None
+        for item in data:
+            for name in item["Names"]:
+                if "services-prometheus" in name:
+                    id = item["Id"]
+        if id is None:
+            print("Failed to get the prometheus container.")
+            return
+
+        container_restart_api = urljoin(self.config.portainer_web, f"api/endpoints/2/docker/containers/{id}/restart")
+        try:
+            response = requests.post(container_restart_api, headers=headers)
+        except Exception as e:
+            print(e)
+            print("Failed to restart the prometheus container.")
+            return
+        print("Prometheus container is restarted!")
+
     def update_det_token_to_prometheus(self):
         with open(self.config.prom_cfg_path, "r") as f:
             lines = f.readlines()
@@ -143,6 +171,8 @@ class MainApplication:
                 f.writelines(lines)
                 print("Prometheus config has updated!")
                 self.restart_prometheus()
+                time.sleep(10)
+                self.restart_prometheus_container()
         else:
             print("Fail to update Prometheus config.")
             return
