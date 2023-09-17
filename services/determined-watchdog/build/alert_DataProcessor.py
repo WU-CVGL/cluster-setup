@@ -1,3 +1,4 @@
+from __future__ import annotations
 import os
 import json
 import requests
@@ -8,10 +9,14 @@ import threading
 
 from datetime import datetime
 import time
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from alert_config import Config
 
 
 class DataProcessor:
-    def __init__(self, config):
+    def __init__(self, config: Config):
         self.config = config
 
     def get_sub_items(self, alert_type, path, group):

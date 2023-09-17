@@ -14,12 +14,8 @@ class MessageNotifier:
         new_data,
         container_ids_to_kill,
         user_info,
-        debug,
-        debug_slack_webhook_url,
-        run_slack_webhook_url,
+        slack_webhook_url,
     ):
-        slack_webhook_url = debug_slack_webhook_url if debug else run_slack_webhook_url
-
         attachments = []
         for recipients, color in [
             (new_data, "warning"),
@@ -67,19 +63,8 @@ class MessageNotifier:
         self,
         warning_type,
         info,
-        debug,
-        debug_slack_webhook_url=None,
-        run_slack_webhook_url=None,
+        slack_webhook_url
     ):
-        if debug_slack_webhook_url == None:
-            debug_slack_webhook_url = self.config.debug_slack_webhook_url
-        if run_slack_webhook_url == None:
-            run_slack_webhook_url = self.config.run_slack_webhook_url
-        if debug is True:
-            slack_webhook_url = debug_slack_webhook_url  # my test
-        elif debug is False:
-            slack_webhook_url = run_slack_webhook_url  # real slack!!!!
-
         attachments = []
         fields = []
         field = {

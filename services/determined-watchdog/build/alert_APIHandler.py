@@ -3,8 +3,9 @@ import json
 import requests
 from flask import Flask, request
 from datetime import datetime
+from urllib.parse import urljoin
 
-from alert_config import Config
+from alert_config import AlertTypes, Config
 from alert_MessageNotifier import MessageNotifier
 
 
@@ -12,6 +13,12 @@ class APIHandler:
     def __init__(self, config: Config):
         self.config = config
         self.message_notifier = MessageNotifier(config)
+        self.det_shell_api = urljoin(config.det_web, "api/v1/shells/")
+        self.grafana_alart_api = urljoin(
+            config.grafana_web,
+            "api/alertmanager/grafana/api/v2/alerts/"
+        )
+        self.initialize_file_info()
 
     def initialize_file_info(self):
         # Construct JSON data
@@ -38,16 +45,13 @@ class APIHandler:
                     record_item[item] = record
             data["alert_local_item"].append(record_item)
 
-        # Construct the file path
-        file_path = f"{self.config.BASE_PATH}/{self.config.FILE_INFO_NAME}"
-
         # Write the data to a JSON file
-        with open(file_path, "w") as f:
+        with open(self.config.file_info_path, "w") as f:
             json.dump(data, f, indent=4)
 
     def get_api_data(self):
         response = requests.get(
-            "https://gpu.lins.lab/api/v1/shells",
+            url=self.det_shell_api,
             headers=self.config.det_headers,
             verify=False,
         )  # ignore SSL verification
@@ -61,9 +65,7 @@ class APIHandler:
             self.message_notifier.send_slack_warning(
                 "det api miss",
                 "need update api!",
-                True,
-                self.config.debug_slack_webhook_url,
-                self.config.run_slack_webhook_url,
+                self.config.slack_webhook_url,
             )
             return {}
         for shell in api_data["shells"]:
@@ -88,7 +90,7 @@ class APIHandler:
         return result
 
     def get_alert_rules(self):
-        endpoint = f"{self.config.grafana_web}api/alertmanager/grafana/api/v2/alerts"
+        endpoint = self.grafana_alart_api
         try:
             # 发送 GET 请求获取警报规则列表
             response = requests.get(
@@ -118,12 +120,10 @@ class APIHandler:
         return container_ids
 
     def kill_container(self, shell_id, det_header, debug):
-        # headers = {
-        #     'Authorization': 'Bearer v2.public.eyJpZCI6MTU1NSwidXNlcl9pZCI6MSwiZXhwaXJ5IjoiMjAyMy0wNi0wNlQwNTozNToyNS45NzI0NDA3N1oifSnhZ56LI8QM4veveTG9MJqqtQnA-KAwNCPHPyNioLCr-LJ8qDvS6SYJERrS-Nl5dfLtMJON7Mu4jbOv7BnptA8.bnVsbA'}
         if debug is True:
             try:
                 response = requests.get(
-                    f"https://gpu.lins.lab/api/v1/shells/{shell_id}",
+                    url=urljoin(self.det_shell_api, shell_id),
                     headers=det_header,
                     verify=False,
                 )
@@ -134,7 +134,7 @@ class APIHandler:
         else:
             try:
                 response = requests.post(
-                    f"https://gpu.lins.lab/api/v1/shells/{shell_id}/kill",
+                    url=urljoin(self.det_shell_api, shell_id, "kill"),
                     headers=det_header,
                     verify=False,
                 )

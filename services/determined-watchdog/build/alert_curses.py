@@ -11,7 +11,7 @@ def main(stdscr):
     height, width = stdscr.getmaxyx()
 
     # 显示运行时间
-    large_text = pyfiglet.figlet_format("Lins Lab", font="univers")
+    large_text = pyfiglet.figlet_format("CVGL Lab", font="univers")
 
     stdscr.addstr(4, 1, large_text, curses.A_BOLD)
 

@@ -7,6 +7,18 @@ networks:
     external: false
 
 services:
+  watchdog:
+    build: ./determined-watchdog/build
+    image: determined-watchdog
+    restart: always
+    volumes:
+      - ./determined-watchdog/data:/app/data
+      - ./prometheus/config:/etc/prometheus
+    networks:
+      - grafana_monitor
+    env_file:
+      - ./determined-watchdog/.env
+
   frp:
     image: snowdreamtech/frps
     network_mode: "host"
