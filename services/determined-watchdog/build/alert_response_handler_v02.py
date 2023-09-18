@@ -2,15 +2,10 @@ import os
 import json
 import requests
 import subprocess
-from flask import Flask, request
 from urllib.parse import urljoin
-import glob
-import threading
 
 from datetime import datetime
 import time
-
-from typing import Type
 
 from alert_config import Config
 from alert_MessageNotifier import MessageNotifier

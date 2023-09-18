@@ -2,7 +2,6 @@ import os
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Dict, List, Tuple
-from urllib.parse import urljoin
 
 DET_WEB_URL = os.environ["DET_WEB_URL"]
 DET_USERNAME = os.environ["DET_USERNAME"]

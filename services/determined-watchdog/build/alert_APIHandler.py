@@ -5,7 +5,7 @@ from flask import Flask, request
 from datetime import datetime
 from urllib.parse import urljoin
 
-from alert_config import AlertTypes, Config
+from alert_config import Config
 from alert_MessageNotifier import MessageNotifier
 
 
@@ -134,7 +134,7 @@ class APIHandler:
         else:
             try:
                 response = requests.post(
-                    url=urljoin(self.det_shell_api, shell_id, "kill"),
+                    url=urljoin(self.det_shell_api, f"{shell_id}/kill"),
                     headers=det_header,
                     verify=False,
                 )
