@@ -123,7 +123,7 @@ class MainApplication:
             "Authorization": f"Bearer {self.config.det_api_token}"
         }
 
-    def restart_prometheus(self):
+    def reload_prometheus(self):
         # https://prometheus.io/docs/prometheus/latest/migration/#prometheus-lifecycle
         prom_reload_api = urljoin(self.config.prom_web, "-/reload/")
         try:
@@ -132,7 +132,7 @@ class MainApplication:
             print(e)
             print("Failed to reload Prometheus.")
             return
-        print("Prometheus is restarted!")
+        print("Prometheus is reloaded!")
 
     def restart_prometheus_container(self):
         portainer_containers_api = urljoin(self.config.portainer_web, "api/endpoints/2/docker/containers/json?all=1")
@@ -170,7 +170,7 @@ class MainApplication:
             with open(self.config.prom_cfg_path, "w") as f:
                 f.writelines(lines)
                 print("Prometheus config has updated!")
-                self.restart_prometheus()
+                self.reload_prometheus()
                 time.sleep(10)
                 self.restart_prometheus_container()
         else:
