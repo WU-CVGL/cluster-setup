@@ -1,8 +1,5 @@
-import os
 import json
 import requests
-from flask import Flask, request
-from datetime import datetime
 from urllib.parse import urljoin
 
 from alert_config import Config
