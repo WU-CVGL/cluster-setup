@@ -63,6 +63,7 @@ scrape_configs:
       - targets:
           - "xray-jp-central-exporter:9550"
           - "xray-singapore-exporter:9550"
+          - "xray-us-west-exporter:9550"
   - job_name: det-master
     honor_timestamps: true
     scrape_interval: 15s
@@ -79,4 +80,4 @@ scrape_configs:
     static_configs:
     - targets:
       - cvglcorevm.lan:8080
-    bearer_token: v2.public.eyJpZCI6MjEzMSwidXNlcl9pZCI6MSwiZXhwaXJ5IjoiMjAyMy0wOS0xM1QwNjo0NDo0Mi43MTY1MDQxOFoifYxPb-hYRC4mX2uljTGmfxLU9_cstanZA8rBvVisjdarxm4hZOfSNdwJ9PhllhnXi9vHZwagvzv3UgBC9wfrfwQ.bnVsbA
+    bearer_token: "v2.public.eyJpZCI6MzI1MywidXNlcl9pZCI6MSwiZXhwaXJ5IjoiMjAyMy0xMC0yNlQwMDowMDowNC4zNTgyMTg2OThaIn2HlDw0wLiGGk5zcX7ofDTILHV9Na3go_P_lNgnnRgIFr_qOlw2HVm76xnKMRZFEgoU19rwvmSe7YO25BswmPgD.bnVsbA"

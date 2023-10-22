@@ -77,6 +77,22 @@ services:
     expose:
       - 10085
 
+  xray-us-west:
+    image: teddysun/xray:latest
+    restart: unless-stopped
+    environment:
+      TZ: Asia/Shanghai
+    networks:
+      - grafana_monitor
+    ports:
+      - 10089:1089
+      - 18889:8889
+    volumes: 
+      - ./xray/us-west/config:/etc/xray
+      - ./xray/us-west/log:/var/log/xray
+    expose:
+      - 10085
+
   xray-singapore:
     image: teddysun/xray:latest
     restart: unless-stopped
@@ -91,7 +107,7 @@ services:
       - ./xray/singapore/config:/etc/xray
       - ./xray/singapore/log:/var/log/xray
     expose:
-      - 10086
+      - 10085
 
   xray-jp-central-exporter:
     image: wi1dcard/v2ray-exporter:master
@@ -104,6 +120,17 @@ services:
     expose:
       - 9550
 
+  xray-us-west-exporter:
+    image: wi1dcard/v2ray-exporter:master
+    environment:
+      TZ: Asia/Shanghai
+    networks:
+      - grafana_monitor
+    restart: unless-stopped
+    command: 'v2ray-exporter --v2ray-endpoint "xray-us-west:10085" --listen ":9550"'
+    expose:
+      - 9550
+
   xray-singapore-exporter:
     image: wi1dcard/v2ray-exporter:master
     environment:
@@ -111,7 +138,7 @@ services:
     networks:
       - grafana_monitor
     restart: unless-stopped
-    command: 'v2ray-exporter --v2ray-endpoint "xray-singapore:10086" --listen ":9550"'
+    command: 'v2ray-exporter --v2ray-endpoint "xray-singapore:10085" --listen ":9550"'
     expose:
       - 9550
 
