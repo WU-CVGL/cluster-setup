@@ -91,7 +91,7 @@ You can first check the availability of the NFS service on the client using the 
 ### Installation
 
 ```bash
-pip install -U determined-cli
+pip install -U determined
 ```
 
 ### Launch master & agents

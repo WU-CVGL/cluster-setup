@@ -283,6 +283,12 @@ network:
       optional: true
 ```
 
+After switching to networkd, disable NetworkManager (that comes with the GNOME desktop if you have ever installed) with:
+
+```bash
+sudo systemctl disable --now NetworkManager
+```
+
 Then execute the command to take effect:
 
 ```bash
@@ -592,7 +598,7 @@ it shows that the proxy service is working.
 
 ```sh
 sudo pip install -U pip
-sudo pip install -U determined-cli
+sudo pip install -U determined
 ```
 
 ### Pypi cryptography & pyOpenSSL dependency conflict
@@ -621,6 +627,54 @@ Reference:
 
 > https://askubuntu.com/questions/1428181/module-lib-has-no-attribute-x509-v-flag-cb-issuer-check/1435520#1435520
 
+### Disable IPv6
+
+Add these lines to `/etc/sysctl.conf`
+
+```conf
+net.ipv6.conf.all.disable_ipv6=1
+net.ipv6.conf.default.disable_ipv6=1
+net.ipv6.conf.lo.disable_ipv6=1
+```
+
+Then execute
+
+```bash
+sudo sysctl -p
+```
+
+### Configure RDMA
+
+Add these lines to `/etc/modules`
+
+```conf
+# iSCSI over RDMA client support
+ib_iser
+
+# iSCSI over RDMA target support
+ib_isert
+
+# SCSI RDMA Protocol target driver
+ib_srpt
+
+# User access to RDMA verbs (supports libibverbs)
+ib_uverbs
+
+# User access to RDMA connection management (supports librdmacm)
+rdma_ucm
+
+# RDS over RDMA support
+rds_rdma
+
+# NFS over RDMA client support
+xprtrdma
+
+# NFS over RDMA server support
+svcrdma
+```
+
+Then reboot.
+
 ## Do stress test
 
 > https://lambdalabs.com/blog/perform-gpu-and-cpu-stress-testing-on-linux
@@ -634,7 +688,7 @@ sudo apt update
 sudo apt upgrade -y
 
 sudo pip install -U pip
-sudo pip install -U determined-cli
+sudo pip install -U determined
 ```
 
 # Common References

@@ -9,6 +9,7 @@ scrape_configs:
   - job_name: "node"
     static_configs:
       - targets:
+          - "cvglcorevm.lan:9100"
           - "cvglsuppvm.lan:9100"
           - "login.cvgl.lab:9100"
           - "cvgl-node01.lan:9100"
@@ -16,6 +17,8 @@ scrape_configs:
           - "cvgl-node03.lan:9100"
           - "cvgl-node04.lan:9100"
           - "cvgl-node05.lan:9100"
+          - "cvgl-node06.lan:9100"
+          - "cvgl-node07.lan:9100"
   - job_name: "cadvisor"
     scrape_interval: 15s
     static_configs:
@@ -27,6 +30,8 @@ scrape_configs:
           - "cvgl-node03.lan:9080"
           - "cvgl-node04.lan:9080"
           - "cvgl-node05.lan:9080"
+          - "cvgl-node06.lan:9080"
+          - "cvgl-node07.lan:9080"
   - job_name: "dcgm"
     honor_timestamps: true
     scrape_interval: 15s
@@ -37,6 +42,8 @@ scrape_configs:
           - "cvgl-node03.lan:9400"
           - "cvgl-node04.lan:9400"
           - "cvgl-node05.lan:9400"
+          - "cvgl-node06.lan:9400"
+          - "cvgl-node07.lan:9400"
     metrics_path: /metrics
     scheme: http
     follow_redirects: true
@@ -80,4 +87,4 @@ scrape_configs:
     static_configs:
     - targets:
       - cvglcorevm.lan:8080
-    bearer_token: "v2.public.eyJpZCI6MzI1MywidXNlcl9pZCI6MSwiZXhwaXJ5IjoiMjAyMy0xMC0yNlQwMDowMDowNC4zNTgyMTg2OThaIn2HlDw0wLiGGk5zcX7ofDTILHV9Na3go_P_lNgnnRgIFr_qOlw2HVm76xnKMRZFEgoU19rwvmSe7YO25BswmPgD.bnVsbA"
+    bearer_token: "v2.public.eyJpZCI6MzMxNCwidXNlcl9pZCI6MSwiZXhwaXJ5IjoiMjAyMy0xMC0zMFQxMjo1MTozMy4yMzg2NjY0ODNaIn34Ydx0WrY4vbbeXF4wqi46cACWTs1bw1faavlsejoK01WHCVJSdXb4ufUSyeYYOLt3Fh06JI_wFP7XGjlFkv0N.bnVsbA"

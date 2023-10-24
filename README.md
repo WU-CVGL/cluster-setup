@@ -36,12 +36,16 @@ Current IP assignment:
 |10.0.1.73 / 192.168.233.13|GPU Node 03|
 |10.0.1.74 / 192.168.233.14|GPU Node 04|
 |10.0.1.75 / 192.168.233.15|GPU Node 05|
+|10.0.1.76 / 192.168.233.16|GPU Node 06|
+|10.0.1.77 / 192.168.233.17|GPU Node 07|
 |10.0.1.80|BMC of storage server|
 |10.0.1.81|BMC of GPU Node 01|
 |10.0.1.82|BMC of GPU Node 02|
 |10.0.1.83|BMC of GPU Node 03|
 |10.0.1.84|BMC of GPU Node 04|
 |10.0.1.85|BMC of GPU Node 05|
+|10.0.1.86|BMC of GPU Node 06|
+|10.0.1.87|BMC of GPU Node 07|
 |10.0.1.91|NVIDIA Mellanox Spectrum SN2700 100GbE Switch MGMT|
 |10.0.1.92|vCenter on management server|
 |10.0.1.93|ESXi on management server|
@@ -148,8 +152,8 @@ GPU Node 6, 7:
 | :----: | :----  |
 |  Model | ASUS ESC8000A-E12|
 |  CPU   | AMD EPYC 9554 * 2 (128C/256T, 3.1-3.75GHz)|
-|  RAM   | Samsung M321R8GA0BB0-CQK / Micron MTC40F2046S1RC48BA1 DDR5 1536G (64G*24) 4800MT/s ECC REG|
-|  GPU   | MSI (0x1462) RTX 4090 * 8 |
+|  RAM   | Samsung M321R8GA0BB0-CQKZJ / Micron MTC40F2046S1RC48BA1 DDR5 1536G (64G*24) 4800MT/s ECC REG|
+|  GPU   | GIGABYTE (NVIDIA/0x10DE) RTX 4090 * 8 |
 |  SSD   | Samsung PM9A3 1.92T (U.2 PCIe 4.0) * 1|
 |  NIC   | Intel I350-AM2 1GbE Dual Port |
 |  NIC   | Mellanox ConnectX-4 VPI EDR QSFP28 MCX455A-ECAT 100Gb ETH/IB Single Port|

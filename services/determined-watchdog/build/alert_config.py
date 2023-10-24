@@ -91,7 +91,7 @@ class Config(PrintableConfig):
     time_function_enabled_3090: bool = True
     time_function_enabled_update: bool = True
 
-    alert_min: int = 16
+    alert_min: int = 0
     alert_update_day: int = 3  # 0-6 Monday -Sunday 3 :Thursday
     alert_types = [BateAlertKill, IdleWarning]
     last_output: Dict[str, str] = field(default_factory=dict)

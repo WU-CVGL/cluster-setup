@@ -6,26 +6,39 @@
 192.168.233.13 cvgl-node03.lan
 192.168.233.14 cvgl-node04.lan
 192.168.233.15 cvgl-node05.lan
+192.168.233.16 cvgl-node06.lan
+192.168.233.17 cvgl-node07.lan
 
 192.168.233.233 nas.cvgl.lab
-# 192.168.233.234 nas.cvgl.lab
+
+192.168.233.8 cvgl.lab
+192.168.233.8 login.cvgl.lab
+192.168.233.8 pan.cvgl.lab
+192.168.233.8 gpu.cvgl.lab
+192.168.233.8 git.cvgl.lab
+192.168.233.8 frp.cvgl.lab
+192.168.233.8 portainer.cvgl.lab
+192.168.233.8 grafana.cvgl.lab
+192.168.233.8 harbor.cvgl.lab
+
 
 ### Campus Network
-10.0.1.68 cvgl.lab
-10.0.1.68 login.cvgl.lab
-10.0.1.68 pan.cvgl.lab
-10.0.1.68 gpu.cvgl.lab
-10.0.1.68 git.cvgl.lab
-10.0.1.68 frp.cvgl.lab
-10.0.1.68 portainer.cvgl.lab
-10.0.1.68 grafana.cvgl.lab
-10.0.1.68 harbor.cvgl.lab
-10.0.1.70 nas.cvgl.lab
-10.0.1.71 cvgl-node01.lan
-10.0.1.72 cvgl-node02.lan
-10.0.1.73 cvgl-node03.lan
-10.0.1.74 cvgl-node04.lan
-10.0.1.75 cvgl-node05.lan
+#10.0.1.68 cvgl.lab
+#10.0.1.68 login.cvgl.lab
+#10.0.1.68 pan.cvgl.lab
+#10.0.1.68 gpu.cvgl.lab
+#10.0.1.68 git.cvgl.lab
+#10.0.1.68 frp.cvgl.lab
+#10.0.1.68 portainer.cvgl.lab
+#10.0.1.68 grafana.cvgl.lab
+
+#10.0.1.68 harbor.cvgl.lab
+#10.0.1.70 nas.cvgl.lab
+#10.0.1.71 cvgl-node01.lan
+#10.0.1.72 cvgl-node02.lan
+#10.0.1.73 cvgl-node03.lan
+#10.0.1.74 cvgl-node04.lan
+#10.0.1.75 cvgl-node05.lan
 
 ### Managed devices
 10.0.1.68 peng.cvgl.lab
