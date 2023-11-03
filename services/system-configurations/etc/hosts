@@ -13,6 +13,7 @@
 
 192.168.233.8 cvgl.lab
 192.168.233.8 login.cvgl.lab
+192.168.233.8 wandb.cvgl.lab
 192.168.233.8 pan.cvgl.lab
 192.168.233.8 gpu.cvgl.lab
 192.168.233.8 git.cvgl.lab
@@ -25,6 +26,7 @@
 ### Campus Network
 #10.0.1.68 cvgl.lab
 #10.0.1.68 login.cvgl.lab
+#10.0.1.68 wandb.cvgl.lab
 #10.0.1.68 pan.cvgl.lab
 #10.0.1.68 gpu.cvgl.lab
 #10.0.1.68 git.cvgl.lab

@@ -15,6 +15,11 @@ links:
   icon: appleIcloud
   desc: Personal storage & easy share
 
+- name: Wandb
+  link: https://wandb.cvgl.lab
+  icon: matrix
+  desc: Weights & Biases
+
 - name: Cluster Wiki
   link: https://github.com/WU-CVGL/cluster-user-guide
   icon: github

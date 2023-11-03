@@ -1,6 +1,7 @@
 xray/*/config/*.json
 nginx/ssl/
 harbor/*
+wandb/vol/
 */log
 */data
 *.env

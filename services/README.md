@@ -86,7 +86,7 @@ P.S. The Harbor service is not in the all-in-one file, thus needs to be launched
 
 Check the [note to add the configuration files](xray/README.md)
 
-#### 4. Grafana and Prometheus
+#### 4. Grafana, Prometheus and Wandb
 
 Fix the ACL permissions:
 
@@ -94,6 +94,8 @@ Fix the ACL permissions:
 sudo chown -R 472:0 grafana/*
 
 sudo chown -R 1000:1000 prometheus/*
+
+sudo chown -R 999:0 wandb/vol
 ```
 
 #### 5. System-configurations
