@@ -485,7 +485,7 @@ pip config set global.index-url https://mirrors.bfsu.edu.cn/pypi/web/simple
 
 ```bash
 sudo apt-get install apt-transport-https ca-certificates curl wget gnupg2 software-properties-common
-export DOWNLOAD_URL="https://mirrors.bfsu.edu.cn/docker-ce"
+export DOWNLOAD_URL="https://mirrors.tuna.tsinghua.edu.cn/docker-ce"
 curl -fsSL https://get.docker.com/ | sh
 ```
 
@@ -626,6 +626,13 @@ Reference:
 > https://stackoverflow.com/questions/74041308/pip-throws-typeerror-deprecated-error/74046535#74046535
 
 > https://askubuntu.com/questions/1428181/module-lib-has-no-attribute-x509-v-flag-cb-issuer-check/1435520#1435520
+
+### Disable i386
+
+```bash
+sudo apt remove `dpkg --get-selections |grep :i386 |awk '{print $1}'`
+sudo dpkg --remove-architecture i386
+```
 
 ### Disable IPv6
 
