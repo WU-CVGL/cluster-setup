@@ -52,6 +52,13 @@ if __name__ == '__main__':
             # 执行函数操作
             # get alert form apu
             grafana_alert=get_alert_rules()
+            if grafana_alert is None:
+                self.message_notifier.send_slack_warning(
+                    warning_type="ERROR",
+                    info="Failed to fetch Grafana alert! Reason: empty response.",
+                    slack_webhook_url=self.config.slack_webhook_url,
+                )
+                continue
             alert_total= get_container_ids_by_alertname(grafana_alert)
             # alert excute func
             handle_alert_data_v3(alert_total)

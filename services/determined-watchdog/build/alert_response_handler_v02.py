@@ -44,6 +44,13 @@ class MainApplication:
             ):
                 self.config.time_function_enabled_3090 = False
                 grafana_alert = self.api_handler.get_alert_rules()
+                if grafana_alert is None:
+                    self.message_notifier.send_slack_warning(
+                        warning_type="ERROR",
+                        info="Failed to fetch Grafana alert! Reason: empty response.",
+                        slack_webhook_url=self.config.slack_webhook_url,
+                    )
+                    continue
                 alert_total = self.api_handler.get_container_ids_by_alertname(
                     grafana_alert
                 )
