@@ -54,7 +54,7 @@ class PrintableConfig:
 @dataclass
 class Config(PrintableConfig):
     """Config class for alert service."""
-    
+
     alert_name = BateAlertKill
     is_debug: bool = True if "WATCHDOG_DEBUG" in os.environ else False
     base_path: Path = Path(DATA_DIR_DEBUG) if is_debug else Path(DATA_DIR)
@@ -93,7 +93,7 @@ class Config(PrintableConfig):
 
     alert_min: int = 0
     alert_update_day: int = 3  # 0-6 Monday -Sunday 3 :Thursday
-    alert_types = [BateAlertKill, IdleWarning]
+    alert_types = AlertTypes
     last_output: Dict[str, str] = field(default_factory=dict)
     # 初始化last_output
     last_output_path: Path = field(default_factory=Path)
