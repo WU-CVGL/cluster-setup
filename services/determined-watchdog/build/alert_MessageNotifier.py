@@ -23,7 +23,7 @@ class MessageNotifier:
             for container_id, info in recipients.items():
                 username = info["username"]
                 user = user_info.get(username)
-                slack_id = f"<@{user['UID']}>" if user and not debug else username
+                slack_id = f"<@{user['UID']}>" if user and not self.config.is_debug else username
                 description = info.get("description", "")
                 field = {"value": slack_id, "title": f"{description}\n", "short": True}
                 fields.append(field)
@@ -49,6 +49,7 @@ class MessageNotifier:
             slack_webhook_url,
             data=json.dumps(data),
             headers={"Content-Type": "application/json"},
+            timeout=200,
         )
 
         if response.status_code != 200:
@@ -91,6 +92,7 @@ class MessageNotifier:
             slack_webhook_url,
             data=json.dumps(data),
             headers={"Content-Type": "application/json"},
+            timeout=200,
         )
 
         if response.status_code != 200:
