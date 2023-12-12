@@ -8,31 +8,21 @@ the PromQL in A is:
 max by(container_id)((DCGM_FI_DEV_GPU_UTIL \* on(gpu_uuid) group_left(container_id) det_gpu_uuid_container_id))
 ```
 
-# the gobel parameter you need know
+# Environment variables
 
-```python
-BateAlertKill = '3090BateTest'  # the name of the alert on the grafana
-BateAlertWarning = '3090Warning'
-GPU3090_KILL="3090BateTest"
-IDLEWARNING="IdleWarning"
-DEBUG = False  # 设置调试开关，True为开，False为关
-# path
-BASE_PATH = "/home/linsadmin/lins_services/services/supplementary/grafana/alterModel/data/"
-# grafana
-GRAFANA_API= 'https://grafana.lins.lab/api/alerts/'
-ALERTGPU = 'GPU_KILL'
-if DEBUG == False:
-    BASE_PATH = "/home/linsadmin/lins_services/services/supplementary/grafana/alterModel/data/"
-elif DEBUG == True:
-    BASE_PATH = "/home/linsadmin/lins_services/services/supplementary/grafana/alterModel/TEST_DATA/"
-
-# alert type
-ALERT_TYPE = [GPU3090_KILL, IDLEWARNING]
-# token  need update before can not use
-GRAFANA_API_TOKEN = '<TBA YOUR GRAFANA TOKEN>'
-GRAFANA_HEADERS ={
-    'Authorization': f'Bearer {GRAFANA_API_TOKEN}'
-}
+Create a `.env` file under this folder with these environment variables:
+```env
+WATCHDOG_DEBUG=0
+DET_WEB_URL=http://192.168.233.6:8080
+DET_USERNAME=admin
+DET_PASSWORD=<secret>
+GRAFANA_WEB_URL=http://192.168.233.8:10080
+GRAFANA_API_TOKEN=<secret>
+GRAFANA_ALERT_NAME=IdleKillAlert
+PORTAINER_WEB_URL=http://192.168.233.8:9000
+PORTAINER_API_TOKEN=<secret>
+SLACK_WEBHOOK_URL=https://hooks.slack.com/services/<secret>/<secret>
+SLACK_WEBHOOK_URL_DEBUG=https://hooks.slack.com/services/<secret>/<secret>
 ```
 
 # main function

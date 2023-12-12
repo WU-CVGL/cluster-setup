@@ -1,7 +1,6 @@
 import os
 import json
 import requests
-import subprocess
 from urllib.parse import urljoin
 
 from datetime import datetime
@@ -190,8 +189,8 @@ class MainApplication:
                 slack_webhook_url=self.config.slack_webhook_url,
             )
 
-        except subprocess.CalledProcessError as e:
-            print(f"Error running curl command: {e}")
+        except Exception as e:
+            print(f"Error in auto update: {e}")
             self.message_notifier.send_slack_warning(
                 warning_type="ERROR",
                 info="Automatic update FAILED ~",

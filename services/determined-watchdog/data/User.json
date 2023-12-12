@@ -1,1 +1,38 @@
-{}
+{
+    "lzzhao": {
+        "slack_id": "Lingzhe ZHAO",
+        "UID": "U05QXGLHUKY"
+    },
+    "wangpeng": {
+        "slack_id": "Peng WANG",
+        "UID": "U05SSCLS8AF"
+    },
+    "lyh": {
+        "slack_id": "Yunhao LI",
+        "UID": "U05SFM3DDSB"
+    },
+    "lmy": {
+        "slack_id": "Moyang LI",
+        "UID": "U05SU30UEG4"
+    },
+    "lzq": {
+        "slack_id": "Zhiqi LI",
+        "UID": "U05SB09JNLX"
+    },
+    "hj": {
+        "slack_id": "Jian HUANG",
+        "UID": "U05SC1U61HD"
+    },
+    "wujing": {
+        "slack_id": "Jing WU",
+        "UID": "U05SY9141K4"
+    },
+    "wanpian": {
+        "slack_id": "Pian WAN",
+        "UID": "U05SNJV8NAZ"
+    },
+    "cym": {
+        "slack_id": "Yiming CHEN",
+        "UID": "U05V9DQRX8Q"
+    }
+}

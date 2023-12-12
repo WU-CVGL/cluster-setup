@@ -3,11 +3,13 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Dict, List, Tuple
 
+IS_DEBUG = os.environ["WATCHDOG_DEBUG"].capitalize() in ["TRUE", "ON", "1"]
 DET_WEB_URL = os.environ["DET_WEB_URL"]
 DET_USERNAME = os.environ["DET_USERNAME"]
 DET_PASSWORD = os.environ["DET_PASSWORD"]
 GRAFANA_WEB_URL = os.environ["GRAFANA_WEB_URL"]
 GRAFANA_API_TOKEN = os.environ["GRAFANA_API_TOKEN"]
+GRAFANA_ALERT_NAME = os.environ["GRAFANA_ALERT_NAME"]
 PORTAINER_WEB_URL = os.environ["PORTAINER_WEB_URL"]
 PORTAINER_API_TOKEN = os.environ["PORTAINER_API_TOKEN"]
 SLACK_WEBHOOK_URL = os.environ["SLACK_WEBHOOK_URL"]
@@ -29,8 +31,8 @@ DATA_DIR_DEBUG = "/app/data/debug"
 if "DATA_DIR_DEBUG" in os.environ:
     DATA_DIR_DEBUG = os.environ["DATA_DIR_DEBUG"]
 
-BateAlertKill = "IdleKillAlert"
-IdleWarning = "IdleWarning"
+BateAlertKill = GRAFANA_ALERT_NAME  # Alert name in Grafana
+IdleWarning = "IdleWarning"  # Not used
 AlertTypes = [BateAlertKill, IdleWarning]
 
 
@@ -56,7 +58,7 @@ class Config(PrintableConfig):
     """Config class for alert service."""
 
     alert_name = BateAlertKill
-    is_debug: bool = True if "WATCHDOG_DEBUG" in os.environ else False
+    is_debug: bool = IS_DEBUG
     base_path: Path = Path(DATA_DIR_DEBUG) if is_debug else Path(DATA_DIR)
     file_info_name: str = "file_info.json"
     file_info_path = base_path / file_info_name
