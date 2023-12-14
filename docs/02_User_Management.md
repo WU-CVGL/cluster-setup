@@ -231,6 +231,12 @@ sudo useradd $USERNAME -s /usr/bin/bash
 sudo passwd $USERNAME
 ```
 
+Add docker permission:
+
+```bash
+sudo usermod -aG docker $USERNAME
+```
+
 Then check out the `UID` and `GID` in `/etc/passwd`, which will be useful in the next section:
 
 ```bash
@@ -250,20 +256,18 @@ export USERUID=1014
 export USERGID=1014
 ```
 
-## Grant docker permission
-
-On Login node:
-
-```bash
-sudo usermod -aG docker $USERNAME
-```
-
 ## Create a Determined AI account
 
 ```bash
 det user create $USERNAME
 det user change-password $USERNAME # Or the user can change password on the web dashboard
 det user link-with-agent-user $USERNAME --agent-uid $USERUID --agent-user $USERNAME --agent-gid $USERGID --agent-group $USERNAME
+```
+
+Check the result with:
+
+```bash
+det user list
 ```
 
 ## Create TrueNAS NFS share
@@ -367,6 +371,20 @@ Now we need to create NFS share for every user separately.
    ```
 
    then the configuration is a success.
+
+## Generate user home folder contents
+
+The user's home folder is empty now. We need to generate the default contents for them:
+
+```bash
+sudo -u $USERNAME chsh -s /bin/bash
+sudo -u $USERNAME xdg-user-dirs-update --force
+sudo -u $USERNAME cp /etc/skel/.* /home/$USERNAME
+```
+
+> Note: You will be prompted to input the user's default password.
+>
+> Ref: https://askubuntu.com/questions/152707/how-to-make-user-home-folder-after-account-creation
 
 ## Create and configure a Harbor account
 
