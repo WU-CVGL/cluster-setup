@@ -25,5 +25,5 @@ nas.cvgl.lab:/mnt/Peter/Workspace/lwp       /workspace/lwp      nfs defaults,ver
 ### Supplementary services
 nas.cvgl.lab:/mnt/Peter/SupplementaryServices/Docker            /srv/nfs/var/Docker             nfs vers=4,defaults,async,noatime,hard,rsize=1048576,wsize=1048576,_netdev 0 2
 nas.cvgl.lab:/mnt/Peter/SupplementaryServices/nextcloud         /srv/nfs/var/nextcloud          nfs vers=4,defaults,async,noatime,hard,rsize=1048576,wsize=1048576,_netdev 0 2
-nas.cvgl.lab:/mnt/Peter/SupplementaryServices/harbor/data       /srv/nfs/var/harbor/data        nfs vers=4,defaults,async,noatime,hard,rsize=1048576,wsize=1048576,_netdev 0 2
+nas.cvgl.lab:/mnt/Peter/SupplementaryServices/harbor/data       /srv/nfs/var/harbor/data        nfs vers=3,defaults,async,noatime,hard,rsize=1048576,wsize=1048576,_netdev 0 2
 nas.cvgl.lab:/mnt/Peter/SupplementaryServices/harbor/database   /srv/nfs/var/harbor/database    nfs vers=3,defaults,async,noatime,hard,rsize=1048576,wsize=1048576,_netdev 0 2
