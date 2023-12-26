@@ -21,6 +21,8 @@ nas.cvgl.lab:/mnt/Peter/Workspace/cym       /workspace/cym      nfs defaults,ver
 nas.cvgl.lab:/mnt/Peter/Workspace/xulu      /workspace/xulu     nfs defaults,vers=3,async,noatime,hard,rsize=1048576,wsize=1048576,_netdev 0 2
 nas.cvgl.lab:/mnt/Peter/Workspace/songwei   /workspace/songwei  nfs defaults,vers=3,async,noatime,hard,rsize=1048576,wsize=1048576,_netdev 0 2
 nas.cvgl.lab:/mnt/Peter/Workspace/lwp       /workspace/lwp      nfs defaults,vers=3,async,noatime,hard,rsize=1048576,wsize=1048576,_netdev 0 2
+nas.cvgl.lab:/mnt/Peter/Workspace/dcr       /workspace/dcr      nfs defaults,vers=3,async,noatime,hard,rsize=1048576,wsize=1048576,_netdev 0 2
+nas.cvgl.lab:/mnt/Peter/Workspace/wmz       /workspace/wmz      nfs defaults,vers=3,async,noatime,hard,rsize=1048576,wsize=1048576,_netdev 0 2
 
 ### Supplementary services
 nas.cvgl.lab:/mnt/Peter/SupplementaryServices/Docker            /srv/nfs/var/Docker             nfs vers=4,defaults,async,noatime,hard,rsize=1048576,wsize=1048576,_netdev 0 2

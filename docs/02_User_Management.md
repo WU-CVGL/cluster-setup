@@ -252,8 +252,7 @@ uid=1014(wanpian) gid=1014(wanpian) groups=1014(wanpian)
 Then the user's `UID` and `GID` are both `1014`. Set env var for the next section:
 
 ```bash
-export USERUID=1014
-export USERGID=1014
+export USERID=1014
 ```
 
 ## Create a Determined AI account
@@ -261,7 +260,8 @@ export USERGID=1014
 ```bash
 det user create $USERNAME
 det user change-password $USERNAME # Or the user can change password on the web dashboard
-det user link-with-agent-user $USERNAME --agent-uid $USERUID --agent-user $USERNAME --agent-gid $USERGID --agent-group $USERNAME
+det user link-with-agent-user $USERNAME --agent-uid $USERID --agent-user $USERNAME --agent-gid $USERID --agent-group $USERNAME
+det user edit $USERNAME --display-name "USER FULLNAME"
 ```
 
 Check the result with:

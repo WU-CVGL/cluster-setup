@@ -16,3 +16,5 @@ mkdir /workspace/cym
 mkdir /workspace/xulu
 mkdir /workspace/songwei
 mkdir /workspace/lwp
+mkdir /workspace/dcr
+mkdir /workspace/wmz
