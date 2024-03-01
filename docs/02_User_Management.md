@@ -12,7 +12,6 @@
     - [Post-installation configurations](#post-installation-configurations)
   - [Add New User to the cluster](#add-new-user-to-the-cluster)
   - [Create a Linux account on the login node](#create-a-linux-account-on-the-login-node)
-  - [Grant docker permission](#grant-docker-permission)
   - [Create a Determined AI account](#create-a-determined-ai-account)
   - [Create TrueNAS NFS share](#create-truenas-nfs-share)
     - [Creating home dataset for the new user](#creating-home-dataset-for-the-new-user)
