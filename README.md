@@ -38,6 +38,7 @@ Current IP assignment:
 |10.0.1.75 / 192.168.233.15|GPU Node 05|
 |10.0.1.76 / 192.168.233.16|GPU Node 06|
 |10.0.1.77 / 192.168.233.17|GPU Node 07|
+|10.0.1.78 / 192.168.233.18|GPU Node 08|
 |10.0.1.80|BMC of storage server|
 |10.0.1.81|BMC of GPU Node 01|
 |10.0.1.82|BMC of GPU Node 02|
@@ -158,6 +159,18 @@ GPU Node 6, 7:
 |  NIC   | Intel I350-AM2 1GbE Dual Port |
 |  NIC   | Mellanox ConnectX-4 VPI EDR QSFP28 MCX455A-ECAT 100Gb ETH/IB Single Port|
 
+GPU Node 8:
+
+|  Name  |  Spec  |
+| :----: | :----  |
+|  Model | ASUS ESC8000A-E12|
+|  CPU   | AMD EPYC 9554 * 2 (128C/256T, 3.1-3.75GHz)|
+|  RAM   | SK Hynix HMCG94AEBRA109N DDR5 1536G (64G*24) 4800MT/s ECC REG|
+|  GPU   | NVIDIA (0x10de) RTX 6000 Ada Generation 48G * 8 |
+|  SSD   | Samsung PM9A3 1.92TB 2.5" NVMe U.2 drive * 2|
+|  NIC   | Mellanox ConnectX-6 VPI HDR100 QSFP56 MCX653106A-ECAT 100Gb ETH/IB Dual Port|
+|  NIC   | Intel I350-T2 1GbE Dual Port |
+
 Storage Server
 
 |  Name  |  Spec  |
@@ -190,3 +203,13 @@ Switch
 |  Brand          |  Model & Spec  |
 |  :----:         | :---- |
 | NVIDIA Mellanox | Spectrum SN2700 100GbE 1U Open Ethernet Switch with NVIDIA Onyx, 32 QSFP28 ports, 2 PSU, x86 CPU, Standard depth |
+
+Note:
+
+  > hwinfo: `sudo apt install hwinfo && sudo hwinfo > hwinfo.log`
+  >
+  > Check memory model: `sudo dmidecode -t memory`
+  >
+  > Check GPU model: `lspci -vnn | grep VGA -A 12` for NVIDIA Geforce GTX/RTX graphics cards, `lspci -vnn | grep "3D controller" -A 12` for NVIDIA Quadro/Tesla/"" acceleration cards.
+  >
+  > Disable NVIDIA GPU's ECC: `sudo nvidia-smi -e 0`

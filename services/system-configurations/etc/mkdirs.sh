@@ -18,3 +18,6 @@ mkdir /workspace/songwei
 mkdir /workspace/lwp
 mkdir /workspace/dcr
 mkdir /workspace/wmz
+mkdir /workspace/liuxiang
+mkdir /workspace/gcc
+mkdir /workspace/wdx
