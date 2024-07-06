@@ -14,9 +14,11 @@
   - [Create a Linux account on the login node](#create-a-linux-account-on-the-login-node)
   - [Create a Determined AI account](#create-a-determined-ai-account)
   - [Create TrueNAS NFS share](#create-truenas-nfs-share)
-    - [Creating home dataset for the new user](#creating-home-dataset-for-the-new-user)
+    - [Create new user in TrueNAS](#create-new-user-in-truenas)
+    - [Create home dataset for the new user](#create-home-dataset-for-the-new-user)
     - [Create NFS share for the new user](#create-nfs-share-for-the-new-user)
     - [Set up NFS client on every node](#set-up-nfs-client-on-every-node)
+  - [Generate user home folder contents](#generate-user-home-folder-contents)
   - [Create and configure a Harbor account](#create-and-configure-a-harbor-account)
   - [References](#references)
 
@@ -271,43 +273,52 @@ det user list
 
 ## Create TrueNAS NFS share
 
-### Creating home dataset for the new user
+### Create new user in TrueNAS
+
+1. Add new group. Go to Credentials -> Groups [(this url)](http://10.0.1.70/ui/credentials/groups), type in `GID` and `Name`, then click **Save**:
+
+   ![TrueNAS Scale - Create New User Group](images/02_TrueNAS_Scale00.png)
+
+2. Add new user. Go to Credentials -> Users [(this url)](http://10.0.1.70/ui/credentials/users), **type in** `UID`, `Full Name`, AND THEN `Username` (NOTICE the step order here since it will generate a default username accorading to the given full name), **select** `Disable Password`, **UNselect** `Create New Primary Group`, **type in** the new group that we just created into `Primary Group`, **Unselect**, `Samba Authentication`, then click **Save**:
+
+   ![TrueNAS Scale - Create New User](images/02_TrueNAS_Scale01.png)
+
+### Create home dataset for the new user
 
 In the previous section, we have configured a **Dataset** `home`
 that will be used to store user files.
 Now we need to create NFS share for every user separately.
 
-1. Open the TrueNAS web dashboard. In **Storage->Pools**,
-   click the **three dots icon** of the Dataset `HDD/home`,
-   then click the **Add Dataset** to add a sub-dataset of it
-   (or you can directly [click this URL](http://10.0.1.70/ui/storage/pools/id/HDD%2Fhome/dataset/add/HDD%2Fhome))
+1. Open the TrueNAS web dashboard. In **Datasets->HDD->home**,
+   navigate to the Dataset `HDD/home` (or you can directly [click this url](http://10.0.1.70/ui/datasets/HDD%2Fhome/)),
+   then click **Add Dataset** to add a sub-dataset of it, type in the same username into `Name`. Then take a breath for the `Advanced Options`:
 
-   ![NAS_01](images/02_NAS.png)
+   ![TrueNAS Scale - Create New Dataset for User (Basic)](images/02_TrueNAS_Scale02.png)
 
-2. In the **Add Dataset** page, in the **Name and Options**, let `Name=<username>`.
-   Then click **ADVANCED OPTIONS**, in **This Dataset**,
-   let `Quota for this dataset = 8TiB`.
+   (Ignore the warning since the dataset has already been created in this example)
 
-   ![NAS_02](images/02_NAS_02.png)
+2. In the same page, click **Advanced Options**, in **This Dataset**, let `Quota for this dataset = 4TiB`.
 
-3. Click **SUBMIT** at the bottom to commit these changes.
+   ![TrueNAS Scale - Create New Dataset for User (Advanced)](images/02_TrueNAS_Scale03.png)
 
-4. Click the **three dots icon** of the newly create sub-dataset,
-   and select **Edit Permissions**.
-   On the new **Edit Permissions** page, click **USE ACL MANAGER**,
-   then in the new pop-up window, select **HOME** as the preset ACL.
-   On the new **Edit ACL** page, edit the `User` and `Group` to the `UID` and `GID` of the user
-   on the login node. Also, enable the `Apply User` and `Apply Group` options to take effect.
-   ![NAS_03](images/02_NAS_03.png)
+3. Click **Save** at the bottom to commit these changes.
 
-5. Click **SAVE** at the bottom to commit these changes.
+4. Click the newly create sub-dataset,
+   and select **Edit** Permissions.
+   On the new **Unix Permissions Editor** page, click **Set ACL**,
+   then in the new **Select a preset ACL** pop-up window, select **NFS4_HOME** as the preset ACL.
+   On the new **Edit ACL** page, search and select the `User` and `Group` to those we just created. Also, enable the `Apply Owner` and `Apply Group` options to take effect.
+   ![TrueNAS Scale - Set ACL](images/02_TrueNAS_Scale04.png)
+
+5. Click **Save Access Control List** at the bottom to commit these changes.
 
 ### Create NFS share for the new user
 
-1. Go to `Sharing/NFS/Add`, and select the sub-dataset just created above.
-2. In **Networks**, let `Authorized Networks = [192.168.233.0/24, 10.0.1.64/27]` (Click the **ADD** button to add the second entity).
-3. Click **SUBMIT** at the bottom of the page.
-![NAS_04](images/02_NAS_04.png)
+1. Go to `Shares/UNIX (NFS) Shares` (or directly [click this link](http://10.0.1.70/ui/sharing/nfs)), then click **Add**, and select the sub-dataset just created above.
+2. In **Networks**, Click **Add** and type in `[192.168.233.0/24, 10.0.1.64/27]`.
+3. Click **Save** at the bottom of the page.
+
+   ![TrueNAS Scale - Set NFS Share](images/02_TrueNAS_Scale05.png)
 
 ### Set up NFS client on every node
 
@@ -327,7 +338,7 @@ Now we need to create NFS share for every user separately.
    192.168.233.234 nas.cvgl.lab
    ```
 
-   While on every GPU (agent) node:
+   While on EVERY GPU (agent) node:
 
    Append this line to `/etc/hosts`:
 
@@ -337,7 +348,7 @@ Now we need to create NFS share for every user separately.
 
 3. Set up `fstab`
 
-   On the login node and every GPU (agent) node:
+   On the login node *as well as* EVERY GPU (agent) node:
 
    First, create the mount point for the new user
 
@@ -373,7 +384,7 @@ Now we need to create NFS share for every user separately.
 
 ## Generate user home folder contents
 
-The user's home folder is empty now. We need to generate the default contents for them:
+The user's home folder is empty now and we need to generate the default contents for them. After finishing the steps above, on the login node:
 
 ```bash
 sudo -u $USERNAME chsh -s /bin/bash

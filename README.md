@@ -167,7 +167,7 @@ GPU Node 8:
 |  CPU   | AMD EPYC 9554 * 2 (128C/256T, 3.1-3.75GHz)|
 |  RAM   | SK Hynix HMCG94AEBRA109N DDR5 1536G (64G*24) 4800MT/s ECC REG|
 |  GPU   | NVIDIA (0x10de) RTX 6000 Ada Generation 48G * 8 |
-|  SSD   | Samsung PM9A3 1.92TB 2.5" NVMe U.2 drive * 2|
+|  SSD   | Samsung PM9A3 (MZQL21T9HCJR-00A07) 1.92TB 2.5" NVMe U.2 drive * 2|
 |  NIC   | Mellanox ConnectX-6 VPI HDR100 QSFP56 MCX653106A-ECAT 100Gb ETH/IB Dual Port|
 |  NIC   | Intel I350-T2 1GbE Dual Port |
 
