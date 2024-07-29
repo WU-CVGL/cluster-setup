@@ -20,7 +20,7 @@ Our cluster is located in the core server room, E6-106.
 
 We have been designated with an IP address range: `10.0.1.64/27`, where the gateway: `10.0.1.65`, address pool: `10.0.1.66-94`.
 
-Our private 10GbE network IP address range: `192.168.233.0/24`
+Our private 100GbE network IP address range: `192.168.233.0/24`
 
 Current IP assignment:
 
@@ -47,6 +47,9 @@ Current IP assignment:
 |10.0.1.85|BMC of GPU Node 05|
 |10.0.1.86|BMC of GPU Node 06|
 |10.0.1.87|BMC of GPU Node 07|
+|10.0.1.88|BMC of GPU Node 08|
+|10.0.1.89|ESXi on storage server (2U, SSD-only)|
+|10.0.1.90|BMC of storage server (2U, SSD-only)|
 |10.0.1.91|NVIDIA Mellanox Spectrum SN2700 100GbE Switch MGMT|
 |10.0.1.92|vCenter on management server|
 |10.0.1.93|ESXi on management server|
@@ -168,7 +171,7 @@ GPU Node 8:
 |  RAM   | SK Hynix HMCG94AEBRA109N DDR5 1536G (64G*24) 4800MT/s ECC REG|
 |  GPU   | NVIDIA (0x10de) RTX 6000 Ada Generation 48G * 8 |
 |  SSD   | Samsung PM9A3 (MZQL21T9HCJR-00A07) 1.92TB 2.5" NVMe U.2 drive * 2|
-|  NIC   | Mellanox ConnectX-6 VPI HDR100 QSFP56 MCX653106A-ECAT 100Gb ETH/IB Dual Port|
+|  NIC   | Mellanox ConnectX-6 VPI NIC; HDR100, EDR IB/100GbE; dual-port QSFP56; PCIe4.0 x16; (MCX653106A-ECAT)|
 |  NIC   | Intel I350-T2 1GbE Dual Port |
 
 Storage Server
@@ -185,6 +188,17 @@ Storage Server
 |  NIC   | Intel i210 1GbE * 2 |
 |  NIC   | Mellanox ConnectX-4 VPI EDR QSFP28 MCX455A-ECAT 100Gb ETH/IB Single Port|
 |  RAID  | LSI SAS3008 PCI-Express Fusion-MPT SAS-3 |
+
+Storage Server (2U, SSD-only):
+
+|  Name  |  Spec  |
+| :----: | :----  |
+|  Model | Dell PowerEdge R7525|
+|  CPU   | AMD EPYC 7313 * 2  (32C/64T, 3.0-3.7GHz)|
+|  RAM   | Samsung DDR4 ECC REG 3200MHz 512G (32G * 16)|
+|  SSD   | KIOXIA DC CD7 RI 960GB 2.5" NVMe U.2 drive|
+|  NIC   | Broadcom BCM5720 Gigabit Ethernet * 2|
+|  NIC   | Mellanox ConnectX-6 VPI NIC; HDR100, EDR IB/100GbE; dual-port QSFP56; PCIe4.0 x16; (MCX653106A-ECAT)|
 
 Management Server
 

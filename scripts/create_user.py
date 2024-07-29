@@ -215,7 +215,7 @@ def create_user_harbor(username, password):
 
 def add_user_to_harbor_project_member(username):
     data = {
-        "role_id": 1,
+        "role_id": 2,  # 2 is the ID for the "Maintainer" role
         "member_user": {
             "username": username
         }
