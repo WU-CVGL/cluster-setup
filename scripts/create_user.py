@@ -141,13 +141,20 @@ def mount_home_all(username):
         conn = Connection(server, config=config)
 
         # Mount the NFS share
-        conn.sudo(f"mkdir -p /home/{username}")
-        # append the following line to /etc/fstab
-        mount_string = f"nas.cvgl.lab:/mnt/Peter/Workspace/{username} /home/{username} nfs defaults,vers=3,async,noatime,soft,rsize=32769,wsize=32768,_netdev 0 2"
-        conn.sudo(f"bash -c 'echo {mount_string} >> /etc/fstab'")
-        result = conn.sudo("mount -a").stdout
-        assert result == "", f"Failed to mount the NFS share: {result}"
+        mount_sources = [f"nas.cvgl.lab:/mnt/Peter/Workspace/{username}"]
+        mount_targets = ["/workspace/{username}"]
 
+        if server == "login":
+            mount_sources.append(mount_sources[0])
+            mount_targets.append(f"/home/{username}")
+
+        for mount_source, mount_target in zip(mount_sources, mount_targets):
+            conn.sudo(f"mkdir -p {mount_target}")
+            # append the following line to /etc/fstab
+            mount_string = f"{mount_source} {mount_target} nfs defaults,vers=3,async,noatime,soft,rsize=32769,wsize=32768,_netdev 0 2"
+            conn.sudo(f"bash -c 'echo {mount_string} >> /etc/fstab'")
+            result = conn.sudo("mount -a").stdout
+            assert result == "", f"Failed to mount the NFS share: {result}"
 
 def generate_home_contents_login_node(username, password):
     # Connect to the server
