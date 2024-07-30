@@ -80,7 +80,7 @@ def create_user_truenas(username, uid):
 def create_home_truenas(username):
     data = {
         "name": f"Peter/Workspace/{username}",
-        "quota": 4 * 1024**4  # 4TB
+        "quota": 8 * 1024**4  # 8TB
     }
     response = requests.post(
         f"{TRUENAS_API_URL}/pool/dataset/",
@@ -157,12 +157,6 @@ def mount_home_all(username):
 
         for mount_source, mount_target in zip(mount_sources, mount_targets):
             conn.sudo(f"mkdir -p {mount_target}")
-            # # remove the following lines from /etc/fstab
-            # to_rm = [
-            #     # ...
-            # ]
-            # for line in to_rm:
-            #     conn.sudo(f"bash -c \"sed -i '#{line}#d' /etc/fstab\"")
 
             # append the following line to /etc/fstab
             mount_string = f"{mount_source} {mount_target} nfs defaults,vers=3,async,noatime,soft,rsize=32769,wsize=32768,_netdev 0 2"
