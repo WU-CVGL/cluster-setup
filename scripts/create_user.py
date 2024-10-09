@@ -144,7 +144,7 @@ def create_home_nfs_share_truenas(username):
 def mount_home_all(username):
     # Connect to the server
     config = Config(overrides={'sudo': {'password': SUDO_PASSWORD}})
-    for server in ["cvgladmin@login","S1", "S2", "S3", "S4", "S5", "S6","S7", "S8"]:
+    for server in ["cvgladmin@login", "S1", "S2", "S3", "S4", "S5", "S6", "S7", "S8"]:
         conn = Connection(server, config=config, connect_kwargs=connect_kwargs)
 
         # Mount the NFS share
