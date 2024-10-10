@@ -145,24 +145,28 @@ def mount_home_all(username):
     # Connect to the server
     config = Config(overrides={'sudo': {'password': SUDO_PASSWORD}})
     for server in ["cvgladmin@login", "S1", "S2", "S3", "S4", "S5", "S6", "S7", "S8"]:
-        conn = Connection(server, config=config, connect_kwargs=connect_kwargs)
+        try:
+            conn = Connection(server, config=config, connect_kwargs=connect_kwargs)
 
-        # Mount the NFS share
-        mount_sources = [f"nas.cvgl.lab:/mnt/Peter/Workspace/{username}"]
-        mount_targets = [f"/workspace/{username}"]
+            # Mount the NFS share
+            mount_sources = [f"nas.cvgl.lab:/mnt/Peter/Workspace/{username}"]
+            mount_targets = [f"/workspace/{username}"]
 
-        if "login" in server:
-            mount_sources.append(mount_sources[0])
-            mount_targets.append(f"/home/{username}")
+            if "login" in server:
+                mount_sources.append(mount_sources[0])
+                mount_targets.append(f"/home/{username}")
 
-        for mount_source, mount_target in zip(mount_sources, mount_targets):
-            conn.sudo(f"mkdir -p {mount_target}")
+            for mount_source, mount_target in zip(mount_sources, mount_targets):
+                conn.sudo(f"mkdir -p {mount_target}")
 
-            # append the following line to /etc/fstab
-            mount_string = f"{mount_source} {mount_target} nfs defaults,vers=3,async,noatime,soft,rsize=32769,wsize=32768,_netdev 0 2"
-            conn.sudo(f"bash -c 'echo {mount_string} >> /etc/fstab'")
-            result = conn.sudo("mount -a").stdout
-            assert result == "", f"Failed to mount the NFS share: {result}"
+                # append the following line to /etc/fstab
+                mount_string = f"{mount_source} {mount_target} nfs defaults,vers=3,async,noatime,soft,rsize=32769,wsize=32768,_netdev 0 2"
+                conn.sudo(f"bash -c 'echo {mount_string} >> /etc/fstab'")
+                result = conn.sudo("mount -a").stdout
+                assert result == "", f"Failed to mount the NFS share: {result}"
+        except Exception as e:
+            print(f"Failed to mount the NFS share on {server}: {e}")
+            return False
 
 def generate_home_contents_login_node(username, password):
     # Connect to the server
@@ -180,14 +184,15 @@ def generate_home_contents_login_node(username, password):
 
 def create_user_det(username, password, uid, gid, fullname=None):
     # Connect to the server
-    conn = Connection("cvgladmin@login")
+    config = Config(overrides={'sudo': {'password': SUDO_PASSWORD}})
+    conn = Connection("cvgladmin@login", config=config, connect_kwargs=connect_kwargs)
 
     # Login to the Determined CLI
     conn.run("det user login admin", in_stream=StringIO(f"{DET_PASSWORD}\n"))
-    conn.run(f"det user create {username} --password {password}")
+    conn.run(f"det user create {username} --password '{password}'")
     conn.run(f"det user link-with-agent-user {username} --agent-uid {uid} --agent-user {username} --agent-gid {gid} --agent-group {username}")
     if fullname:
-        conn.run(f"det user edit {username} --display-name {fullname}")
+        conn.run(f"det user edit {username} --display-name '{fullname}'")
     conn.run("det user list")
 
 
@@ -209,7 +214,7 @@ def create_user_harbor(username, password):
 
 def add_user_to_harbor_project_member(username):
     data = {
-        "role_id": 2,  # 2 is the ID for the "Maintainer" role
+        "role_id": 2,  # 2 is the ID for the "Developer" role
         "member_user": {
             "username": username
         }

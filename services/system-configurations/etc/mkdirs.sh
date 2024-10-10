@@ -22,3 +22,4 @@ mkdir /workspace/liuxiang
 mkdir /workspace/gcc
 mkdir /workspace/wdx
 mkdir /workspace/hxn
+mkdir /workspace/cxh
