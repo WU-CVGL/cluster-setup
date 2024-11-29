@@ -42,5 +42,13 @@
     "liuxiang": {
         "slack_id": "Xiang LIU",
         "UID": "U06U9B0HMJP"
+    },
+    "cxh": {
+        "slack_id": "Xuanhua CHEN",
+        "UID": "U07RGS3P68L"
+    },
+    "xuqi": {
+        "slack_id": "Qi XU",
+        "UID": "U082PQEHFAM"
     }
 }

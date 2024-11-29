@@ -23,6 +23,7 @@ def create_user_login_node(username, password):
     # Create the user
     conn.sudo(f"useradd -m -s /bin/bash {username}")
     conn.sudo(f"bash -c 'echo {username}:{password} | chpasswd'")
+    conn.sudo(f"usermod -aG docker {username}")
 
     # Check if the user was created, and get the user ID and group ID
     uid = conn.run(f"id -u {username}").stdout.strip()
