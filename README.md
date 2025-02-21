@@ -39,6 +39,9 @@ Current IP assignment:
 |10.0.1.76 / 192.168.233.16|GPU Node 06|
 |10.0.1.77 / 192.168.233.17|GPU Node 07|
 |10.0.1.78 / 192.168.233.18|GPU Node 08|
+|10.0.1.79 / 192.168.233.2|iKuai on storage server (2U, SSD-only)|
+|N/A / 192.168.233.100|Ubuntu VM on storage server (2U, SSD-only)|
+|N/A / 192.168.233.101|TrueNAS on storage server (2U, SSD-only)|
 |10.0.1.80|BMC of storage server|
 |10.0.1.81|BMC of GPU Node 01|
 |10.0.1.82|BMC of GPU Node 02|
