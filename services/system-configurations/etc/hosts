@@ -11,6 +11,7 @@
 192.168.233.18 cvgl-node08.lan
 
 192.168.233.233 nas.cvgl.lab
+192.168.233.101 nas2.cvgl.lab
 
 192.168.233.8 cvgl.lab
 192.168.233.8 login.cvgl.lab

@@ -38,7 +38,7 @@ services:
     restart: always
     volumes:
       - ./determined-watchdog/data:/app/data
-      - ./prometheus/config:/etc/prometheus
+      - ./prometheus:/etc/prometheus
     networks:
       - grafana_monitor
     env_file:
@@ -73,6 +73,39 @@ services:
     volumes:
       - ./flare/app:/app
 
+  xray-jp-osaka-xuqi:
+    image: teddysun/xray:latest
+    restart: unless-stopped
+    environment:
+      TZ: Asia/Shanghai
+    networks:
+      - grafana_monitor
+    ports:
+      - 40089:1089
+      - 48889:8889
+    volumes: 
+      - ./xray/jp-osaka-xuqi/config:/etc/xray
+      - ./xray/jp-osaka-xuqi/log:/var/log/xray
+    expose:
+      - 10085
+
+
+  xray-jp-osaka-bwh:
+    image: teddysun/xray:latest
+    restart: unless-stopped
+    environment:
+      TZ: Asia/Shanghai
+    networks:
+      - grafana_monitor
+    ports:
+      - 30089:1089
+      - 38889:8889
+    volumes: 
+      - ./xray/jp-osaka-bwh/config:/etc/xray
+      - ./xray/jp-osaka-bwh/log:/var/log/xray
+    expose:
+      - 10085
+
   xray-jp-central:
     image: teddysun/xray:latest
     restart: unless-stopped
@@ -105,7 +138,7 @@ services:
     expose:
       - 10085
 
-  xray-singapore:
+  xray-us-west-megaboxpro-2tb:
     image: teddysun/xray:latest
     restart: unless-stopped
     environment:
@@ -116,10 +149,32 @@ services:
       - 20089:1089
       - 28889:8889
     volumes: 
-      - ./xray/singapore/config:/etc/xray
-      - ./xray/singapore/log:/var/log/xray
+      - ./xray/us-west-megaboxpro-2tb/config:/etc/xray
+      - ./xray/us-west-megaboxpro-2tb/log:/var/log/xray
     expose:
       - 10085
+
+  xray-jp-osaka-xuqi-exporter:
+    image: wi1dcard/v2ray-exporter:master
+    environment:
+      TZ: Asia/Shanghai
+    networks:
+      - grafana_monitor
+    restart: unless-stopped
+    command: 'v2ray-exporter --v2ray-endpoint "xray-jp-osaka-xuqi:10085" --listen ":9550"'
+    expose:
+      - 9550
+
+  xray-jp-osaka-bwh-exporter:
+    image: wi1dcard/v2ray-exporter:master
+    environment:
+      TZ: Asia/Shanghai
+    networks:
+      - grafana_monitor
+    restart: unless-stopped
+    command: 'v2ray-exporter --v2ray-endpoint "xray-jp-osaka-bwh:10085" --listen ":9550"'
+    expose:
+      - 9550
 
   xray-jp-central-exporter:
     image: wi1dcard/v2ray-exporter:master
@@ -143,14 +198,14 @@ services:
     expose:
       - 9550
 
-  xray-singapore-exporter:
+  xray-us-west-megaboxpro-2tb-exporter:
     image: wi1dcard/v2ray-exporter:master
     environment:
       TZ: Asia/Shanghai
     networks:
       - grafana_monitor
     restart: unless-stopped
-    command: 'v2ray-exporter --v2ray-endpoint "xray-singapore:10085" --listen ":9550"'
+    command: 'v2ray-exporter --v2ray-endpoint "xray-us-west-megaboxpro-2tb:10085" --listen ":9550"'
     expose:
       - 9550
 
@@ -189,13 +244,14 @@ services:
     environment:
       TZ: Asia/Shanghai
     volumes:
-      - ./prometheus/data:/prometheus
-      - ./prometheus/config:/etc/prometheus
+      - /srv/nfs/var/prometheus:/prometheus
+      - ./prometheus:/etc/prometheus
     command:
       - '--config.file=/etc/prometheus/prometheus.yml'
       - '--web.enable-admin-api'
       - '--web.enable-lifecycle'
       - '--storage.tsdb.path=/prometheus'
+      - '--storage.tsdb.retention.time=30d'
       - '--web.console.libraries=/etc/prometheus/console_libraries'
       - '--web.console.templates=/etc/prometheus/consoles'
 

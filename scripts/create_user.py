@@ -244,14 +244,17 @@ def create_user(username, password, fullname=None):
 
 usernames = [
     # fill in the usernames
+    "hzc"
 ]
 
 full_names = [
     # fill in the full names
+    "Zhangchi HUANG"
 ]
 
 passwords = [
     # fill in the passwords
+    "NFGPSU2gB5Iuk"
 ]
 
 for username, password, fullname in zip(usernames, passwords, full_names):

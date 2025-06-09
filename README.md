@@ -39,9 +39,7 @@ Current IP assignment:
 |10.0.1.76 / 192.168.233.16|GPU Node 06|
 |10.0.1.77 / 192.168.233.17|GPU Node 07|
 |10.0.1.78 / 192.168.233.18|GPU Node 08|
-|10.0.1.79 / 192.168.233.2|iKuai on storage server (2U, SSD-only)|
-|N/A / 192.168.233.100|Ubuntu VM on storage server (2U, SSD-only)|
-|N/A / 192.168.233.101|TrueNAS on storage server (2U, SSD-only)|
+|10.0.1.79 / 192.168.233.2|iKuai on management server|
 |10.0.1.80|BMC of storage server|
 |10.0.1.81|BMC of GPU Node 01|
 |10.0.1.82|BMC of GPU Node 02|
@@ -51,10 +49,9 @@ Current IP assignment:
 |10.0.1.86|BMC of GPU Node 06|
 |10.0.1.87|BMC of GPU Node 07|
 |10.0.1.88|BMC of GPU Node 08|
-|10.0.1.89|ESXi on storage server (2U, SSD-only)|
+|10.0.1.89 / 192.168.233.101|TrueNAS on storage server (2U, SSD-only)|
 |10.0.1.90|BMC of storage server (2U, SSD-only)|
 |10.0.1.91|NVIDIA Mellanox Spectrum SN2700 100GbE Switch MGMT|
-|10.0.1.92|vCenter on management server|
 |10.0.1.93|ESXi on management server|
 |10.0.1.94|BMC of management server|
 
@@ -186,7 +183,7 @@ Storage Server
 |  RAM   | Samsung M393A4K40DB2-CWE DDR4 256G (32G*8) 2933MT/s ECC REG |
 |  SSD   | INTEL 760p (SSDPEKKW256G8) 256G (M.2 PCIe 3.0) * 1|
 |  SSD   | Intel S4510 1.92TB (SATA) * 2 |
-|  SSD   | WD Ultrastar DC SN640 (WUS4BB076D7P3E3) 7.68TB (U.2 PCIe 3.0) * 12 |
+|  SSD   | WD Ultrastar DC SN640 (WUS4BB076D7P3E3) 7.68TB (U.2 PCIe 3.0) * 12 (2 corrupted) |
 |  HDD   | Seagate Exos X18 18TB * 24 |
 |  NIC   | Intel i210 1GbE * 2 |
 |  NIC   | Mellanox ConnectX-4 VPI EDR QSFP28 MCX455A-ECAT 100Gb ETH/IB Single Port|
@@ -199,7 +196,9 @@ Storage Server (2U, SSD-only):
 |  Model | Dell PowerEdge R7525|
 |  CPU   | AMD EPYC 7313 * 2  (32C/64T, 3.0-3.7GHz)|
 |  RAM   | Samsung DDR4 ECC REG 3200MHz 512G (32G * 16)|
-|  SSD   | KIOXIA DC CD7 RI 960GB 2.5" NVMe U.2 drive|
+|  SSD   | KIOXIA DC CD7 RI 960GB 2.5" NVMe U.2 drive * 1|
+|  SSD   | Seagate Nytro 5350H 7.68 TB 2.5" NVMe U.3 drive * 8|
+|  SSD   | Samsung BM1743 60.72 TB 2.5" NVMe U.3 drive * 4|
 |  NIC   | Broadcom BCM5720 Gigabit Ethernet * 2|
 |  NIC   | Mellanox ConnectX-6 VPI NIC; HDR100, EDR IB/100GbE; dual-port QSFP56; PCIe4.0 x16; (MCX653106A-ECAT)|
 

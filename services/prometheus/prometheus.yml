@@ -71,8 +71,10 @@ scrape_configs:
     metrics_path: /scrape
     static_configs:
       - targets:
+          - "xray-jp-osaka-xuqi-exporter:9550"
+          - "xray-jp-osaka-bwh-exporter:9550"
           - "xray-jp-central-exporter:9550"
-          - "xray-singapore-exporter:9550"
+          - "xray-us-west-megaboxpro-2tb-exporter:9550"
           - "xray-us-west-exporter:9550"
   - job_name: det-master
     honor_timestamps: true
