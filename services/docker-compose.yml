@@ -11,6 +11,26 @@ volumes:
     driver: local
 
 services:
+  hbbs:
+    container_name: hbbs
+    image: harbor.cvgl.lab/library/rustdesk/rustdesk-server
+    command: hbbs
+    volumes:
+      - ./rustdesk/data:/root
+    network_mode: "host"
+    depends_on:
+      - hbbr
+    restart: unless-stopped
+
+  hbbr:
+    container_name: hbbr
+    image: harbor.cvgl.lab/library/rustdesk/rustdesk-server
+    command: hbbr
+    volumes:
+      - ./rustdesk/data:/root
+    network_mode: "host"
+    restart: unless-stopped
+
   wandb:
     image: wandb/local
     restart: always
@@ -38,7 +58,7 @@ services:
     restart: always
     volumes:
       - ./determined-watchdog/data:/app/data
-      - ./prometheus:/etc/prometheus
+      - ./prometheus/prometheus.yml:/etc/prometheus/prometheus.yml
     networks:
       - grafana_monitor
     env_file:

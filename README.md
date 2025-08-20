@@ -197,8 +197,9 @@ Storage Server (2U, SSD-only):
 |  CPU   | AMD EPYC 7313 * 2  (32C/64T, 3.0-3.7GHz)|
 |  RAM   | Samsung DDR4 ECC REG 3200MHz 512G (32G * 16)|
 |  SSD   | KIOXIA DC CD7 RI 960GB 2.5" NVMe U.2 drive * 1|
-|  SSD   | Seagate Nytro 5350H 7.68 TB 2.5" NVMe U.3 drive * 8|
-|  SSD   | Samsung BM1743 60.72 TB 2.5" NVMe U.3 drive * 4|
+|  SSD   | Seagate Nytro 5350H 7.68 TB 2.5" NVMe U.3 drive * 8 (replaced)|
+|  SSD   | Samsung BM1743 30.72 TB 2.5" NVMe U.3 drive * 6|
+|  SSD   | KIOXIA CM6 30.72 TB 2.5" NVMe U.3 drive * 2|
 |  NIC   | Broadcom BCM5720 Gigabit Ethernet * 2|
 |  NIC   | Mellanox ConnectX-6 VPI NIC; HDR100, EDR IB/100GbE; dual-port QSFP56; PCIe4.0 x16; (MCX653106A-ECAT)|
 

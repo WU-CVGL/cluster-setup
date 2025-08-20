@@ -54,5 +54,13 @@
     "hzc": {
         "slack_id": "Zhangchi HUANG",
         "UID": "U08MWGFS6DQ"
+    },
+    "sht": {
+        "slack_id": "Haotian SHEN",
+        "UID": "U09AMRJBGA3"
+    },
+    "lxh": {
+        "slack_id": "Xinhao LOU",
+        "UID": "U09B844525U"
     }
 }
