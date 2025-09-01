@@ -174,6 +174,22 @@ services:
     expose:
       - 10085
 
+  xray-us-west-racknerd-12tb:
+    image: teddysun/xray:latest
+    restart: unless-stopped
+    environment:
+      TZ: Asia/Shanghai
+    networks:
+      - grafana_monitor
+    ports:
+      - 50089:1089
+      - 58889:8889
+    volumes: 
+      - ./xray/us-west-racknerd-12tb/config:/etc/xray
+      - ./xray/us-west-racknerd-12tb/log:/var/log/xray
+    expose:
+      - 10085
+
   xray-jp-osaka-xuqi-exporter:
     image: wi1dcard/v2ray-exporter:master
     environment:
@@ -215,6 +231,17 @@ services:
       - grafana_monitor
     restart: unless-stopped
     command: 'v2ray-exporter --v2ray-endpoint "xray-us-west:10085" --listen ":9550"'
+    expose:
+      - 9550
+
+  xray-us-west-racknerd-12tb-exporter:
+    image: wi1dcard/v2ray-exporter:master
+    environment:
+      TZ: Asia/Shanghai
+    networks:
+      - grafana_monitor
+    restart: unless-stopped
+    command: 'v2ray-exporter --v2ray-endpoint "xray-us-west-racknerd-12tb:10085" --listen ":9550"'
     expose:
       - 9550
 

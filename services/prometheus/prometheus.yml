@@ -75,6 +75,7 @@ scrape_configs:
           - "xray-jp-osaka-bwh-exporter:9550"
           - "xray-jp-central-exporter:9550"
           - "xray-us-west-megaboxpro-2tb-exporter:9550"
+          - "xray-us-west-racknerd-12tb-exporter:9550"
           - "xray-us-west-exporter:9550"
   - job_name: det-master
     honor_timestamps: true
