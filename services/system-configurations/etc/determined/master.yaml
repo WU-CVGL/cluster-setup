@@ -1,10 +1,14 @@
 ## Configure the task container defaults. Tasks include trials, commands, tensorboards and more.
 ## For all task containers, shm_size_bytes and network_mode are configurable. For trials, the
 ## network interface used by distributed (multi-machine) training is configurable.
-#task_container_defaults:
-#  shm_size_bytes: 4294967296
-#  network_mode: bridge
+task_container_defaults:
+  shm_size_bytes: 17179869184
+  network_mode: bridge
 #  dtrain_network_interface: <network interface name>
+  add_capabilities:
+    - IPC_LOCK
+  environment_variables:
+    - NVIDIA_DRIVER_CAPABILITIES=all
 
 ## Resource manager configuration. Defaults to using the agent resource manager.
 resource_manager:
