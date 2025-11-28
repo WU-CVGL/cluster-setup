@@ -11,6 +11,7 @@ class APIHandler:
         self.config = config
         self.message_notifier = MessageNotifier(config)
         self.det_shell_api = urljoin(config.det_web, "api/v1/shells/")
+        self.det_task_api = urljoin(config.det_web, "api/v1/tasks/")
         self.grafana_alart_api = urljoin(
             config.grafana_web,
             "api/alertmanager/grafana/api/v2/alerts/"
@@ -46,38 +47,64 @@ class APIHandler:
         with open(self.config.file_info_path, "w") as f:
             json.dump(data, f, indent=4)
 
-    def get_api_data(self):
-        response = requests.get(
+    def get_shell_api_data(self):
+        shell_api_response = requests.get(
             url=self.det_shell_api,
             headers=self.config.det_headers,
             verify=False,
         )  # ignore SSL verification
-        api_data = response.json()
-        return api_data
+        return shell_api_response.json()
 
-    def parse_api_data(self, api_data):
+    def get_task_api_data(self):
+        task_api_response = requests.get(
+            url=self.det_task_api,
+            headers=self.config.det_headers,
+            verify=False,
+        )
+        return task_api_response.json()
+
+    def parse_api_data(self, shell_api_data, task_api_data):
         result = {}
-        # print(api_data)
-        if "error" in api_data:
+        if "error" in shell_api_data:
             self.message_notifier.send_slack_warning(
                 "det api miss",
                 "need update api!",
                 self.config.slack_webhook_url,
             )
             return {}
-        for shell in api_data["shells"]:
-            if "container" in shell and shell["container"] is not None:
-                container_id = shell[
-                    "id"
-                ]  # Fix: Use shell['id'] instead of shell['container'].get('id')
+        if "error" in task_api_data:
+            self.message_notifier.send_slack_warning(
+                "det api miss",
+                "need update api!",
+                self.config.slack_webhook_url,
+            )
+            return {}
+        for shell in shell_api_data["shells"]:
+            shell_id = shell["id"]
+
+            ## container is null in shell_api. Retrieve from task_api
+            # container_id = shell["container"].get("id")
+            try:
+                shell_task_data = task_api_data["allocationIdToSummary"][f"{shell_id}.1"]
+            except KeyError:
+                continue
+            resources = shell_task_data["resources"]
+            if resources is not None and len(resources) > 0:
+                container_id = resources[0]["containerId"]
+                # print(f"[debug] container_id: {container_id} for shell_id {shell_id}")
+                if container_id is None:
+                    print("[debug] container_id is none")
+                    print(task_api_data)
+                    print(shell_id)
+
                 description = shell.get("description")
                 username = shell.get("username")
                 startTime = shell.get("startTime")
-                devices = shell["container"].get("devices", [])
+                devices = resources[0]["agentDevices"].get("devices", [])
                 device_count = len(devices)
-                if container_id is not None and container_id not in result:
-                    result[container_id] = {
-                        "container_id": shell["container"].get("id"),
+                if shell_id is not None and shell_id not in result:
+                    result[shell_id] = {
+                        "container_id": container_id,
                         "description": description,
                         "username": username,
                         "startTime": startTime,

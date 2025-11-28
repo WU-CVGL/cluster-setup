@@ -218,8 +218,10 @@ class MainApplication:
             # Slack send blank message?
             return
 
-        api_data = self.api_handler.get_api_data()
-        det_container_ids = self.api_handler.parse_api_data(api_data)
+        shell_api_data = self.api_handler.get_shell_api_data()
+        task_api_data = self.api_handler.get_task_api_data()
+
+        det_container_ids = self.api_handler.parse_api_data(shell_api_data, task_api_data)
         alert_3090_container_ids = alert_container_ids[self.config.alert_name]
 
         # 解析API数据
@@ -227,7 +229,7 @@ class MainApplication:
             alert_3090_container_ids, det_container_ids
         )
         if not new_data:
-            print(f"'{alert_container_ids}' not found in det_container_ids.")
+            print(f"'{alert_container_ids}' not found in det_container_ids: {det_container_ids}.")
             # Slack send blank message?
             return
 

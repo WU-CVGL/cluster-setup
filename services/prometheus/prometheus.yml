@@ -71,12 +71,13 @@ scrape_configs:
     metrics_path: /scrape
     static_configs:
       - targets:
+          - "xray-hk-lisa-exporter:9550"
           - "xray-jp-osaka-xuqi-exporter:9550"
           - "xray-jp-osaka-bwh-exporter:9550"
           - "xray-jp-central-exporter:9550"
           - "xray-us-west-megaboxpro-2tb-exporter:9550"
           - "xray-us-west-racknerd-12tb-exporter:9550"
-          - "xray-us-west-exporter:9550"
+          - "xray-us-west-bwh-exporter:9550"
   - job_name: det-master
     honor_timestamps: true
     scrape_interval: 15s
@@ -93,4 +94,4 @@ scrape_configs:
     static_configs:
     - targets:
       - cvglcorevm.lan:8080
-    bearer_token: "v2.public.eyJpZCI6NTU5NCwidXNlcl9pZCI6MSwiZXhwaXJ5IjoiMjAyNC0wNi0wNlQwMDowMDowNS42MDA0ODg2NjRaIiwiSW5oZXJpdGVkQ2xhaW1zIjpudWxsfdwzvwgW9HMNcefHErK07X8xhK9QZWqn7zLQqp87P9ycFDkNbNAgH2O59ehR6rd8xl4qqykF6en3ITucEEiyKws.bnVsbA"
+    bearer_token: "v2.public.eyJpZCI6MTE4NjQsInVzZXJfaWQiOjEsImV4cGlyeSI6IjIwMjUtMTItMDVUMTY6NTk6NDIuODY3NzM0NjU4WiIsImNyZWF0ZWRfYXQiOiIyMDI1LTExLTI4VDE2OjU5OjQyLjg2NzczNDY1OFoiLCJ0b2tlbl90eXBlIjoiVVNFUl9TRVNTSU9OIiwicmV2b2tlZF9hdCI6bnVsbCwiZGVzY3JpcHRpb24iOm51bGwsIkluaGVyaXRlZENsYWltcyI6bnVsbH3u2OaALkdwjiI8_MTyLqxBAwjpXVf_2K3nLCFmGbC8h4b9a_tZBdJ4UP6qccl9RKINLYa-CM82CKS9XTVYaPcJ.bnVsbA"

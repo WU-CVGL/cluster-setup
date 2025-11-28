@@ -136,13 +136,13 @@ services:
     ports:
       - 1089:1089
       - 8889:8889
-    volumes: 
+    volumes:
       - ./xray/jp-central/config:/etc/xray
       - ./xray/jp-central/log:/var/log/xray
     expose:
       - 10085
 
-  xray-us-west:
+  xray-us-west-bwh:
     image: teddysun/xray:latest
     restart: unless-stopped
     environment:
@@ -153,8 +153,8 @@ services:
       - 10089:1089
       - 18889:8889
     volumes: 
-      - ./xray/us-west/config:/etc/xray
-      - ./xray/us-west/log:/var/log/xray
+      - ./xray/us-west-bwh/config:/etc/xray
+      - ./xray/us-west-bwh/log:/var/log/xray
     expose:
       - 10085
 
@@ -171,6 +171,22 @@ services:
     volumes: 
       - ./xray/us-west-megaboxpro-2tb/config:/etc/xray
       - ./xray/us-west-megaboxpro-2tb/log:/var/log/xray
+    expose:
+      - 10085
+
+  xray-hk-lisa:
+    image: teddysun/xray:latest
+    restart: unless-stopped
+    environment:
+      TZ: Asia/Shanghai
+    networks:
+      - grafana_monitor
+    ports:
+      - 59089:1089
+      - 59889:8889
+    volumes: 
+      - ./xray/hk-lisa/config:/etc/xray
+      - ./xray/hk-lisa/log:/var/log/xray
     expose:
       - 10085
 
@@ -223,14 +239,25 @@ services:
     expose:
       - 9550
 
-  xray-us-west-exporter:
+  xray-us-west-bwh-exporter:
     image: wi1dcard/v2ray-exporter:master
     environment:
       TZ: Asia/Shanghai
     networks:
       - grafana_monitor
     restart: unless-stopped
-    command: 'v2ray-exporter --v2ray-endpoint "xray-us-west:10085" --listen ":9550"'
+    command: 'v2ray-exporter --v2ray-endpoint "xray-us-west-bwh:10085" --listen ":9550"'
+    expose:
+      - 9550
+
+  xray-hk-lisa-exporter:
+    image: wi1dcard/v2ray-exporter:master
+    environment:
+      TZ: Asia/Shanghai
+    networks:
+      - grafana_monitor
+    restart: unless-stopped
+    command: 'v2ray-exporter --v2ray-endpoint "xray-hk-lisa:10085" --listen ":9550"'
     expose:
       - 9550
 
