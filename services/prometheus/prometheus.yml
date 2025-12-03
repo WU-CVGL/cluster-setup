@@ -78,6 +78,10 @@ scrape_configs:
           - "xray-us-west-megaboxpro-2tb-exporter:9550"
           - "xray-us-west-racknerd-12tb-exporter:9550"
           - "xray-us-west-bwh-exporter:9550"
+          - "xray-jms-iplc-hk1000v2-c983-s01-exporter:9550"
+          - "xray-jms-iplc-hk1000v2-c983-s02-exporter:9550"
+          - "xray-jms-iplc-hk1000v2-c983-s52-exporter:9550"
+          - "xray-jms-iplc-hk1000v2-c983-s53-exporter:9550"
   - job_name: det-master
     honor_timestamps: true
     scrape_interval: 15s

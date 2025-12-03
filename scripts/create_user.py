@@ -252,6 +252,10 @@ full_names = [
 
 passwords = [
     # fill in the passwords
+    # ✓ password must have at least 8 characters
+    # ✓ password must include an uppercase letter
+    # ✓ password must include a lowercase letter
+    # ✓ password must include a number
 ]
 
 for username, password, fullname in zip(usernames, passwords, full_names):

@@ -283,6 +283,114 @@ services:
     expose:
       - 9550
 
+  xray-jms-iplc-hk1000v2-c983-s01:
+    image: teddysun/xray:latest
+    restart: unless-stopped
+    environment:
+      TZ: Asia/Shanghai
+    networks:
+      - grafana_monitor
+    ports:
+      - 50180:1089
+      - 50189:8889
+    volumes: 
+      - ./xray/jms-iplc-hk1000v2-c983-s01/config:/etc/xray
+      - ./xray/jms-iplc-hk1000v2-c983-s01/log:/var/log/xray
+    expose:
+      - 10085
+
+  xray-jms-iplc-hk1000v2-c983-s01-exporter:
+    image: wi1dcard/v2ray-exporter:master
+    environment:
+      TZ: Asia/Shanghai
+    networks:
+      - grafana_monitor
+    restart: unless-stopped
+    command: 'v2ray-exporter --v2ray-endpoint "xray-jms-iplc-hk1000v2-c983-s01:10085" --listen ":9550"'
+    expose:
+      - 9550
+
+  xray-jms-iplc-hk1000v2-c983-s02:
+    image: teddysun/xray:latest
+    restart: unless-stopped
+    environment:
+      TZ: Asia/Shanghai
+    networks:
+      - grafana_monitor
+    ports:
+      - 50280:1089
+      - 50289:8889
+    volumes: 
+      - ./xray/jms-iplc-hk1000v2-c983-s02/config:/etc/xray
+      - ./xray/jms-iplc-hk1000v2-c983-s02/log:/var/log/xray
+    expose:
+      - 10085
+
+  xray-jms-iplc-hk1000v2-c983-s02-exporter:
+    image: wi1dcard/v2ray-exporter:master
+    environment:
+      TZ: Asia/Shanghai
+    networks:
+      - grafana_monitor
+    restart: unless-stopped
+    command: 'v2ray-exporter --v2ray-endpoint "xray-jms-iplc-hk1000v2-c983-s02:10085" --listen ":9550"'
+    expose:
+      - 9550
+
+  xray-jms-iplc-hk1000v2-c983-s52:
+    image: teddysun/xray:latest
+    restart: unless-stopped
+    environment:
+      TZ: Asia/Shanghai
+    networks:
+      - grafana_monitor
+    ports:
+      - 55280:1089
+      - 55289:8889
+    volumes: 
+      - ./xray/jms-iplc-hk1000v2-c983-s52/config:/etc/xray
+      - ./xray/jms-iplc-hk1000v2-c983-s52/log:/var/log/xray
+    expose:
+      - 10085
+
+  xray-jms-iplc-hk1000v2-c983-s52-exporter:
+    image: wi1dcard/v2ray-exporter:master
+    environment:
+      TZ: Asia/Shanghai
+    networks:
+      - grafana_monitor
+    restart: unless-stopped
+    command: 'v2ray-exporter --v2ray-endpoint "xray-jms-iplc-hk1000v2-c983-s52:10085" --listen ":9550"'
+    expose:
+      - 9550
+
+  xray-jms-iplc-hk1000v2-c983-s53:
+    image: teddysun/xray:latest
+    restart: unless-stopped
+    environment:
+      TZ: Asia/Shanghai
+    networks:
+      - grafana_monitor
+    ports:
+      - 55380:1089
+      - 55389:8889
+    volumes: 
+      - ./xray/jms-iplc-hk1000v2-c983-s53/config:/etc/xray
+      - ./xray/jms-iplc-hk1000v2-c983-s53/log:/var/log/xray
+    expose:
+      - 10085
+
+  xray-jms-iplc-hk1000v2-c983-s53-exporter:
+    image: wi1dcard/v2ray-exporter:master
+    environment:
+      TZ: Asia/Shanghai
+    networks:
+      - grafana_monitor
+    restart: unless-stopped
+    command: 'v2ray-exporter --v2ray-endpoint "xray-jms-iplc-hk1000v2-c983-s53:10085" --listen ":9550"'
+    expose:
+      - 9550
+
   grafana:
     image: grafana/grafana
     restart: unless-stopped

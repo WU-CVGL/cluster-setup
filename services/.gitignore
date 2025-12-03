@@ -6,3 +6,4 @@ wandb/vol/
 */data
 *.env
 *.log
+__pycache__/
