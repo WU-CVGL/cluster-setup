@@ -93,23 +93,6 @@ services:
     volumes:
       - ./flare/app:/app
 
-  xray-jp-osaka-xuqi:
-    image: teddysun/xray:latest
-    restart: unless-stopped
-    environment:
-      TZ: Asia/Shanghai
-    networks:
-      - grafana_monitor
-    ports:
-      - 40089:1089
-      - 48889:8889
-    volumes: 
-      - ./xray/jp-osaka-xuqi/config:/etc/xray
-      - ./xray/jp-osaka-xuqi/log:/var/log/xray
-    expose:
-      - 10085
-
-
   xray-jp-osaka-bwh:
     image: teddysun/xray:latest
     restart: unless-stopped
@@ -123,70 +106,6 @@ services:
     volumes: 
       - ./xray/jp-osaka-bwh/config:/etc/xray
       - ./xray/jp-osaka-bwh/log:/var/log/xray
-    expose:
-      - 10085
-
-  xray-jp-central:
-    image: teddysun/xray:latest
-    restart: unless-stopped
-    environment:
-      TZ: Asia/Shanghai
-    networks:
-      - grafana_monitor
-    ports:
-      - 1089:1089
-      - 8889:8889
-    volumes:
-      - ./xray/jp-central/config:/etc/xray
-      - ./xray/jp-central/log:/var/log/xray
-    expose:
-      - 10085
-
-  xray-us-west-bwh:
-    image: teddysun/xray:latest
-    restart: unless-stopped
-    environment:
-      TZ: Asia/Shanghai
-    networks:
-      - grafana_monitor
-    ports:
-      - 10089:1089
-      - 18889:8889
-    volumes: 
-      - ./xray/us-west-bwh/config:/etc/xray
-      - ./xray/us-west-bwh/log:/var/log/xray
-    expose:
-      - 10085
-
-  xray-us-west-megaboxpro-2tb:
-    image: teddysun/xray:latest
-    restart: unless-stopped
-    environment:
-      TZ: Asia/Shanghai
-    networks:
-      - grafana_monitor
-    ports:
-      - 20089:1089
-      - 28889:8889
-    volumes: 
-      - ./xray/us-west-megaboxpro-2tb/config:/etc/xray
-      - ./xray/us-west-megaboxpro-2tb/log:/var/log/xray
-    expose:
-      - 10085
-
-  xray-hk-lisa:
-    image: teddysun/xray:latest
-    restart: unless-stopped
-    environment:
-      TZ: Asia/Shanghai
-    networks:
-      - grafana_monitor
-    ports:
-      - 59089:1089
-      - 59889:8889
-    volumes: 
-      - ./xray/hk-lisa/config:/etc/xray
-      - ./xray/hk-lisa/log:/var/log/xray
     expose:
       - 10085
 
@@ -206,17 +125,6 @@ services:
     expose:
       - 10085
 
-  xray-jp-osaka-xuqi-exporter:
-    image: wi1dcard/v2ray-exporter:master
-    environment:
-      TZ: Asia/Shanghai
-    networks:
-      - grafana_monitor
-    restart: unless-stopped
-    command: 'v2ray-exporter --v2ray-endpoint "xray-jp-osaka-xuqi:10085" --listen ":9550"'
-    expose:
-      - 9550
-
   xray-jp-osaka-bwh-exporter:
     image: wi1dcard/v2ray-exporter:master
     environment:
@@ -225,39 +133,6 @@ services:
       - grafana_monitor
     restart: unless-stopped
     command: 'v2ray-exporter --v2ray-endpoint "xray-jp-osaka-bwh:10085" --listen ":9550"'
-    expose:
-      - 9550
-
-  xray-jp-central-exporter:
-    image: wi1dcard/v2ray-exporter:master
-    environment:
-      TZ: Asia/Shanghai
-    networks:
-      - grafana_monitor
-    restart: unless-stopped
-    command: 'v2ray-exporter --v2ray-endpoint "xray-jp-central:10085" --listen ":9550"'
-    expose:
-      - 9550
-
-  xray-us-west-bwh-exporter:
-    image: wi1dcard/v2ray-exporter:master
-    environment:
-      TZ: Asia/Shanghai
-    networks:
-      - grafana_monitor
-    restart: unless-stopped
-    command: 'v2ray-exporter --v2ray-endpoint "xray-us-west-bwh:10085" --listen ":9550"'
-    expose:
-      - 9550
-
-  xray-hk-lisa-exporter:
-    image: wi1dcard/v2ray-exporter:master
-    environment:
-      TZ: Asia/Shanghai
-    networks:
-      - grafana_monitor
-    restart: unless-stopped
-    command: 'v2ray-exporter --v2ray-endpoint "xray-hk-lisa:10085" --listen ":9550"'
     expose:
       - 9550
 
@@ -272,18 +147,7 @@ services:
     expose:
       - 9550
 
-  xray-us-west-megaboxpro-2tb-exporter:
-    image: wi1dcard/v2ray-exporter:master
-    environment:
-      TZ: Asia/Shanghai
-    networks:
-      - grafana_monitor
-    restart: unless-stopped
-    command: 'v2ray-exporter --v2ray-endpoint "xray-us-west-megaboxpro-2tb:10085" --listen ":9550"'
-    expose:
-      - 9550
-
-  xray-jms-iplc-hk1000v2-c983-s01:
+  xray-usca5-bwh-sla-1tb:
     image: teddysun/xray:latest
     restart: unless-stopped
     environment:
@@ -291,26 +155,27 @@ services:
     networks:
       - grafana_monitor
     ports:
-      - 50180:1089
-      - 50189:8889
+      - 59880:1089
+      - 59889:8889
     volumes: 
-      - ./xray/jms-iplc-hk1000v2-c983-s01/config:/etc/xray
-      - ./xray/jms-iplc-hk1000v2-c983-s01/log:/var/log/xray
+      - ./xray/usca5-bwh-sla-1tb/config:/etc/xray
+      - ./xray/usca5-bwh-sla-1tb/log:/var/log/xray
     expose:
       - 10085
 
-  xray-jms-iplc-hk1000v2-c983-s01-exporter:
+  xray-usca5-bwh-sla-1tb-exporter:
     image: wi1dcard/v2ray-exporter:master
     environment:
       TZ: Asia/Shanghai
     networks:
       - grafana_monitor
     restart: unless-stopped
-    command: 'v2ray-exporter --v2ray-endpoint "xray-jms-iplc-hk1000v2-c983-s01:10085" --listen ":9550"'
+    command: 'v2ray-exporter --v2ray-endpoint "xray-usca5-bwh-sla-1tb:10085" --listen ":9550"'
     expose:
       - 9550
 
-  xray-jms-iplc-hk1000v2-c983-s02:
+
+  xray-usca1-bwh-megaboxpro-2tb:
     image: teddysun/xray:latest
     restart: unless-stopped
     environment:
@@ -318,26 +183,27 @@ services:
     networks:
       - grafana_monitor
     ports:
-      - 50280:1089
-      - 50289:8889
+      - 20089:1089
+      - 28889:8889
     volumes: 
-      - ./xray/jms-iplc-hk1000v2-c983-s02/config:/etc/xray
-      - ./xray/jms-iplc-hk1000v2-c983-s02/log:/var/log/xray
+      - ./xray/usca1-bwh-megaboxpro-2tb/config:/etc/xray
+      - ./xray/usca1-bwh-megaboxpro-2tb/log:/var/log/xray
     expose:
       - 10085
 
-  xray-jms-iplc-hk1000v2-c983-s02-exporter:
+  xray-usca1-bwh-megaboxpro-2tb-exporter:
     image: wi1dcard/v2ray-exporter:master
     environment:
       TZ: Asia/Shanghai
     networks:
       - grafana_monitor
     restart: unless-stopped
-    command: 'v2ray-exporter --v2ray-endpoint "xray-jms-iplc-hk1000v2-c983-s02:10085" --listen ":9550"'
+    command: 'v2ray-exporter --v2ray-endpoint "xray-usca1-bwh-megaboxpro-2tb:10085" --listen ":9550"'
     expose:
       - 9550
 
-  xray-jms-iplc-hk1000v2-c983-s52:
+
+  xray-usca6-bwh-1tb:
     image: teddysun/xray:latest
     restart: unless-stopped
     environment:
@@ -345,49 +211,22 @@ services:
     networks:
       - grafana_monitor
     ports:
-      - 55280:1089
-      - 55289:8889
+      - 10089:1089
+      - 18889:8889
     volumes: 
-      - ./xray/jms-iplc-hk1000v2-c983-s52/config:/etc/xray
-      - ./xray/jms-iplc-hk1000v2-c983-s52/log:/var/log/xray
+      - ./xray/usca6-bwh-1tb/config:/etc/xray
+      - ./xray/usca6-bwh-1tb/log:/var/log/xray
     expose:
       - 10085
 
-  xray-jms-iplc-hk1000v2-c983-s52-exporter:
+  xray-usca6-bwh-1tb-exporter:
     image: wi1dcard/v2ray-exporter:master
     environment:
       TZ: Asia/Shanghai
     networks:
       - grafana_monitor
     restart: unless-stopped
-    command: 'v2ray-exporter --v2ray-endpoint "xray-jms-iplc-hk1000v2-c983-s52:10085" --listen ":9550"'
-    expose:
-      - 9550
-
-  xray-jms-iplc-hk1000v2-c983-s53:
-    image: teddysun/xray:latest
-    restart: unless-stopped
-    environment:
-      TZ: Asia/Shanghai
-    networks:
-      - grafana_monitor
-    ports:
-      - 55380:1089
-      - 55389:8889
-    volumes: 
-      - ./xray/jms-iplc-hk1000v2-c983-s53/config:/etc/xray
-      - ./xray/jms-iplc-hk1000v2-c983-s53/log:/var/log/xray
-    expose:
-      - 10085
-
-  xray-jms-iplc-hk1000v2-c983-s53-exporter:
-    image: wi1dcard/v2ray-exporter:master
-    environment:
-      TZ: Asia/Shanghai
-    networks:
-      - grafana_monitor
-    restart: unless-stopped
-    command: 'v2ray-exporter --v2ray-endpoint "xray-jms-iplc-hk1000v2-c983-s53:10085" --listen ":9550"'
+    command: 'v2ray-exporter --v2ray-endpoint "xray-usca6-bwh-1tb:10085" --listen ":9550"'
     expose:
       - 9550
 
@@ -400,6 +239,7 @@ services:
       - TZ=Asia/Shanghai
       - GF_RENDERING_SERVER_URL=http://grafana-renderer:8081/render
       - GF_RENDERING_CALLBACK_URL=http://grafana:3000/
+      - GF_RENDERING_RENDERER_TOKEN=CVGLGRAFANARENDER
       - GF_LOG_FILTERS=rendering:debug
     volumes:
       - ./grafana/custom.ini:/etc/grafana/grafana.ini
@@ -416,6 +256,8 @@ services:
       - grafana_monitor
     ports:
       - 8081
+    environment:
+      - AUTH_TOKEN=CVGLGRAFANARENDER
 
   prometheus:
     image: prom/prometheus

@@ -71,17 +71,11 @@ scrape_configs:
     metrics_path: /scrape
     static_configs:
       - targets:
-          - "xray-hk-lisa-exporter:9550"
-          - "xray-jp-osaka-xuqi-exporter:9550"
           - "xray-jp-osaka-bwh-exporter:9550"
-          - "xray-jp-central-exporter:9550"
-          - "xray-us-west-megaboxpro-2tb-exporter:9550"
           - "xray-us-west-racknerd-12tb-exporter:9550"
-          - "xray-us-west-bwh-exporter:9550"
-          - "xray-jms-iplc-hk1000v2-c983-s01-exporter:9550"
-          - "xray-jms-iplc-hk1000v2-c983-s02-exporter:9550"
-          - "xray-jms-iplc-hk1000v2-c983-s52-exporter:9550"
-          - "xray-jms-iplc-hk1000v2-c983-s53-exporter:9550"
+          - "xray-usca1-bwh-megaboxpro-2tb-exporter:9550"
+          - "xray-usca5-bwh-sla-1tb-exporter:9550"
+          - "xray-usca6-bwh-1tb-exporter:9550"
   - job_name: det-master
     honor_timestamps: true
     scrape_interval: 15s
@@ -98,4 +92,4 @@ scrape_configs:
     static_configs:
     - targets:
       - cvglcorevm.lan:8080
-    bearer_token: "v2.public.eyJpZCI6MTE4NjQsInVzZXJfaWQiOjEsImV4cGlyeSI6IjIwMjUtMTItMDVUMTY6NTk6NDIuODY3NzM0NjU4WiIsImNyZWF0ZWRfYXQiOiIyMDI1LTExLTI4VDE2OjU5OjQyLjg2NzczNDY1OFoiLCJ0b2tlbl90eXBlIjoiVVNFUl9TRVNTSU9OIiwicmV2b2tlZF9hdCI6bnVsbCwiZGVzY3JpcHRpb24iOm51bGwsIkluaGVyaXRlZENsYWltcyI6bnVsbH3u2OaALkdwjiI8_MTyLqxBAwjpXVf_2K3nLCFmGbC8h4b9a_tZBdJ4UP6qccl9RKINLYa-CM82CKS9XTVYaPcJ.bnVsbA"
+    bearer_token: "v2.public.eyJpZCI6MjA4NDgsInVzZXJfaWQiOjEsImV4cGlyeSI6IjIwMjYtMDUtMTRUMDA6MDA6MDYuODQxMDg5MDA0WiIsImNyZWF0ZWRfYXQiOiIyMDI2LTA1LTA3VDAwOjAwOjA2Ljg0MTA4OTAwNFoiLCJ0b2tlbl90eXBlIjoiVVNFUl9TRVNTSU9OIiwicmV2b2tlZF9hdCI6bnVsbCwiZGVzY3JpcHRpb24iOm51bGwsIkluaGVyaXRlZENsYWltcyI6bnVsbH24exSykqxAFppYZpJ3pNgN8-EdRdraXghMmvfI2E9jZnAXD9R6N_ZJ98bGFwqv41brfOwtNBaN9lD3MuF_zJMD.bnVsbA"
