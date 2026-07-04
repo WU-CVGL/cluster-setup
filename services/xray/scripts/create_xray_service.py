@@ -16,7 +16,7 @@ from typing import Dict, Any, List, Tuple, Optional
 # 添加脚本目录到路径
 sys.path.insert(0, str(Path(__file__).parent))
 
-from XrayConfigHandler import XrayConfigHandler
+from XrayConfigHandler import DEFAULT_HTTP_PORT, DEFAULT_SOCKS_PORT, XrayConfigHandler
 
 
 class XrayServiceCreator:
@@ -102,141 +102,15 @@ class XrayServiceCreator:
         注意：容器内固定使用 1089 (SOCKS5) 和 8889 (HTTP)
         """
         # 容器内固定端口
-        CONTAINER_SOCKS_PORT = 1089
-        CONTAINER_HTTP_PORT = 8889
-        
-        config = {
-            "log": {
-                "loglevel": "none",
-                "access": "/var/log/xray/access.log",
-                "error": "/var/log/xray/error.log"
-            },
-            "stats": {},
-            "api": {
-                "tag": "api",
-                "services": [
-                    "StatsService"
-                ]
-            },
-            "dns": {
-                "servers": [
-                    "1.1.1.1",
-                    "8.8.8.8",
-                    "8.8.4.4"
-                ]
-            },
-            "policy": {
-                "levels": {
-                    "0": {
-                        "statsUserUplink": True,
-                        "statsUserDownlink": True
-                    }
-                },
-                "system": {
-                    "statsInboundUplink": True,
-                    "statsInboundDownlink": True,
-                    "statsOutboundUplink": True,
-                    "statsOutboundDownlink": True
-                }
-            },
-            "inbounds": [
-                {
-                    "listen": "0.0.0.0",
-                    "port": CONTAINER_HTTP_PORT,
-                    "protocol": "http",
-                    "settings": {
-                        "allowTransparent": True,
-                        "timeout": 300
-                    },
-                    "sniffing": {},
-                    "tag": "http_IN"
-                },
-                {
-                    "listen": "0.0.0.0",
-                    "port": CONTAINER_SOCKS_PORT,
-                    "protocol": "socks",
-                    "settings": {
-                        "auth": "noauth",
-                        "ip": "0.0.0.0",
-                        "udp": True
-                    },
-                    "sniffing": {},
-                    "tag": "socks_IN"
-                },
-                {
-                    "tag": "api",
-                    "port": 10085,
-                    "listen": "0.0.0.0",
-                    "protocol": "dokodemo-door",
-                    "settings": {
-                        "udp": False,
-                        "address": "0.0.0.0",
-                        "allowTransparent": False
-                    }
-                }
-            ],
-            "outbounds": [
-                outbound,
-                {
-                    "protocol": "freedom",
-                    "sendThrough": "0.0.0.0",
-                    "settings": {
-                        "domainStrategy": "AsIs",
-                        "redirect": ":0"
-                    },
-                    "streamSettings": {},
-                    "tag": "DIRECT"
-                },
-                {
-                    "protocol": "blackhole",
-                    "sendThrough": "0.0.0.0",
-                    "settings": {
-                        "response": {
-                            "type": "none"
-                        }
-                    },
-                    "streamSettings": {},
-                    "tag": "BLACKHOLE"
-                }
-            ],
-            "routing": {
-                "domainStrategy": "AsIs",
-                "domainMatcher": "mph",
-                "rules": [
-                    {
-                        "inboundTag": [
-                            "api"
-                        ],
-                        "outboundTag": "api",
-                        "type": "field",
-                        "enabled": True
-                    },
-                    {
-                        "ip": [
-                            "geoip:private"
-                        ],
-                        "outboundTag": "DIRECT",
-                        "type": "field"
-                    },
-                    {
-                        "ip": [
-                            "geoip:cn"
-                        ],
-                        "outboundTag": "DIRECT",
-                        "type": "field"
-                    },
-                    {
-                        "domain": [
-                            "geosite:cn"
-                        ],
-                        "outboundTag": "DIRECT",
-                        "type": "field"
-                    }
-                ]
-            }
-        }
-        
-        return config
+        return XrayConfigHandler.build_xray_config(
+            outbound=outbound,
+            http_port=DEFAULT_HTTP_PORT,
+            socks_port=DEFAULT_SOCKS_PORT,
+            loglevel="none",
+            access_log="/var/log/xray/access.log",
+            error_log="/var/log/xray/error.log",
+            include_stats_api=True,
+        )
     
     def update_docker_compose(
         self,
