@@ -41,6 +41,10 @@ nas.cvgl.lab:/mnt/Peter/Workspace/lihao     /workspace/lihao    nfs defaults,ver
 nas.cvgl.lab:/mnt/Peter/Workspace/xjz       /workspace/xjz      nfs defaults,vers=3,async,noatime,soft,rsize=1048576,wsize=1048576,_netdev 0 2
 nas.cvgl.lab:/mnt/Peter/Workspace/xiangfeng /workspace/xiangfeng nfs defaults,vers=3,async,noatime,soft,rsize=32769,wsize=32768,_netdev 0 2
 nas.cvgl.lab:/mnt/Peter/Workspace/zhenhua   /workspace/zhenhua  nfs defaults,vers=3,async,noatime,soft,rsize=32769,wsize=32768,_netdev 0 2
+nas.cvgl.lab:/mnt/Peter/Workspace/wangchi /workspace/wangchi nfs defaults,vers=3,async,noatime,soft,rsize=32769,wsize=32768,_netdev 0 2
+nas.cvgl.lab:/mnt/Peter/Workspace/snc /workspace/snc nfs defaults,vers=3,async,noatime,soft,rsize=32769,wsize=32768,_netdev 0 2
+nas.cvgl.lab:/mnt/Peter/Workspace/liyaohui /workspace/liyaohui nfs defaults,vers=3,async,noatime,soft,rsize=32769,wsize=32768,_netdev 0 2
+nas.cvgl.lab:/mnt/Peter/Workspace/lzh /workspace/lzh nfs defaults,vers=3,async,noatime,soft,rsize=32769,wsize=32768,_netdev 0 2
 
 nas.cvgl.lab:/mnt/SSD/shared                /SSD                nfs defaults,vers=3,async,noatime,soft,rsize=1048576,wsize=1048576,_netdev 0 2
 nas.cvgl.lab:/mnt/SSD/home                  /SSD_home           nfs defaults,vers=3,async,noatime,soft,rsize=1048576,wsize=1048576,_netdev 0 2

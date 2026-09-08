@@ -11,6 +11,11 @@ import urllib.parse
 from typing import Dict, Any, Optional
 
 
+DEFAULT_HTTP_PORT = 8889
+DEFAULT_SOCKS_PORT = 1089
+DEFAULT_API_PORT = 10085
+
+
 class XrayConfigHandler:
     """解析 Xray 分享 URL 并转换为 Xray 配置格式"""
     
@@ -403,6 +408,162 @@ class XrayConfigHandler:
         return outbound
     
     @staticmethod
+    def build_xray_config(
+        outbound: Dict[str, Any],
+        http_port: int = DEFAULT_HTTP_PORT,
+        socks_port: int = DEFAULT_SOCKS_PORT,
+        loglevel: str = "warning",
+        access_log: Optional[str] = None,
+        error_log: Optional[str] = None,
+        include_stats_api: bool = False,
+        api_port: int = DEFAULT_API_PORT,
+    ) -> Dict[str, Any]:
+        """Build a complete Xray config from a single outbound definition."""
+        log_config = {
+            "loglevel": loglevel,
+        }
+        if access_log:
+            log_config["access"] = access_log
+        if error_log:
+            log_config["error"] = error_log
+
+        config = {
+            "log": log_config,
+            "dns": {
+                "servers": [
+                    "1.1.1.1",
+                    "8.8.8.8",
+                    "8.8.4.4",
+                ]
+            },
+            "inbounds": [
+                {
+                    "listen": "0.0.0.0",
+                    "port": http_port,
+                    "protocol": "http",
+                    "settings": {
+                        "allowTransparent": True,
+                        "timeout": 300,
+                    },
+                    "sniffing": {},
+                    "tag": "http_IN",
+                },
+                {
+                    "listen": "0.0.0.0",
+                    "port": socks_port,
+                    "protocol": "socks",
+                    "settings": {
+                        "auth": "noauth",
+                        "ip": "0.0.0.0",
+                        "udp": True,
+                    },
+                    "sniffing": {},
+                    "tag": "socks_IN",
+                },
+            ],
+            "outbounds": [
+                outbound,
+                {
+                    "protocol": "freedom",
+                    "sendThrough": "0.0.0.0",
+                    "settings": {
+                        "domainStrategy": "AsIs",
+                        "redirect": ":0",
+                    },
+                    "streamSettings": {},
+                    "tag": "DIRECT",
+                },
+                {
+                    "protocol": "blackhole",
+                    "sendThrough": "0.0.0.0",
+                    "settings": {
+                        "response": {
+                            "type": "none",
+                        }
+                    },
+                    "streamSettings": {},
+                    "tag": "BLACKHOLE",
+                },
+            ],
+            "routing": {
+                "domainStrategy": "AsIs",
+                "domainMatcher": "mph",
+                "rules": [
+                    {
+                        "ip": [
+                            "geoip:private",
+                        ],
+                        "outboundTag": "DIRECT",
+                        "type": "field",
+                    },
+                    {
+                        "ip": [
+                            "geoip:cn",
+                        ],
+                        "outboundTag": "DIRECT",
+                        "type": "field",
+                    },
+                    {
+                        "domain": [
+                            "geosite:cn",
+                        ],
+                        "outboundTag": "DIRECT",
+                        "type": "field",
+                    },
+                ],
+            },
+        }
+
+        if include_stats_api:
+            config["stats"] = {}
+            config["api"] = {
+                "tag": "api",
+                "services": [
+                    "StatsService",
+                ],
+            }
+            config["policy"] = {
+                "levels": {
+                    "0": {
+                        "statsUserUplink": True,
+                        "statsUserDownlink": True,
+                    }
+                },
+                "system": {
+                    "statsInboundUplink": True,
+                    "statsInboundDownlink": True,
+                    "statsOutboundUplink": True,
+                    "statsOutboundDownlink": True,
+                },
+            }
+            config["inbounds"].append(
+                {
+                    "tag": "api",
+                    "port": api_port,
+                    "listen": "0.0.0.0",
+                    "protocol": "dokodemo-door",
+                    "settings": {
+                        "udp": False,
+                        "address": "0.0.0.0",
+                        "allowTransparent": False,
+                    },
+                }
+            )
+            config["routing"]["rules"].insert(
+                0,
+                {
+                    "inboundTag": [
+                        "api",
+                    ],
+                    "outboundTag": "api",
+                    "type": "field",
+                    "enabled": True,
+                },
+            )
+
+        return config
+
+    @staticmethod
     def to_xray_outbound(parsed_config: Dict[str, Any]) -> Dict[str, Any]:
         """将解析的配置转换为 Xray outbound 格式"""
         protocol = parsed_config.get('protocol', '').lower()
@@ -417,4 +578,3 @@ class XrayConfigHandler:
             return XrayConfigHandler.shadowsocks_to_xray_outbound(parsed_config)
         else:
             raise ValueError(f"不支持的协议: {protocol}")
-
