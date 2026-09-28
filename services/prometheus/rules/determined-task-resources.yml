@@ -1,0 +1,131 @@
+groups:
+  - name: determined-task-resources
+    interval: 15s
+    rules:
+      # A failed master scrape must not keep the last mapping alive through the
+      # Prometheus lookback period. This is an availability gate, not a zero fill.
+      - record: det:master_up:info
+        expr: max by (det_cluster) (up{job="det-master",det_cluster!=""} == 1)
+
+      # Det's mapping gauges can exceed one after repeated association. Grouping
+      # normalizes each positive relation to one; zero values never enter joins.
+      - record: det:allocation_task_candidate:info
+        expr: |
+          group by (det_cluster, allocation_id, task_id, job_id) (
+            det_allocation_id_task_id_task_actor{job="det-master",det_cluster!=""} > 0
+          ) and on (det_cluster) det:master_up:info
+      - record: det:container_allocation_candidate:info
+        expr: |
+          group by (det_cluster, container_id, allocation_id) (
+            det_container_id_allocation_id{job="det-master",det_cluster!=""} > 0
+          ) and on (det_cluster) det:master_up:info
+      - record: det:runtime_container_candidate:info
+        expr: |
+          group by (det_cluster, container_runtime_id, container_id) (
+            det_container_id_runtime_container_id{job="det-master",det_cluster!="",container_runtime_id!=""} > 0
+          ) and on (det_cluster) det:master_up:info
+      - record: det:gpu_container_candidate:info
+        expr: |
+          group by (det_cluster, gpu_uuid, container_id) (
+            det_gpu_uuid_container_id{job="det-master",det_cluster!="",gpu_uuid!=""} > 0
+          ) and on (det_cluster) det:master_up:info
+
+      # Report ambiguity before excluding it. No max/first-owner selection.
+      - record: det:allocation_task_conflict:count
+        expr: count by (det_cluster, allocation_id) (det:allocation_task_candidate:info) > 1
+      - record: det:container_allocation_conflict:count
+        expr: count by (det_cluster, container_id) (det:container_allocation_candidate:info) > 1
+      - record: det:runtime_container_conflict:count
+        expr: count by (det_cluster, container_runtime_id) (det:runtime_container_candidate:info) > 1
+      - record: det:container_runtime_conflict:count
+        expr: count by (det_cluster, container_id) (det:runtime_container_candidate:info) > 1
+      - record: det:gpu_container_conflict:count
+        expr: count by (det_cluster, gpu_uuid) (det:gpu_container_candidate:info) > 1
+
+      - record: det:allocation_task:info
+        expr: |
+          det:allocation_task_candidate:info
+            unless on (det_cluster, allocation_id) det:allocation_task_conflict:count
+      - record: det:container_allocation:info
+        expr: |
+          det:container_allocation_candidate:info
+            unless on (det_cluster, container_id) det:container_allocation_conflict:count
+      - record: det:runtime_container:info
+        expr: |
+          det:runtime_container_candidate:info
+            unless on (det_cluster, container_runtime_id) det:runtime_container_conflict:count
+            unless on (det_cluster, container_id) det:container_runtime_conflict:count
+      - record: det:gpu_container:info
+        expr: |
+          det:gpu_container_candidate:info
+            unless on (det_cluster, gpu_uuid) det:gpu_container_conflict:count
+
+      - record: det:container_task:info
+        expr: |
+          det:container_allocation:info
+            * on (det_cluster, allocation_id) group_left (task_id, job_id)
+          det:allocation_task:info
+      - record: det:runtime_task:info
+        expr: |
+          det:runtime_container:info
+            * on (det_cluster, container_id) group_left (allocation_id, task_id, job_id)
+          det:container_task:info
+      - record: det:gpu_task:info
+        expr: |
+          det:gpu_container:info
+            * on (det_cluster, container_id) group_left (allocation_id, task_id, job_id)
+          det:container_task:info
+
+      # Missing links are observable gaps, never zero-valued resource use.
+      - record: det:container_without_task:info
+        expr: |
+          det:container_allocation:info
+            unless on (det_cluster, allocation_id) det:allocation_task:info
+      - record: det:runtime_without_allocation:info
+        expr: |
+          det:runtime_container:info
+            unless on (det_cluster, container_id) det:container_allocation:info
+      - record: det:container_without_runtime:info
+        expr: |
+          det:container_task:info
+            unless on (det_cluster, container_id) det:runtime_container:info
+      - record: det:gpu_without_task:info
+        expr: |
+          det:gpu_container:info
+            unless on (det_cluster, container_id) det:container_task:info
+
+      # Duplicate exporter series can otherwise double a panel or put one GPU
+      # on two nodes. These are source conflicts, separate from Det ownership.
+      - record: det:cadvisor_cpu_conflict:count
+        expr: |
+          count by (det_cluster, container_runtime_id) (
+            container_cpu_usage_seconds_total{job="cadvisor",det_cluster!="",container_runtime_id!="",cpu=~"^(total)?$"}
+          ) > 1
+      - record: det:cadvisor_memory_conflict:count
+        expr: |
+          count by (det_cluster, container_runtime_id) (
+            container_memory_working_set_bytes{job="cadvisor",det_cluster!="",container_runtime_id!=""}
+          ) > 1
+      - record: det:dcgm_gpu_conflict:count
+        expr: |
+          count by (det_cluster, gpu_uuid) (
+            DCGM_FI_DEV_GPU_UTIL{job="dcgm",det_cluster!="",gpu_uuid!=""}
+          ) > 1
+      - record: det:runtime_without_cadvisor:info
+        expr: |
+          det:runtime_task:info unless on (det_cluster, container_runtime_id)
+          group by (det_cluster, container_runtime_id) (
+            container_memory_working_set_bytes{job="cadvisor",det_cluster!="",container_runtime_id!=""}
+          )
+      - record: det:gpu_without_dcgm:info
+        expr: |
+          det:gpu_task:info unless on (det_cluster, gpu_uuid)
+          group by (det_cluster, gpu_uuid) (
+            DCGM_FI_DEV_GPU_UTIL{job="dcgm",det_cluster!="",gpu_uuid!=""}
+          )
+      - record: det:dcgm_gpu_invalid:info
+        expr: |
+          group by (det_cluster, node, gpu_uuid) (
+            DCGM_FI_DEV_GPU_UTIL{job="dcgm",det_cluster!="",gpu_uuid!=""} < 0
+            or DCGM_FI_DEV_GPU_UTIL{job="dcgm",det_cluster!="",gpu_uuid!=""} > 100
+          )

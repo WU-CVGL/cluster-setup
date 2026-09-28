@@ -58,7 +58,8 @@ services:
     restart: always
     volumes:
       - ./determined-watchdog/data:/app/data
-      - ./prometheus/prometheus.yml:/etc/prometheus/prometheus.yml
+      # Directory mount lets atomic token rotation become visible to Prometheus.
+      - ./prometheus/secrets:/run/determined-metrics
     networks:
       - grafana_monitor
     env_file:
@@ -269,7 +270,8 @@ services:
       TZ: Asia/Shanghai
     volumes:
       - /srv/nfs/var/prometheus:/prometheus
-      - ./prometheus:/etc/prometheus
+      - ./prometheus:/etc/prometheus:ro
+      - ./prometheus/secrets:/run/determined-metrics:ro
     command:
       - '--config.file=/etc/prometheus/prometheus.yml'
       - '--web.enable-admin-api'

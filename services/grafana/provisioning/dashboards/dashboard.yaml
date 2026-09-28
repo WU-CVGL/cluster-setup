@@ -35,3 +35,8 @@ providers:
     editable: true
     options:
       path: /etc/grafana/provisioning/dashboards/json/determined-hardware-grafana.json
+  - name: 'Determined Task Resources'
+    type: file
+    editable: true
+    options:
+      path: /etc/grafana/provisioning/dashboards/json/determined-task-resources.json

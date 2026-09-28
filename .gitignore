@@ -6,3 +6,7 @@
 
 # Misc
 .vscode/
+# Runtime Determined scrape credentials
+services/prometheus/secrets/
+
+__pycache__/

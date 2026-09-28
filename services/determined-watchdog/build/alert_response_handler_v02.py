@@ -7,6 +7,7 @@ from datetime import datetime
 import time
 
 from alert_config import Config
+from metrics_token import write_metrics_token
 from alert_MessageNotifier import MessageNotifier
 from alert_APIHandler import APIHandler
 from alert_DataProcessor import DataProcessor
@@ -24,7 +25,7 @@ class MainApplication:
         self.api_handler = APIHandler(config)
         self.message_notifier = MessageNotifier(config)
         self.DataProcessor = DataProcessor(config)
-        print(config)
+        print("Watchdog configured; credential values are not logged.")
 
     def run(self):
         requests.packages.urllib3.disable_warnings()
@@ -110,14 +111,11 @@ class MainApplication:
             }
         )
         headers = {"Content-Type": "application/json"}
-        try:
-            response = requests.post(det_login_api, headers=headers, data=payload)
-        except Exception as e:
-            print(e)
-            print("Failed to connect to Determined master")
-            return
-
-        token = json.loads(response.text).get("token", "")
+        response = requests.post(det_login_api, headers=headers, data=payload, timeout=10)
+        response.raise_for_status()
+        token = response.json().get("token", "")
+        if not isinstance(token, str) or not token or any(c.isspace() for c in token):
+            raise ValueError("Determined login did not return a valid token")
         print(f"Obtained new Determined AI token.")
         self.config.det_api_token = token
         self.config.det_headers = {
@@ -164,19 +162,10 @@ class MainApplication:
         print("Prometheus container is restarted!")
 
     def update_det_token_to_prometheus(self):
-        with open(self.config.prom_cfg_path, "r") as f:
-            lines = f.readlines()
-        if lines:
-            lines[-1] = f'    bearer_token: "{self.config.det_api_token}"\n'
-            with open(self.config.prom_cfg_path, "w") as f:
-                f.writelines(lines)
-                print("Prometheus config has updated!")
-                self.reload_prometheus()
-                time.sleep(10)
-                self.restart_prometheus_container()
-        else:
-            print("Fail to update Prometheus config.")
-            return
+        write_metrics_token(self.config.det_metrics_token_path, self.config.det_api_token)
+        # Prometheus reads authorization.credentials_file for each scrape.
+        # Do not rewrite YAML, reload it, or restart the monitoring container.
+        print("Determined metrics credential file updated.")
 
     def auto_update(self):
         try:
@@ -200,8 +189,8 @@ class MainApplication:
         self.self_check()
 
     def self_check(self):
-        print(f"det_headers: { self.config.det_headers}")
-        print(f"grafana_headers: {self.config.grafana_headers}")
+        print("API credentials configured:", bool(self.config.det_headers),
+              bool(self.config.grafana_headers))
 
     def handle_alert_data_v3(self, alert_container_ids):
         if not alert_container_ids:

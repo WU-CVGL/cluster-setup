@@ -1,0 +1,293 @@
+rule_files:
+  - ../rules/determined-task-resources.yml
+evaluation_interval: 15s
+tests:
+  - name: positive gauges normalize to one and zero relations never join
+    interval: 15s
+    input_series:
+      - series: 'up{job="det-master",det_cluster="cvgl",instance="master"}'
+        values: '1 1 1 1'
+      - series: 'det_allocation_id_task_id_task_actor{job="det-master",det_cluster="cvgl",allocation_id="task.1",task_id="task",job_id="job",task_actor="actor"}'
+        values: '3 3 3 3'
+      - series: 'det_allocation_id_task_id_task_actor{job="det-master",det_cluster="cvgl",allocation_id="old",task_id="task",job_id="job",task_actor="old"}'
+        values: '0 0 0 0'
+      - series: 'det_container_id_allocation_id{job="det-master",det_cluster="cvgl",container_id="c1",allocation_id="task.1"}'
+        values: '2 2 2 2'
+      - series: 'det_container_id_runtime_container_id{job="det-master",det_cluster="cvgl",container_id="c1",container_runtime_id="r1"}'
+        values: '4 4 4 4'
+      - series: 'det_gpu_uuid_container_id{job="det-master",det_cluster="cvgl",container_id="c1",gpu_uuid="GPU-1"}'
+        values: '7 7 7 7'
+      - series: 'container_memory_working_set_bytes{job="cadvisor",det_cluster="cvgl",node="n1",container_runtime_id="r1"}'
+        values: '1024 1024 1024 1024'
+      - series: 'DCGM_FI_DEV_GPU_UTIL{job="dcgm",det_cluster="cvgl",node="n1",gpu_uuid="GPU-1"}'
+        values: '37 37 37 37'
+    promql_expr_test:
+      - expr: 'det:runtime_task:info'
+        eval_time: 30s
+        exp_samples:
+          - labels: 'det:runtime_task:info{det_cluster="cvgl",container_runtime_id="r1",container_id="c1",allocation_id="task.1",task_id="task",job_id="job"}'
+            value: 1
+      - expr: 'det:gpu_task:info'
+        eval_time: 30s
+        exp_samples:
+          - labels: 'det:gpu_task:info{det_cluster="cvgl",gpu_uuid="GPU-1",container_id="c1",allocation_id="task.1",task_id="task",job_id="job"}'
+            value: 1
+      - expr: 'sum by (task_id, allocation_id) (container_memory_working_set_bytes * on (det_cluster, container_runtime_id) group_left (task_id, allocation_id) det:runtime_task:info)'
+        eval_time: 30s
+        exp_samples:
+          - labels: '{task_id="task",allocation_id="task.1"}'
+            value: 1024
+      - expr: 'sum by (task_id, allocation_id) (DCGM_FI_DEV_GPU_UTIL * on (det_cluster, gpu_uuid) group_left (task_id, allocation_id) det:gpu_task:info)'
+        eval_time: 30s
+        exp_samples:
+          - labels: '{task_id="task",allocation_id="task.1"}'
+            value: 37
+      - expr: 'det:allocation_task:info{allocation_id="old"}'
+        eval_time: 30s
+        exp_samples: []
+
+  - name: conflicting owners suppress attribution and are visible as conflicts
+    interval: 15s
+    input_series:
+      - series: 'up{job="det-master",det_cluster="cvgl"}'
+        values: '1 1 1'
+      - series: 'det_allocation_id_task_id_task_actor{job="det-master",det_cluster="cvgl",allocation_id="a",task_id="t1",job_id="j1",task_actor="one"}'
+        values: '1 1 1'
+      - series: 'det_allocation_id_task_id_task_actor{job="det-master",det_cluster="cvgl",allocation_id="a",task_id="t2",job_id="j2",task_actor="two"}'
+        values: '1 1 1'
+      - series: 'det_container_id_allocation_id{job="det-master",det_cluster="cvgl",container_id="c",allocation_id="a"}'
+        values: '1 1 1'
+      - series: 'det_container_id_runtime_container_id{job="det-master",det_cluster="cvgl",container_id="c",container_runtime_id="r"}'
+        values: '1 1 1'
+      - series: 'det_gpu_uuid_container_id{job="det-master",det_cluster="cvgl",container_id="c",gpu_uuid="GPU-X"}'
+        values: '1 1 1'
+    promql_expr_test:
+      - expr: 'det:allocation_task_conflict:count'
+        eval_time: 30s
+        exp_samples:
+          - labels: 'det:allocation_task_conflict:count{det_cluster="cvgl",allocation_id="a"}'
+            value: 2
+      - expr: 'det:runtime_task:info'
+        eval_time: 30s
+        exp_samples: []
+      - expr: 'det:gpu_task:info'
+        eval_time: 30s
+        exp_samples: []
+
+  - name: container runtime and GPU cardinality conflicts do not choose owners
+    interval: 15s
+    input_series:
+      - series: 'up{job="det-master",det_cluster="cvgl"}'
+        values: '1 1 1'
+      - series: 'det_allocation_id_task_id_task_actor{job="det-master",det_cluster="cvgl",allocation_id="a1",task_id="t1",job_id="j1"}'
+        values: '1 1 1'
+      - series: 'det_allocation_id_task_id_task_actor{job="det-master",det_cluster="cvgl",allocation_id="a2",task_id="t2",job_id="j2"}'
+        values: '1 1 1'
+      - series: 'det_container_id_allocation_id{job="det-master",det_cluster="cvgl",container_id="c1",allocation_id="a1"}'
+        values: '1 1 1'
+      - series: 'det_container_id_allocation_id{job="det-master",det_cluster="cvgl",container_id="c1",allocation_id="a2"}'
+        values: '1 1 1'
+      - series: 'det_container_id_allocation_id{job="det-master",det_cluster="cvgl",container_id="c2",allocation_id="a2"}'
+        values: '1 1 1'
+      - series: 'det_container_id_runtime_container_id{job="det-master",det_cluster="cvgl",container_id="c1",container_runtime_id="r1"}'
+        values: '1 1 1'
+      - series: 'det_container_id_runtime_container_id{job="det-master",det_cluster="cvgl",container_id="c2",container_runtime_id="r1"}'
+        values: '1 1 1'
+      - series: 'det_container_id_runtime_container_id{job="det-master",det_cluster="cvgl",container_id="c2",container_runtime_id="r2"}'
+        values: '1 1 1'
+      - series: 'det_gpu_uuid_container_id{job="det-master",det_cluster="cvgl",container_id="c1",gpu_uuid="GPU-X"}'
+        values: '1 1 1'
+      - series: 'det_gpu_uuid_container_id{job="det-master",det_cluster="cvgl",container_id="c2",gpu_uuid="GPU-X"}'
+        values: '1 1 1'
+    promql_expr_test:
+      - expr: 'det:container_allocation_conflict:count'
+        eval_time: 30s
+        exp_samples:
+          - labels: 'det:container_allocation_conflict:count{det_cluster="cvgl",container_id="c1"}'
+            value: 2
+      - expr: 'det:runtime_container_conflict:count'
+        eval_time: 30s
+        exp_samples:
+          - labels: 'det:runtime_container_conflict:count{det_cluster="cvgl",container_runtime_id="r1"}'
+            value: 2
+      - expr: 'det:container_runtime_conflict:count'
+        eval_time: 30s
+        exp_samples:
+          - labels: 'det:container_runtime_conflict:count{det_cluster="cvgl",container_id="c2"}'
+            value: 2
+      - expr: 'det:gpu_container_conflict:count'
+        eval_time: 30s
+        exp_samples:
+          - labels: 'det:gpu_container_conflict:count{det_cluster="cvgl",gpu_uuid="GPU-X"}'
+            value: 2
+      - expr: 'det:runtime_task:info'
+        eval_time: 30s
+        exp_samples: []
+      - expr: 'det:gpu_task:info'
+        eval_time: 30s
+        exp_samples: []
+
+  - name: task reallocation stays distinct and remains selectable in history
+    interval: 15s
+    input_series:
+      - series: 'up{job="det-master",det_cluster="cvgl"}'
+        values: '1 1 1 1 1'
+      - series: 'det_allocation_id_task_id_task_actor{job="det-master",det_cluster="cvgl",allocation_id="task.1",task_id="task",job_id="j"}'
+        values: '1 1 0 0 0'
+      - series: 'det_allocation_id_task_id_task_actor{job="det-master",det_cluster="cvgl",allocation_id="task.2",task_id="task",job_id="j"}'
+        values: '0 0 1 1 1'
+    promql_expr_test:
+      - expr: 'det:allocation_task:info{task_id="task"}'
+        eval_time: 15s
+        exp_samples:
+          - labels: 'det:allocation_task:info{det_cluster="cvgl",allocation_id="task.1",task_id="task",job_id="j"}'
+            value: 1
+      - expr: 'det:allocation_task:info{task_id="task"}'
+        eval_time: 45s
+        exp_samples:
+          - labels: 'det:allocation_task:info{det_cluster="cvgl",allocation_id="task.2",task_id="task",job_id="j"}'
+            value: 1
+      - expr: 'max_over_time(det:allocation_task:info{task_id="task"}[1m])'
+        eval_time: 45s
+        exp_samples:
+          - labels: '{det_cluster="cvgl",allocation_id="task.1",task_id="task",job_id="j"}'
+            value: 1
+          - labels: '{det_cluster="cvgl",allocation_id="task.2",task_id="task",job_id="j"}'
+            value: 1
+
+  - name: missing links are reported without fabricating resource samples
+    interval: 15s
+    input_series:
+      - series: 'up{job="det-master",det_cluster="cvgl"}'
+        values: '1 1 1'
+      - series: 'det_allocation_id_task_id_task_actor{job="det-master",det_cluster="cvgl",allocation_id="a",task_id="t",job_id="j"}'
+        values: '1 1 1'
+      - series: 'det_container_id_allocation_id{job="det-master",det_cluster="cvgl",container_id="c1",allocation_id="a"}'
+        values: '1 1 1'
+      - series: 'det_container_id_allocation_id{job="det-master",det_cluster="cvgl",container_id="c4",allocation_id="unknown"}'
+        values: '1 1 1'
+      - series: 'det_container_id_runtime_container_id{job="det-master",det_cluster="cvgl",container_id="c2",container_runtime_id="r2"}'
+        values: '1 1 1'
+      - series: 'det_gpu_uuid_container_id{job="det-master",det_cluster="cvgl",container_id="c3",gpu_uuid="GPU-3"}'
+        values: '1 1 1'
+    promql_expr_test:
+      - expr: 'det:container_without_task:info'
+        eval_time: 30s
+        exp_samples:
+          - labels: 'det:container_without_task:info{det_cluster="cvgl",container_id="c4",allocation_id="unknown"}'
+            value: 1
+      - expr: 'det:runtime_without_allocation:info'
+        eval_time: 30s
+        exp_samples:
+          - labels: 'det:runtime_without_allocation:info{det_cluster="cvgl",container_id="c2",container_runtime_id="r2"}'
+            value: 1
+      - expr: 'det:container_without_runtime:info'
+        eval_time: 30s
+        exp_samples:
+          - labels: 'det:container_without_runtime:info{det_cluster="cvgl",container_id="c1",allocation_id="a",task_id="t",job_id="j"}'
+            value: 1
+      - expr: 'det:gpu_without_task:info'
+        eval_time: 30s
+        exp_samples:
+          - labels: 'det:gpu_without_task:info{det_cluster="cvgl",container_id="c3",gpu_uuid="GPU-3"}'
+            value: 1
+
+  - name: same resource labels across clusters never cross join
+    interval: 15s
+    input_series:
+      - series: 'up{job="det-master",det_cluster="cvgl"}'
+        values: '1 1 1'
+      - series: 'up{job="det-master",det_cluster="test"}'
+        values: '1 1 1'
+      - series: 'det_allocation_id_task_id_task_actor{job="det-master",det_cluster="cvgl",allocation_id="a",task_id="production",job_id="j"}'
+        values: '1 1 1'
+      - series: 'det_allocation_id_task_id_task_actor{job="det-master",det_cluster="test",allocation_id="a",task_id="sandbox",job_id="j"}'
+        values: '1 1 1'
+      - series: 'det_container_id_allocation_id{job="det-master",det_cluster="cvgl",container_id="c",allocation_id="a"}'
+        values: '1 1 1'
+      - series: 'det_container_id_allocation_id{job="det-master",det_cluster="test",container_id="c",allocation_id="a"}'
+        values: '1 1 1'
+      - series: 'det_container_id_runtime_container_id{job="det-master",det_cluster="cvgl",container_id="c",container_runtime_id="r"}'
+        values: '1 1 1'
+      - series: 'det_container_id_runtime_container_id{job="det-master",det_cluster="test",container_id="c",container_runtime_id="r"}'
+        values: '1 1 1'
+    promql_expr_test:
+      - expr: 'det:runtime_task:info'
+        eval_time: 30s
+        exp_samples:
+          - labels: 'det:runtime_task:info{det_cluster="cvgl",container_runtime_id="r",container_id="c",allocation_id="a",task_id="production",job_id="j"}'
+            value: 1
+          - labels: 'det:runtime_task:info{det_cluster="test",container_runtime_id="r",container_id="c",allocation_id="a",task_id="sandbox",job_id="j"}'
+            value: 1
+
+  - name: duplicate exporters and invalid GPU values are explicit diagnostics
+    interval: 15s
+    input_series:
+      - series: 'up{job="det-master",det_cluster="cvgl"}'
+        values: '1 1 1'
+      - series: 'det_allocation_id_task_id_task_actor{job="det-master",det_cluster="cvgl",allocation_id="a",task_id="t",job_id="j"}'
+        values: '1 1 1'
+      - series: 'det_container_id_allocation_id{job="det-master",det_cluster="cvgl",container_id="c",allocation_id="a"}'
+        values: '1 1 1'
+      - series: 'det_container_id_runtime_container_id{job="det-master",det_cluster="cvgl",container_id="c",container_runtime_id="r"}'
+        values: '1 1 1'
+      - series: 'det_gpu_uuid_container_id{job="det-master",det_cluster="cvgl",container_id="c",gpu_uuid="GPU-X"}'
+        values: '1 1 1'
+      - series: 'container_cpu_usage_seconds_total{job="cadvisor",det_cluster="cvgl",node="n1",container_runtime_id="r",instance="i1"}'
+        values: '0 15 30'
+      - series: 'container_cpu_usage_seconds_total{job="cadvisor",det_cluster="cvgl",node="n1",container_runtime_id="r",instance="i2"}'
+        values: '0 15 30'
+      - series: 'container_memory_working_set_bytes{job="cadvisor",det_cluster="cvgl",node="n1",container_runtime_id="r",instance="i1"}'
+        values: '1024 1024 1024'
+      - series: 'container_memory_working_set_bytes{job="cadvisor",det_cluster="cvgl",node="n1",container_runtime_id="r",instance="i2"}'
+        values: '1024 1024 1024'
+      - series: 'DCGM_FI_DEV_GPU_UTIL{job="dcgm",det_cluster="cvgl",node="n1",gpu_uuid="GPU-X",instance="i1"}'
+        values: '37 37 37'
+      - series: 'DCGM_FI_DEV_GPU_UTIL{job="dcgm",det_cluster="cvgl",node="n2",gpu_uuid="GPU-X",instance="i2"}'
+        values: '37 37 37'
+      - series: 'DCGM_FI_DEV_GPU_UTIL{job="dcgm",det_cluster="cvgl",node="n3",gpu_uuid="GPU-BAD"}'
+        values: '-1 -1 -1'
+    promql_expr_test:
+      - expr: 'det:cadvisor_cpu_conflict:count'
+        eval_time: 30s
+        exp_samples:
+          - labels: 'det:cadvisor_cpu_conflict:count{det_cluster="cvgl",container_runtime_id="r"}'
+            value: 2
+      - expr: 'det:cadvisor_memory_conflict:count'
+        eval_time: 30s
+        exp_samples:
+          - labels: 'det:cadvisor_memory_conflict:count{det_cluster="cvgl",container_runtime_id="r"}'
+            value: 2
+      - expr: 'det:dcgm_gpu_conflict:count'
+        eval_time: 30s
+        exp_samples:
+          - labels: 'det:dcgm_gpu_conflict:count{det_cluster="cvgl",gpu_uuid="GPU-X"}'
+            value: 2
+      - expr: 'det:dcgm_gpu_invalid:info'
+        eval_time: 30s
+        exp_samples:
+          - labels: 'det:dcgm_gpu_invalid:info{det_cluster="cvgl",node="n3",gpu_uuid="GPU-BAD"}'
+            value: 1
+      - expr: 'sum by (task_id, allocation_id) ((container_memory_working_set_bytes and on (det_cluster,container_runtime_id) (count by (det_cluster,container_runtime_id) (container_memory_working_set_bytes) == 1)) * on (det_cluster,container_runtime_id) group_left (task_id,allocation_id) det:runtime_task:info)'
+        eval_time: 30s
+        exp_samples: []
+      - expr: 'sum by (task_id, allocation_id) ((DCGM_FI_DEV_GPU_UTIL and on (det_cluster,gpu_uuid) (count by (det_cluster,gpu_uuid) (DCGM_FI_DEV_GPU_UTIL) == 1)) * on (det_cluster,gpu_uuid) group_left (task_id,allocation_id) det:gpu_task:info)'
+        eval_time: 30s
+        exp_samples: []
+
+  - name: down master stops mappings rather than keeping lookback value
+    interval: 15s
+    input_series:
+      - series: 'up{job="det-master",det_cluster="cvgl"}'
+        values: '1 1 0 0'
+      - series: 'det_allocation_id_task_id_task_actor{job="det-master",det_cluster="cvgl",allocation_id="a",task_id="t",job_id="j"}'
+        values: '1 1 1 1'
+    promql_expr_test:
+      - expr: 'det:allocation_task:info'
+        eval_time: 15s
+        exp_samples:
+          - labels: 'det:allocation_task:info{det_cluster="cvgl",allocation_id="a",task_id="t",job_id="j"}'
+            value: 1
+      - expr: 'det:allocation_task:info'
+        eval_time: 45s
+        exp_samples: []

@@ -161,20 +161,9 @@ Update `static_configs[targets]` in `prometheus/config/prometheus.yml` if any ne
 
 ##### 7.3. Prometheus authentication for Determined AI (Bearer token)
 
-Scraping Determined-AI-master's metrics (`/prom/det-state-metrics`) with Determined-AI API needs a `bearer_token`. You can get this token by:
-
-```bash
-curl -s "http://10.0.1.66:8080/api/v1/auth/login" \
-  -H 'Content-Type: application/json' \
-  --data-binary '{"username":"admin","password":"********"}'
-```
-
-Then you can use this token in `prometheus.yaml`.
-
-Reference: 
-> [Determined AI Docs - Configure Determined with Prometheus and Grafana](https://docs.determined.ai/latest/integrations/prometheus/prometheus.html)
->
-> [Determined AI Docs - REST API - Authentication](https://docs.determined.ai/latest/reference/rest-api.html?highlight=api%20login#authentication)
+Prometheus reads its Determined bearer token from a private runtime file. Follow
+[the credential migration and task-resource monitoring guide](prometheus/README.md)
+to provision it and update the watchdog mounts. Do not put tokens in YAML.
 
 ## Notes
 
@@ -193,7 +182,8 @@ With `gpu_uuid`, you can get GPU stats of this job with `dcgm-exporter`.
 
 TODOs:
 
-- A Grafana dashboard that integrates and visualizes these data
+- Native Determined resource charts with per-task authorization (the first-phase
+  [shared Grafana task dashboard](prometheus/README.md) is provided)
 - A management watchdog that utilizes these data and kills tasks
 
 ## Acknowledgments
