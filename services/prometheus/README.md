@@ -65,6 +65,9 @@ Select the time range before choosing completed tasks or historical allocations.
 CPU is measured in logical cores, memory in bytes, and GPU panels show **allocated
 device** observations, not exclusive per-process attribution. Allocation labels
 remain distinct across pause/resume. Parent task usage excludes child tasks.
+On the observed cAdvisor targets, RSS currently reports zero for every sample
+while working set is nonzero. That does not establish that task RSS is truly
+zero; validate the exporter and cgroup support before interpreting the RSS panel.
 
 The mapping rules normalize positive relationship values to one and exclude
 ambiguous ownership before joining. Conflict/missing-data panels explain gaps.
@@ -106,7 +109,13 @@ do not establish single- or multi-GPU hardware acceptance.
 Check `findmnt -T /srv/nfs/var/prometheus` on the Prometheus host. If its filesystem
 is NFS, plan a backed-up migration to local storage before using it as the active
 TSDB. The path name alone does not establish filesystem type; this PR does not
-move or delete existing time-series data.
+move or delete existing time-series data. For a migration, provision the local
+filesystem and copy the TSDB once for preparation, then **stop Prometheus and
+make a final copy while it is stopped** before changing the bind mount. Check
+ownership for UID 1000, start Prometheus against the local copy, and verify
+targets and historical queries. Retain the old NFS directory unchanged as a
+rollback copy; do not run two Prometheus processes against one TSDB. Any rollback
+after new writes needs an explicit decision about the intervening samples.
 
 References: [Prometheus configuration](https://prometheus.io/docs/prometheus/latest/configuration/configuration/),
 [rule tests](https://prometheus.io/docs/prometheus/latest/configuration/unit_testing_rules/),

@@ -29,9 +29,13 @@ class MainApplication:
 
     def run(self):
         requests.packages.urllib3.disable_warnings()
-        self.auto_update()
+        startup_refreshed = self.auto_update(notify=False)
 
         current_time = datetime.now()
+        # The startup refresh already ran today's update. Allow the normal
+        # scheduled notification after the weekday changes and comes around again.
+        if startup_refreshed and current_time.weekday() == self.config.alert_update_day:
+            self.config.time_function_enabled_update = False
         is_next_color_a = True
         next_color = "\033[34m"
 
@@ -167,26 +171,31 @@ class MainApplication:
         # Do not rewrite YAML, reload it, or restart the monitoring container.
         print("Determined metrics credential file updated.")
 
-    def auto_update(self):
+    def auto_update(self, notify=True):
         try:
             self.renew_det_token()
             self.update_det_token_to_prometheus()
 
-            self.message_notifier.send_slack_warning(
-                warning_type="notification",
-                info="Automatic update success ~",
-                slack_webhook_url=self.config.slack_webhook_url,
-            )
+            if notify:
+                self.message_notifier.send_slack_warning(
+                    warning_type="notification",
+                    info="Automatic update success ~",
+                    slack_webhook_url=self.config.slack_webhook_url,
+                )
+            succeeded = True
 
         except Exception as e:
+            succeeded = False
             print(f"Error in auto update: {e}")
-            self.message_notifier.send_slack_warning(
-                warning_type="ERROR",
-                info="Automatic update FAILED ~",
-                slack_webhook_url=self.config.slack_webhook_url,
-            )
+            if notify:
+                self.message_notifier.send_slack_warning(
+                    warning_type="ERROR",
+                    info="Automatic update FAILED ~",
+                    slack_webhook_url=self.config.slack_webhook_url,
+                )
 
         self.self_check()
+        return succeeded
 
     def self_check(self):
         print("API credentials configured:", bool(self.config.det_headers),

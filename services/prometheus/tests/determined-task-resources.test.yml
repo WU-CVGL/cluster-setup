@@ -155,7 +155,7 @@ tests:
           - labels: '{det_cluster="cvgl",allocation_id="task.2",task_id="task",job_id="j"}'
             value: 1
 
-  - name: missing links are reported without fabricating resource samples
+  - name: missing links report observed orphan runtime but not stale positive history
     interval: 15s
     input_series:
       - series: 'up{job="det-master",det_cluster="cvgl"}'
@@ -168,6 +168,10 @@ tests:
         values: '1 1 1'
       - series: 'det_container_id_runtime_container_id{job="det-master",det_cluster="cvgl",container_id="c2",container_runtime_id="r2"}'
         values: '1 1 1'
+      - series: 'det_container_id_runtime_container_id{job="det-master",det_cluster="cvgl",container_id="c5",container_runtime_id="r5"}'
+        values: '1 1 1'
+      - series: 'container_memory_working_set_bytes{job="cadvisor",det_cluster="cvgl",node="n1",container_runtime_id="r2"}'
+        values: '1024 1024 1024'
       - series: 'det_gpu_uuid_container_id{job="det-master",det_cluster="cvgl",container_id="c3",gpu_uuid="GPU-3"}'
         values: '1 1 1'
     promql_expr_test:

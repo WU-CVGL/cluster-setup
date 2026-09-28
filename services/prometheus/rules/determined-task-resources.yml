@@ -83,8 +83,13 @@ groups:
             unless on (det_cluster, allocation_id) det:allocation_task:info
       - record: det:runtime_without_allocation:info
         expr: |
-          det:runtime_container:info
-            unless on (det_cluster, container_id) det:container_allocation:info
+          (
+            det:runtime_container:info
+              and on (det_cluster, container_runtime_id)
+            group by (det_cluster, container_runtime_id) (
+              container_memory_working_set_bytes{job="cadvisor",det_cluster!="",container_runtime_id!=""}
+            )
+          ) unless on (det_cluster, container_id) det:container_allocation:info
       - record: det:container_without_runtime:info
         expr: |
           det:container_task:info

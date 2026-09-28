@@ -345,7 +345,7 @@
         "w": 12,
         "h": 8
       },
-      "description": "Resident memory as exported by cAdvisor.",
+      "description": "Resident memory as reported by cAdvisor. A zero may be real or indicate exporter/cgroup reporting limits; compare with the working-set panel and validate host support before interpreting it.",
       "fieldConfig": {
         "defaults": {
           "unit": "bytes",
