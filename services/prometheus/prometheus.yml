@@ -1,12 +1,28 @@
 global:
   scrape_interval: 5s
   scrape_timeout: 1s
+  evaluation_interval: 15s
+rule_files:
+  - /etc/prometheus/rules/*.yml
 scrape_configs:
   - job_name: "prometheus"
     static_configs:
       - targets:
           - "localhost:9090"
   - job_name: "node"
+    scrape_interval: 15s
+    scrape_timeout: 5s
+    relabel_configs:
+      - target_label: det_cluster
+        replacement: cvgl
+      - source_labels: [__address__]
+        regex: '([^:]+):[0-9]+'
+        target_label: node
+        replacement: '$1'
+      - source_labels: [node]
+        regex: 'cvglloginnode\.lan'
+        target_label: node
+        replacement: login.cvgl.lab
     static_configs:
       - targets:
           - "cvglcorevm.lan:9100"
@@ -21,7 +37,28 @@ scrape_configs:
           - "cvgl-node07.lan:9100"
           - "cvgl-node08.lan:9100"
   - job_name: "cadvisor"
+    relabel_configs:
+      - target_label: det_cluster
+        replacement: cvgl
+      - source_labels: [__address__]
+        regex: '([^:]+):[0-9]+'
+        target_label: node
+        replacement: '$1'
+      - source_labels: [node]
+        regex: 'cvglloginnode\.lan'
+        target_label: node
+        replacement: login.cvgl.lab
+    metric_relabel_configs:
+      - source_labels: [id]
+        regex: '.*/docker/([0-9a-f]{64})'
+        target_label: container_runtime_id
+        replacement: '$1'
+      - source_labels: [id]
+        regex: '.*docker-([0-9a-f]{64})\.scope'
+        target_label: container_runtime_id
+        replacement: '$1'
     scrape_interval: 15s
+    scrape_timeout: 5s
     static_configs:
       - targets:
           - "cvglsuppvm.lan:9080"
@@ -35,8 +72,20 @@ scrape_configs:
           - "cvgl-node07.lan:9080"
           - "cvgl-node08.lan:9080"
   - job_name: "dcgm"
+    relabel_configs:
+      - target_label: det_cluster
+        replacement: cvgl
+      - source_labels: [__address__]
+        regex: '([^:]+):[0-9]+'
+        target_label: node
+        replacement: '$1'
+      - source_labels: [node]
+        regex: 'cvglloginnode\.lan'
+        target_label: node
+        replacement: login.cvgl.lab
     honor_timestamps: true
     scrape_interval: 15s
+    scrape_timeout: 5s
     static_configs:
       - targets:
           - "cvgl-node01.lan:9400"
@@ -51,22 +100,12 @@ scrape_configs:
     scheme: http
     follow_redirects: true
     metric_relabel_configs:
-    - source_labels: [id]
-      separator: ;
-      regex: /docker/(.*)
-      target_label: container_runtime_id
-      replacement: $1
-      action: replace
     - source_labels: [__name__, UUID]
       separator: ;
       regex: DCGM.*;(.*)
       target_label: gpu_uuid
       replacement: $1
       action: replace
-    http_sd_configs:
-    - follow_redirects: true
-      refresh_interval: 1m
-      url: http://cvglcorevm.lan:8080/prom/det-http-sd-config
   - job_name: "v2ray"
     metrics_path: /scrape
     static_configs:
@@ -77,9 +116,21 @@ scrape_configs:
           - "xray-usca5-bwh-sla-1tb-exporter:9550"
           - "xray-usca6-bwh-1tb-exporter:9550"
   - job_name: det-master
+    relabel_configs:
+      - target_label: det_cluster
+        replacement: cvgl
+      - source_labels: [__address__]
+        regex: '([^:]+):[0-9]+'
+        target_label: node
+        replacement: '$1'
+      - source_labels: [node]
+        regex: 'cvglloginnode\.lan'
+        target_label: node
+        replacement: login.cvgl.lab
     honor_timestamps: true
     scrape_interval: 15s
-    metrics_path: prom/det-state-metrics
+    scrape_timeout: 5s
+    metrics_path: /prom/det-state-metrics
     scheme: http
     follow_redirects: true
     metric_relabel_configs:
@@ -92,4 +143,6 @@ scrape_configs:
     static_configs:
     - targets:
       - cvglcorevm.lan:8080
-    bearer_token: "v2.public.eyJpZCI6MjA4NDgsInVzZXJfaWQiOjEsImV4cGlyeSI6IjIwMjYtMDUtMTRUMDA6MDA6MDYuODQxMDg5MDA0WiIsImNyZWF0ZWRfYXQiOiIyMDI2LTA1LTA3VDAwOjAwOjA2Ljg0MTA4OTAwNFoiLCJ0b2tlbl90eXBlIjoiVVNFUl9TRVNTSU9OIiwicmV2b2tlZF9hdCI6bnVsbCwiZGVzY3JpcHRpb24iOm51bGwsIkluaGVyaXRlZENsYWltcyI6bnVsbH24exSykqxAFppYZpJ3pNgN8-EdRdraXghMmvfI2E9jZnAXD9R6N_ZJ98bGFwqv41brfOwtNBaN9lD3MuF_zJMD.bnVsbA"
+    authorization:
+      type: Bearer
+      credentials_file: /run/determined-metrics/token

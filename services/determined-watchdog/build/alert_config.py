@@ -19,9 +19,9 @@ PROMETHEUS_WEB_URL = "http://prometheus:9090"
 if "PROMETHEUS_WEB_URL" in os.environ:
     PROMETHEUS_WEB_URL = os.environ["PROMETHEUS_WEB_URL"]
 
-PROMETHEUS_CONFIG_PATH = "/etc/prometheus/prometheus.yml"
-if "PROMETHEUS_CONFIG_PATH" in os.environ:
-    PROMETHEUS_CONFIG_PATH = os.environ["PROMETHEUS_CONFIG_PATH"]
+DETERMINED_METRICS_TOKEN_FILE = os.environ.get(
+    "DETERMINED_METRICS_TOKEN_FILE", "/run/determined-metrics/token"
+)
 
 DATA_DIR = "/app/data"
 if "DATA_DIR" in os.environ:
@@ -69,7 +69,7 @@ class Config(PrintableConfig):
     det_username: str = DET_USERNAME
     det_password: str = DET_PASSWORD
     prom_web: str = PROMETHEUS_WEB_URL
-    prom_cfg_path: Path = Path(PROMETHEUS_CONFIG_PATH)
+    det_metrics_token_path: Path = Path(DETERMINED_METRICS_TOKEN_FILE)
     grafana_web: str = GRAFANA_WEB_URL
     grafana_api_token: str = GRAFANA_API_TOKEN
     portainer_web: str = PORTAINER_WEB_URL

@@ -1,0 +1,840 @@
+{
+  "uid": "det-task-resources",
+  "title": "Determined Task Resources",
+  "description": "Per-task and per-allocation resource history with explicit attribution gaps and conflicts.",
+  "schemaVersion": 39,
+  "version": 1,
+  "editable": true,
+  "graphTooltip": 1,
+  "timezone": "browser",
+  "time": {
+    "from": "now-6h",
+    "to": "now"
+  },
+  "refresh": "30s",
+  "tags": [
+    "determined",
+    "task",
+    "resources"
+  ],
+  "templating": {
+    "list": [
+      {
+        "name": "cluster",
+        "label": "Cluster",
+        "type": "query",
+        "datasource": "Prometheus",
+        "definition": "query_result(max_over_time(det:allocation_task:info[$__range]))",
+        "query": {
+          "query": "query_result(max_over_time(det:allocation_task:info[$__range]))",
+          "refId": "StandardVariableQuery"
+        },
+        "regex": "/det_cluster=\"([^\"]+)\"/",
+        "refresh": 2,
+        "sort": 1,
+        "multi": false,
+        "includeAll": false,
+        "allValue": null,
+        "current": {
+          "selected": true,
+          "text": "cvgl",
+          "value": "cvgl"
+        },
+        "options": [],
+        "hide": 0,
+        "skipUrlSync": false
+      },
+      {
+        "name": "task_id",
+        "label": "Task ID",
+        "type": "query",
+        "datasource": "Prometheus",
+        "definition": "query_result(max_over_time(det:allocation_task:info{det_cluster=~\"${cluster:regex}\"}[$__range]))",
+        "query": {
+          "query": "query_result(max_over_time(det:allocation_task:info{det_cluster=~\"${cluster:regex}\"}[$__range]))",
+          "refId": "StandardVariableQuery"
+        },
+        "regex": "/task_id=\"([^\"]+)\"/",
+        "refresh": 2,
+        "sort": 1,
+        "multi": false,
+        "includeAll": false,
+        "allValue": null,
+        "current": {
+          "selected": false,
+          "text": "",
+          "value": ""
+        },
+        "options": [],
+        "hide": 0,
+        "skipUrlSync": false
+      },
+      {
+        "name": "allocation_id",
+        "label": "Allocation ID",
+        "type": "query",
+        "datasource": "Prometheus",
+        "definition": "query_result(max_over_time(det:allocation_task:info{det_cluster=~\"${cluster:regex}\",task_id=~\"${task_id:regex}\"}[$__range]))",
+        "query": {
+          "query": "query_result(max_over_time(det:allocation_task:info{det_cluster=~\"${cluster:regex}\",task_id=~\"${task_id:regex}\"}[$__range]))",
+          "refId": "StandardVariableQuery"
+        },
+        "regex": "/allocation_id=\"([^\"]+)\"/",
+        "refresh": 2,
+        "sort": 1,
+        "multi": false,
+        "includeAll": true,
+        "allValue": ".*",
+        "current": {
+          "selected": true,
+          "text": "All",
+          "value": "$__all"
+        },
+        "options": [],
+        "hide": 0,
+        "skipUrlSync": false
+      }
+    ]
+  },
+  "annotations": {
+    "list": []
+  },
+  "panels": [
+    {
+      "id": 1,
+      "title": "Reading this dashboard",
+      "type": "text",
+      "gridPos": {
+        "x": 0,
+        "y": 0,
+        "w": 24,
+        "h": 3
+      },
+      "options": {
+        "mode": "markdown",
+        "content": "Select a time range first, then cluster, task, and allocation. **All** allocations shows each run separately; gaps mean no confirmed attribution, not zero use. GPU readings are for the entire assigned device and may include other processes. The conflict and missing-link tables are cluster-wide diagnostics. A missing panel value is N/A, not zero. This dashboard requires no experiment mapping."
+      }
+    },
+    {
+      "id": 2,
+      "title": "Master scrape",
+      "type": "stat",
+      "datasource": "Prometheus",
+      "targets": [
+        {
+          "expr": "up{job=\"det-master\",det_cluster=~\"${cluster:regex}\"}",
+          "refId": "A",
+          "datasource": "Prometheus",
+          "instant": false,
+          "range": true,
+          "legendFormat": "{{instance}}"
+        }
+      ],
+      "gridPos": {
+        "x": 0,
+        "y": 3,
+        "w": 6,
+        "h": 4
+      },
+      "description": "0 means the master scrape failed. Mapping rules stop attributing resources until a successful scrape.",
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "nullValueMode": "null",
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              }
+            ]
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "orientation": "auto",
+        "textMode": "auto",
+        "colorMode": "value",
+        "graphMode": "none",
+        "justifyMode": "auto"
+      }
+    },
+    {
+      "id": 3,
+      "title": "Allocation lifecycle",
+      "type": "timeseries",
+      "datasource": "Prometheus",
+      "targets": [
+        {
+          "expr": "det:allocation_task:info{det_cluster=~\"${cluster:regex}\",task_id=~\"${task_id:regex}\",allocation_id=~\"${allocation_id:regex}\"}",
+          "refId": "A",
+          "datasource": "Prometheus",
+          "instant": false,
+          "range": true,
+          "legendFormat": "{{allocation_id}}"
+        }
+      ],
+      "gridPos": {
+        "x": 6,
+        "y": 3,
+        "w": 18,
+        "h": 4
+      },
+      "description": "Value 1 marks periods with a confirmed task-to-allocation relation; separate allocation IDs remain separate.",
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "nullValueMode": "null",
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              }
+            ]
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "tooltip": {
+          "mode": "multi",
+          "sort": "none"
+        },
+        "legend": {
+          "displayMode": "table",
+          "placement": "bottom",
+          "calcs": [
+            "lastNotNull"
+          ]
+        }
+      }
+    },
+    {
+      "id": 4,
+      "title": "CPU logical cores used",
+      "type": "timeseries",
+      "datasource": "Prometheus",
+      "targets": [
+        {
+          "expr": "sum by (allocation_id,node) ((rate(container_cpu_usage_seconds_total{job=\"cadvisor\",det_cluster=~\"${cluster:regex}\",container_runtime_id!=\"\",cpu=~\"^(total)?$\"}[$__rate_interval]) and on (det_cluster,container_runtime_id) (count by (det_cluster,container_runtime_id) (container_cpu_usage_seconds_total{job=\"cadvisor\",det_cluster=~\"${cluster:regex}\",container_runtime_id!=\"\",cpu=~\"^(total)?$\"}) == 1)) * on (det_cluster,container_runtime_id) group_left (task_id,allocation_id) det:runtime_task:info{det_cluster=~\"${cluster:regex}\",task_id=~\"${task_id:regex}\",allocation_id=~\"${allocation_id:regex}\"})",
+          "refId": "A",
+          "datasource": "Prometheus",
+          "instant": false,
+          "range": true,
+          "legendFormat": "{{allocation_id}} \u00b7 {{node}}"
+        }
+      ],
+      "gridPos": {
+        "x": 0,
+        "y": 7,
+        "w": 12,
+        "h": 8
+      },
+      "description": "CPU seconds per second. Only a unique cAdvisor total-or-unlabeled CPU series per container is accepted.",
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "nullValueMode": "null",
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              }
+            ]
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "tooltip": {
+          "mode": "multi",
+          "sort": "none"
+        },
+        "legend": {
+          "displayMode": "table",
+          "placement": "bottom",
+          "calcs": [
+            "lastNotNull"
+          ]
+        }
+      }
+    },
+    {
+      "id": 5,
+      "title": "Memory working set",
+      "type": "timeseries",
+      "datasource": "Prometheus",
+      "targets": [
+        {
+          "expr": "sum by (allocation_id,node) ((container_memory_working_set_bytes{job=\"cadvisor\",det_cluster=~\"${cluster:regex}\",container_runtime_id!=\"\"} and on (det_cluster,container_runtime_id) (count by (det_cluster,container_runtime_id) (container_memory_working_set_bytes{job=\"cadvisor\",det_cluster=~\"${cluster:regex}\",container_runtime_id!=\"\"}) == 1)) * on (det_cluster,container_runtime_id) group_left (task_id,allocation_id) det:runtime_task:info{det_cluster=~\"${cluster:regex}\",task_id=~\"${task_id:regex}\",allocation_id=~\"${allocation_id:regex}\"})",
+          "refId": "A",
+          "datasource": "Prometheus",
+          "instant": false,
+          "range": true,
+          "legendFormat": "{{allocation_id}} \u00b7 {{node}}"
+        }
+      ],
+      "gridPos": {
+        "x": 12,
+        "y": 7,
+        "w": 12,
+        "h": 8
+      },
+      "description": "Container working set, not application heap. Missing or duplicate exporter samples are excluded.",
+      "fieldConfig": {
+        "defaults": {
+          "unit": "bytes",
+          "nullValueMode": "null",
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              }
+            ]
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "tooltip": {
+          "mode": "multi",
+          "sort": "none"
+        },
+        "legend": {
+          "displayMode": "table",
+          "placement": "bottom",
+          "calcs": [
+            "lastNotNull"
+          ]
+        }
+      }
+    },
+    {
+      "id": 6,
+      "title": "Memory RSS",
+      "type": "timeseries",
+      "datasource": "Prometheus",
+      "targets": [
+        {
+          "expr": "sum by (allocation_id,node) ((container_memory_rss{job=\"cadvisor\",det_cluster=~\"${cluster:regex}\",container_runtime_id!=\"\"} and on (det_cluster,container_runtime_id) (count by (det_cluster,container_runtime_id) (container_memory_rss{job=\"cadvisor\",det_cluster=~\"${cluster:regex}\",container_runtime_id!=\"\"}) == 1)) * on (det_cluster,container_runtime_id) group_left (task_id,allocation_id) det:runtime_task:info{det_cluster=~\"${cluster:regex}\",task_id=~\"${task_id:regex}\",allocation_id=~\"${allocation_id:regex}\"})",
+          "refId": "A",
+          "datasource": "Prometheus",
+          "instant": false,
+          "range": true,
+          "legendFormat": "{{allocation_id}} \u00b7 {{node}}"
+        }
+      ],
+      "gridPos": {
+        "x": 0,
+        "y": 15,
+        "w": 12,
+        "h": 8
+      },
+      "description": "Resident memory as exported by cAdvisor.",
+      "fieldConfig": {
+        "defaults": {
+          "unit": "bytes",
+          "nullValueMode": "null",
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              }
+            ]
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "tooltip": {
+          "mode": "multi",
+          "sort": "none"
+        },
+        "legend": {
+          "displayMode": "table",
+          "placement": "bottom",
+          "calcs": [
+            "lastNotNull"
+          ]
+        }
+      }
+    },
+    {
+      "id": 7,
+      "title": "Assigned GPU utilization per device",
+      "type": "timeseries",
+      "datasource": "Prometheus",
+      "targets": [
+        {
+          "expr": "(((DCGM_FI_DEV_GPU_UTIL{job=\"dcgm\",det_cluster=~\"${cluster:regex}\",gpu_uuid!=\"\"} >= 0) and on (det_cluster,gpu_uuid) (DCGM_FI_DEV_GPU_UTIL{job=\"dcgm\",det_cluster=~\"${cluster:regex}\",gpu_uuid!=\"\"} <= 100)) and on (det_cluster,gpu_uuid) (count by (det_cluster,gpu_uuid) (DCGM_FI_DEV_GPU_UTIL{job=\"dcgm\",det_cluster=~\"${cluster:regex}\",gpu_uuid!=\"\"}) == 1)) * on (det_cluster,gpu_uuid) group_left (task_id,allocation_id) det:gpu_task:info{det_cluster=~\"${cluster:regex}\",task_id=~\"${task_id:regex}\",allocation_id=~\"${allocation_id:regex}\"}",
+          "refId": "A",
+          "datasource": "Prometheus",
+          "instant": false,
+          "range": true,
+          "legendFormat": "{{allocation_id}} \u00b7 {{node}} \u00b7 {{gpu_uuid}}"
+        }
+      ],
+      "gridPos": {
+        "x": 12,
+        "y": 15,
+        "w": 12,
+        "h": 8
+      },
+      "description": "Full-device utilization. One DCGM series and one unambiguous owner per GPU UUID are required.",
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percent",
+          "nullValueMode": "null",
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              }
+            ]
+          },
+          "min": 0,
+          "max": 100
+        },
+        "overrides": []
+      },
+      "options": {
+        "tooltip": {
+          "mode": "multi",
+          "sort": "none"
+        },
+        "legend": {
+          "displayMode": "table",
+          "placement": "bottom",
+          "calcs": [
+            "lastNotNull"
+          ]
+        }
+      }
+    },
+    {
+      "id": 8,
+      "title": "Assigned GPU framebuffer used",
+      "type": "timeseries",
+      "datasource": "Prometheus",
+      "targets": [
+        {
+          "expr": "((((DCGM_FI_DEV_FB_USED{job=\"dcgm\",det_cluster=~\"${cluster:regex}\",gpu_uuid!=\"\"} >= 0) and on (det_cluster,gpu_uuid) (DCGM_FI_DEV_FB_USED{job=\"dcgm\",det_cluster=~\"${cluster:regex}\",gpu_uuid!=\"\"} <= 1000000)) and on (det_cluster,gpu_uuid) (count by (det_cluster,gpu_uuid) (DCGM_FI_DEV_FB_USED{job=\"dcgm\",det_cluster=~\"${cluster:regex}\",gpu_uuid!=\"\"}) == 1)) * on (det_cluster,gpu_uuid) group_left (task_id,allocation_id) det:gpu_task:info{det_cluster=~\"${cluster:regex}\",task_id=~\"${task_id:regex}\",allocation_id=~\"${allocation_id:regex}\"}) * 1024 * 1024",
+          "refId": "A",
+          "datasource": "Prometheus",
+          "instant": false,
+          "range": true,
+          "legendFormat": "{{allocation_id}} \u00b7 {{node}} \u00b7 {{gpu_uuid}}"
+        }
+      ],
+      "gridPos": {
+        "x": 0,
+        "y": 23,
+        "w": 12,
+        "h": 8
+      },
+      "description": "DCGM reports MiB; values are converted to bytes for display. Full-device framebuffer use; it is not per-process memory.",
+      "fieldConfig": {
+        "defaults": {
+          "unit": "bytes",
+          "nullValueMode": "null",
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              }
+            ]
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "tooltip": {
+          "mode": "multi",
+          "sort": "none"
+        },
+        "legend": {
+          "displayMode": "table",
+          "placement": "bottom",
+          "calcs": [
+            "lastNotNull"
+          ]
+        }
+      }
+    },
+    {
+      "id": 9,
+      "title": "Assigned GPU power",
+      "type": "timeseries",
+      "datasource": "Prometheus",
+      "targets": [
+        {
+          "expr": "(((DCGM_FI_DEV_POWER_USAGE{job=\"dcgm\",det_cluster=~\"${cluster:regex}\",gpu_uuid!=\"\"} >= 0) and on (det_cluster,gpu_uuid) (DCGM_FI_DEV_POWER_USAGE{job=\"dcgm\",det_cluster=~\"${cluster:regex}\",gpu_uuid!=\"\"} <= 10000)) and on (det_cluster,gpu_uuid) (count by (det_cluster,gpu_uuid) (DCGM_FI_DEV_POWER_USAGE{job=\"dcgm\",det_cluster=~\"${cluster:regex}\",gpu_uuid!=\"\"}) == 1)) * on (det_cluster,gpu_uuid) group_left (task_id,allocation_id) det:gpu_task:info{det_cluster=~\"${cluster:regex}\",task_id=~\"${task_id:regex}\",allocation_id=~\"${allocation_id:regex}\"}",
+          "refId": "A",
+          "datasource": "Prometheus",
+          "instant": false,
+          "range": true,
+          "legendFormat": "{{allocation_id}} \u00b7 {{node}} \u00b7 {{gpu_uuid}}"
+        }
+      ],
+      "gridPos": {
+        "x": 12,
+        "y": 23,
+        "w": 12,
+        "h": 8
+      },
+      "description": "Full-device power draw. Missing values are left blank.",
+      "fieldConfig": {
+        "defaults": {
+          "unit": "watt",
+          "nullValueMode": "null",
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              }
+            ]
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "tooltip": {
+          "mode": "multi",
+          "sort": "none"
+        },
+        "legend": {
+          "displayMode": "table",
+          "placement": "bottom",
+          "calcs": [
+            "lastNotNull"
+          ]
+        }
+      }
+    },
+    {
+      "id": 10,
+      "title": "Assigned GPU temperature",
+      "type": "timeseries",
+      "datasource": "Prometheus",
+      "targets": [
+        {
+          "expr": "(((DCGM_FI_DEV_GPU_TEMP{job=\"dcgm\",det_cluster=~\"${cluster:regex}\",gpu_uuid!=\"\"} >= 0) and on (det_cluster,gpu_uuid) (DCGM_FI_DEV_GPU_TEMP{job=\"dcgm\",det_cluster=~\"${cluster:regex}\",gpu_uuid!=\"\"} <= 150)) and on (det_cluster,gpu_uuid) (count by (det_cluster,gpu_uuid) (DCGM_FI_DEV_GPU_TEMP{job=\"dcgm\",det_cluster=~\"${cluster:regex}\",gpu_uuid!=\"\"}) == 1)) * on (det_cluster,gpu_uuid) group_left (task_id,allocation_id) det:gpu_task:info{det_cluster=~\"${cluster:regex}\",task_id=~\"${task_id:regex}\",allocation_id=~\"${allocation_id:regex}\"}",
+          "refId": "A",
+          "datasource": "Prometheus",
+          "instant": false,
+          "range": true,
+          "legendFormat": "{{allocation_id}} \u00b7 {{node}} \u00b7 {{gpu_uuid}}"
+        }
+      ],
+      "gridPos": {
+        "x": 0,
+        "y": 31,
+        "w": 12,
+        "h": 8
+      },
+      "description": "Full-device temperature.",
+      "fieldConfig": {
+        "defaults": {
+          "unit": "celsius",
+          "nullValueMode": "null",
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              }
+            ]
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "tooltip": {
+          "mode": "multi",
+          "sort": "none"
+        },
+        "legend": {
+          "displayMode": "table",
+          "placement": "bottom",
+          "calcs": [
+            "lastNotNull"
+          ]
+        }
+      }
+    },
+    {
+      "id": 11,
+      "title": "Confirmed resource identities",
+      "type": "table",
+      "datasource": "Prometheus",
+      "targets": [
+        {
+          "expr": "det:runtime_task:info{det_cluster=~\"${cluster:regex}\",task_id=~\"${task_id:regex}\",allocation_id=~\"${allocation_id:regex}\"}",
+          "refId": "A",
+          "datasource": "Prometheus",
+          "instant": true,
+          "range": false,
+          "format": "table"
+        },
+        {
+          "expr": "det:gpu_task:info{det_cluster=~\"${cluster:regex}\",task_id=~\"${task_id:regex}\",allocation_id=~\"${allocation_id:regex}\"}",
+          "refId": "B",
+          "datasource": "Prometheus",
+          "instant": true,
+          "range": false,
+          "format": "table"
+        }
+      ],
+      "gridPos": {
+        "x": 12,
+        "y": 31,
+        "w": 12,
+        "h": 8
+      },
+      "description": "Current allocation, runtime container ID, and GPU UUID mapping. For older runs use the time-series panels and historical variables.",
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "nullValueMode": "null",
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              }
+            ]
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "showHeader": true,
+        "footer": {
+          "show": false
+        }
+      }
+    },
+    {
+      "id": 12,
+      "title": "Mapping conflicts \u2014 cluster-wide",
+      "type": "table",
+      "datasource": "Prometheus",
+      "targets": [
+        {
+          "expr": "det:allocation_task_conflict:count{det_cluster=~\"${cluster:regex}\"}",
+          "refId": "A",
+          "datasource": "Prometheus",
+          "instant": true,
+          "range": false,
+          "format": "table"
+        },
+        {
+          "expr": "det:container_allocation_conflict:count{det_cluster=~\"${cluster:regex}\"}",
+          "refId": "B",
+          "datasource": "Prometheus",
+          "instant": true,
+          "range": false,
+          "format": "table"
+        },
+        {
+          "expr": "det:runtime_container_conflict:count{det_cluster=~\"${cluster:regex}\"}",
+          "refId": "C",
+          "datasource": "Prometheus",
+          "instant": true,
+          "range": false,
+          "format": "table"
+        },
+        {
+          "expr": "det:container_runtime_conflict:count{det_cluster=~\"${cluster:regex}\"}",
+          "refId": "D",
+          "datasource": "Prometheus",
+          "instant": true,
+          "range": false,
+          "format": "table"
+        },
+        {
+          "expr": "det:gpu_container_conflict:count{det_cluster=~\"${cluster:regex}\"}",
+          "refId": "E",
+          "datasource": "Prometheus",
+          "instant": true,
+          "range": false,
+          "format": "table"
+        },
+        {
+          "expr": "det:cadvisor_cpu_conflict:count{det_cluster=~\"${cluster:regex}\"}",
+          "refId": "F",
+          "datasource": "Prometheus",
+          "instant": true,
+          "range": false,
+          "format": "table"
+        },
+        {
+          "expr": "det:cadvisor_memory_conflict:count{det_cluster=~\"${cluster:regex}\"}",
+          "refId": "G",
+          "datasource": "Prometheus",
+          "instant": true,
+          "range": false,
+          "format": "table"
+        },
+        {
+          "expr": "det:dcgm_gpu_conflict:count{det_cluster=~\"${cluster:regex}\"}",
+          "refId": "H",
+          "datasource": "Prometheus",
+          "instant": true,
+          "range": false,
+          "format": "table"
+        }
+      ],
+      "gridPos": {
+        "x": 0,
+        "y": 39,
+        "w": 12,
+        "h": 8
+      },
+      "description": "A row means multiple owners or duplicate exporter series for the named key. Ambiguous sources are suppressed from resource panels; no owner is chosen.",
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "nullValueMode": "null",
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              }
+            ]
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "showHeader": true,
+        "footer": {
+          "show": false
+        }
+      }
+    },
+    {
+      "id": 13,
+      "title": "Missing mapping links \u2014 cluster-wide",
+      "type": "table",
+      "datasource": "Prometheus",
+      "targets": [
+        {
+          "expr": "det:container_without_task:info{det_cluster=~\"${cluster:regex}\"}",
+          "refId": "A",
+          "datasource": "Prometheus",
+          "instant": true,
+          "range": false,
+          "format": "table"
+        },
+        {
+          "expr": "det:runtime_without_allocation:info{det_cluster=~\"${cluster:regex}\"}",
+          "refId": "B",
+          "datasource": "Prometheus",
+          "instant": true,
+          "range": false,
+          "format": "table"
+        },
+        {
+          "expr": "det:container_without_runtime:info{det_cluster=~\"${cluster:regex}\"}",
+          "refId": "C",
+          "datasource": "Prometheus",
+          "instant": true,
+          "range": false,
+          "format": "table"
+        },
+        {
+          "expr": "det:gpu_without_task:info{det_cluster=~\"${cluster:regex}\"}",
+          "refId": "D",
+          "datasource": "Prometheus",
+          "instant": true,
+          "range": false,
+          "format": "table"
+        },
+        {
+          "expr": "det:runtime_without_cadvisor:info{det_cluster=~\"${cluster:regex}\"}",
+          "refId": "E",
+          "datasource": "Prometheus",
+          "instant": true,
+          "range": false,
+          "format": "table"
+        },
+        {
+          "expr": "det:gpu_without_dcgm:info{det_cluster=~\"${cluster:regex}\"}",
+          "refId": "F",
+          "datasource": "Prometheus",
+          "instant": true,
+          "range": false,
+          "format": "table"
+        },
+        {
+          "expr": "det:dcgm_gpu_invalid:info{det_cluster=~\"${cluster:regex}\"}",
+          "refId": "G",
+          "datasource": "Prometheus",
+          "instant": true,
+          "range": false,
+          "format": "table"
+        }
+      ],
+      "gridPos": {
+        "x": 12,
+        "y": 39,
+        "w": 12,
+        "h": 8
+      },
+      "description": "A row is a partial identity chain, missing exporter sample, or unsupported GPU utilization value. It is not a zero resource measurement.",
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "nullValueMode": "null",
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              }
+            ]
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "showHeader": true,
+        "footer": {
+          "show": false
+        }
+      }
+    }
+  ],
+  "links": [],
+  "weekStart": "",
+  "fiscalYearStartMonth": 0
+}
