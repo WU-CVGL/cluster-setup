@@ -20,14 +20,29 @@
   "templating": {
     "list": [
       {
+        "name": "prometheus_source",
+        "label": "Prometheus source",
+        "type": "datasource",
+        "query": "prometheus",
+        "regex": "",
+        "refresh": 1,
+        "multi": false,
+        "includeAll": false,
+        "current": {},
+        "options": [],
+        "hide": 0,
+        "skipUrlSync": false
+      },
+      {
         "name": "cluster",
         "label": "Cluster",
         "type": "query",
-        "datasource": "Prometheus",
+        "datasource": {"type": "prometheus", "uid": "${prometheus_source}"},
         "definition": "query_result(max_over_time(det:allocation_task:info[$__range]))",
         "query": {
+          "qryType": 3,
           "query": "query_result(max_over_time(det:allocation_task:info[$__range]))",
-          "refId": "StandardVariableQuery"
+          "refId": "PrometheusVariableQueryEditor-VariableQuery"
         },
         "regex": "/det_cluster=\"([^\"]+)\"/",
         "refresh": 2,
@@ -48,11 +63,12 @@
         "name": "task_id",
         "label": "Task ID",
         "type": "query",
-        "datasource": "Prometheus",
-        "definition": "query_result(max_over_time(det:allocation_task:info{det_cluster=~\"${cluster:regex}\"}[$__range]))",
+        "datasource": {"type": "prometheus", "uid": "${prometheus_source}"},
+        "definition": "query_result(max_over_time(det:allocation_task:info{det_cluster=\"$cluster\"}[$__range]))",
         "query": {
-          "query": "query_result(max_over_time(det:allocation_task:info{det_cluster=~\"${cluster:regex}\"}[$__range]))",
-          "refId": "StandardVariableQuery"
+          "qryType": 3,
+          "query": "query_result(max_over_time(det:allocation_task:info{det_cluster=\"$cluster\"}[$__range]))",
+          "refId": "PrometheusVariableQueryEditor-VariableQuery"
         },
         "regex": "/task_id=\"([^\"]+)\"/",
         "refresh": 2,
@@ -73,11 +89,12 @@
         "name": "allocation_id",
         "label": "Allocation ID",
         "type": "query",
-        "datasource": "Prometheus",
-        "definition": "query_result(max_over_time(det:allocation_task:info{det_cluster=~\"${cluster:regex}\",task_id=~\"${task_id:regex}\"}[$__range]))",
+        "datasource": {"type": "prometheus", "uid": "${prometheus_source}"},
+        "definition": "query_result(max_over_time(det:allocation_task:info{det_cluster=\"$cluster\",task_id=\"$task_id\"}[$__range]))",
         "query": {
-          "query": "query_result(max_over_time(det:allocation_task:info{det_cluster=~\"${cluster:regex}\",task_id=~\"${task_id:regex}\"}[$__range]))",
-          "refId": "StandardVariableQuery"
+          "qryType": 3,
+          "query": "query_result(max_over_time(det:allocation_task:info{det_cluster=\"$cluster\",task_id=\"$task_id\"}[$__range]))",
+          "refId": "PrometheusVariableQueryEditor-VariableQuery"
         },
         "regex": "/allocation_id=\"([^\"]+)\"/",
         "refresh": 2,
@@ -112,19 +129,19 @@
       },
       "options": {
         "mode": "markdown",
-        "content": "Select a time range first, then cluster, task, and allocation. **All** allocations shows each run separately; gaps mean no confirmed attribution, not zero use. GPU readings are for the entire assigned device and may include other processes. The conflict and missing-link tables are cluster-wide diagnostics. A missing panel value is N/A, not zero. This dashboard requires no experiment mapping."
+        "content": "If multiple Prometheus sources are available, choose the one with Determined metrics. Select a time range first, then cluster, task, and allocation. **All** allocations shows each run separately; gaps mean no confirmed attribution, not zero use. GPU readings are for the entire assigned device and may include other processes. The conflict and missing-link tables are cluster-wide diagnostics. A missing panel value is N/A, not zero. This dashboard requires no experiment mapping."
       }
     },
     {
       "id": 2,
       "title": "Master scrape",
       "type": "stat",
-      "datasource": "Prometheus",
+      "datasource": {"type": "prometheus", "uid": "${prometheus_source}"},
       "targets": [
         {
-          "expr": "up{job=\"det-master\",det_cluster=~\"${cluster:regex}\"}",
+          "expr": "up{job=\"det-master\",det_cluster=\"$cluster\"}",
           "refId": "A",
-          "datasource": "Prometheus",
+          "datasource": {"type": "prometheus", "uid": "${prometheus_source}"},
           "instant": false,
           "range": true,
           "legendFormat": "{{instance}}"
@@ -172,12 +189,12 @@
       "id": 3,
       "title": "Allocation lifecycle",
       "type": "timeseries",
-      "datasource": "Prometheus",
+      "datasource": {"type": "prometheus", "uid": "${prometheus_source}"},
       "targets": [
         {
-          "expr": "det:allocation_task:info{det_cluster=~\"${cluster:regex}\",task_id=~\"${task_id:regex}\",allocation_id=~\"${allocation_id:regex}\"}",
+          "expr": "det:allocation_task:info{det_cluster=\"$cluster\",task_id=\"$task_id\",allocation_id=~\"$allocation_id\"}",
           "refId": "A",
-          "datasource": "Prometheus",
+          "datasource": {"type": "prometheus", "uid": "${prometheus_source}"},
           "instant": false,
           "range": true,
           "legendFormat": "{{allocation_id}}"
@@ -224,12 +241,12 @@
       "id": 4,
       "title": "CPU logical cores used",
       "type": "timeseries",
-      "datasource": "Prometheus",
+      "datasource": {"type": "prometheus", "uid": "${prometheus_source}"},
       "targets": [
         {
-          "expr": "sum by (allocation_id,node) ((rate(container_cpu_usage_seconds_total{job=\"cadvisor\",det_cluster=~\"${cluster:regex}\",container_runtime_id!=\"\",cpu=~\"^(total)?$\"}[$__rate_interval]) and on (det_cluster,container_runtime_id) (count by (det_cluster,container_runtime_id) (container_cpu_usage_seconds_total{job=\"cadvisor\",det_cluster=~\"${cluster:regex}\",container_runtime_id!=\"\",cpu=~\"^(total)?$\"}) == 1)) * on (det_cluster,container_runtime_id) group_left (task_id,allocation_id) det:runtime_task:info{det_cluster=~\"${cluster:regex}\",task_id=~\"${task_id:regex}\",allocation_id=~\"${allocation_id:regex}\"})",
+          "expr": "sum by (allocation_id,node) ((rate(container_cpu_usage_seconds_total{job=\"cadvisor\",det_cluster=\"$cluster\",container_runtime_id!=\"\",cpu=~\"^(total)?$\"}[$__rate_interval]) and on (det_cluster,container_runtime_id) (count by (det_cluster,container_runtime_id) (container_cpu_usage_seconds_total{job=\"cadvisor\",det_cluster=\"$cluster\",container_runtime_id!=\"\",cpu=~\"^(total)?$\"}) == 1)) * on (det_cluster,container_runtime_id) group_left (task_id,allocation_id) det:runtime_task:info{det_cluster=\"$cluster\",task_id=\"$task_id\",allocation_id=~\"$allocation_id\"})",
           "refId": "A",
-          "datasource": "Prometheus",
+          "datasource": {"type": "prometheus", "uid": "${prometheus_source}"},
           "instant": false,
           "range": true,
           "legendFormat": "{{allocation_id}} \u00b7 {{node}}"
@@ -276,12 +293,12 @@
       "id": 5,
       "title": "Memory working set",
       "type": "timeseries",
-      "datasource": "Prometheus",
+      "datasource": {"type": "prometheus", "uid": "${prometheus_source}"},
       "targets": [
         {
-          "expr": "sum by (allocation_id,node) ((container_memory_working_set_bytes{job=\"cadvisor\",det_cluster=~\"${cluster:regex}\",container_runtime_id!=\"\"} and on (det_cluster,container_runtime_id) (count by (det_cluster,container_runtime_id) (container_memory_working_set_bytes{job=\"cadvisor\",det_cluster=~\"${cluster:regex}\",container_runtime_id!=\"\"}) == 1)) * on (det_cluster,container_runtime_id) group_left (task_id,allocation_id) det:runtime_task:info{det_cluster=~\"${cluster:regex}\",task_id=~\"${task_id:regex}\",allocation_id=~\"${allocation_id:regex}\"})",
+          "expr": "sum by (allocation_id,node) ((container_memory_working_set_bytes{job=\"cadvisor\",det_cluster=\"$cluster\",container_runtime_id!=\"\"} and on (det_cluster,container_runtime_id) (count by (det_cluster,container_runtime_id) (container_memory_working_set_bytes{job=\"cadvisor\",det_cluster=\"$cluster\",container_runtime_id!=\"\"}) == 1)) * on (det_cluster,container_runtime_id) group_left (task_id,allocation_id) det:runtime_task:info{det_cluster=\"$cluster\",task_id=\"$task_id\",allocation_id=~\"$allocation_id\"})",
           "refId": "A",
-          "datasource": "Prometheus",
+          "datasource": {"type": "prometheus", "uid": "${prometheus_source}"},
           "instant": false,
           "range": true,
           "legendFormat": "{{allocation_id}} \u00b7 {{node}}"
@@ -328,12 +345,12 @@
       "id": 6,
       "title": "Memory RSS",
       "type": "timeseries",
-      "datasource": "Prometheus",
+      "datasource": {"type": "prometheus", "uid": "${prometheus_source}"},
       "targets": [
         {
-          "expr": "sum by (allocation_id,node) ((container_memory_rss{job=\"cadvisor\",det_cluster=~\"${cluster:regex}\",container_runtime_id!=\"\"} and on (det_cluster,container_runtime_id) (count by (det_cluster,container_runtime_id) (container_memory_rss{job=\"cadvisor\",det_cluster=~\"${cluster:regex}\",container_runtime_id!=\"\"}) == 1)) * on (det_cluster,container_runtime_id) group_left (task_id,allocation_id) det:runtime_task:info{det_cluster=~\"${cluster:regex}\",task_id=~\"${task_id:regex}\",allocation_id=~\"${allocation_id:regex}\"})",
+          "expr": "sum by (allocation_id,node) ((container_memory_rss{job=\"cadvisor\",det_cluster=\"$cluster\",container_runtime_id!=\"\"} and on (det_cluster,container_runtime_id) (count by (det_cluster,container_runtime_id) (container_memory_rss{job=\"cadvisor\",det_cluster=\"$cluster\",container_runtime_id!=\"\"}) == 1)) * on (det_cluster,container_runtime_id) group_left (task_id,allocation_id) det:runtime_task:info{det_cluster=\"$cluster\",task_id=\"$task_id\",allocation_id=~\"$allocation_id\"})",
           "refId": "A",
-          "datasource": "Prometheus",
+          "datasource": {"type": "prometheus", "uid": "${prometheus_source}"},
           "instant": false,
           "range": true,
           "legendFormat": "{{allocation_id}} \u00b7 {{node}}"
@@ -380,12 +397,12 @@
       "id": 7,
       "title": "Assigned GPU utilization per device",
       "type": "timeseries",
-      "datasource": "Prometheus",
+      "datasource": {"type": "prometheus", "uid": "${prometheus_source}"},
       "targets": [
         {
-          "expr": "(((DCGM_FI_DEV_GPU_UTIL{job=\"dcgm\",det_cluster=~\"${cluster:regex}\",gpu_uuid!=\"\"} >= 0) and on (det_cluster,gpu_uuid) (DCGM_FI_DEV_GPU_UTIL{job=\"dcgm\",det_cluster=~\"${cluster:regex}\",gpu_uuid!=\"\"} <= 100)) and on (det_cluster,gpu_uuid) (count by (det_cluster,gpu_uuid) (DCGM_FI_DEV_GPU_UTIL{job=\"dcgm\",det_cluster=~\"${cluster:regex}\",gpu_uuid!=\"\"}) == 1)) * on (det_cluster,gpu_uuid) group_left (task_id,allocation_id) det:gpu_task:info{det_cluster=~\"${cluster:regex}\",task_id=~\"${task_id:regex}\",allocation_id=~\"${allocation_id:regex}\"}",
+          "expr": "(((DCGM_FI_DEV_GPU_UTIL{job=\"dcgm\",det_cluster=\"$cluster\",gpu_uuid!=\"\"} >= 0) and on (det_cluster,gpu_uuid) (DCGM_FI_DEV_GPU_UTIL{job=\"dcgm\",det_cluster=\"$cluster\",gpu_uuid!=\"\"} <= 100)) and on (det_cluster,gpu_uuid) (count by (det_cluster,gpu_uuid) (DCGM_FI_DEV_GPU_UTIL{job=\"dcgm\",det_cluster=\"$cluster\",gpu_uuid!=\"\"}) == 1)) * on (det_cluster,gpu_uuid) group_left (task_id,allocation_id) det:gpu_task:info{det_cluster=\"$cluster\",task_id=\"$task_id\",allocation_id=~\"$allocation_id\"}",
           "refId": "A",
-          "datasource": "Prometheus",
+          "datasource": {"type": "prometheus", "uid": "${prometheus_source}"},
           "instant": false,
           "range": true,
           "legendFormat": "{{allocation_id}} \u00b7 {{node}} \u00b7 {{gpu_uuid}}"
@@ -434,12 +451,12 @@
       "id": 8,
       "title": "Assigned GPU framebuffer used",
       "type": "timeseries",
-      "datasource": "Prometheus",
+      "datasource": {"type": "prometheus", "uid": "${prometheus_source}"},
       "targets": [
         {
-          "expr": "((((DCGM_FI_DEV_FB_USED{job=\"dcgm\",det_cluster=~\"${cluster:regex}\",gpu_uuid!=\"\"} >= 0) and on (det_cluster,gpu_uuid) (DCGM_FI_DEV_FB_USED{job=\"dcgm\",det_cluster=~\"${cluster:regex}\",gpu_uuid!=\"\"} <= 1000000)) and on (det_cluster,gpu_uuid) (count by (det_cluster,gpu_uuid) (DCGM_FI_DEV_FB_USED{job=\"dcgm\",det_cluster=~\"${cluster:regex}\",gpu_uuid!=\"\"}) == 1)) * on (det_cluster,gpu_uuid) group_left (task_id,allocation_id) det:gpu_task:info{det_cluster=~\"${cluster:regex}\",task_id=~\"${task_id:regex}\",allocation_id=~\"${allocation_id:regex}\"}) * 1024 * 1024",
+          "expr": "((((DCGM_FI_DEV_FB_USED{job=\"dcgm\",det_cluster=\"$cluster\",gpu_uuid!=\"\"} >= 0) and on (det_cluster,gpu_uuid) (DCGM_FI_DEV_FB_USED{job=\"dcgm\",det_cluster=\"$cluster\",gpu_uuid!=\"\"} <= 1000000)) and on (det_cluster,gpu_uuid) (count by (det_cluster,gpu_uuid) (DCGM_FI_DEV_FB_USED{job=\"dcgm\",det_cluster=\"$cluster\",gpu_uuid!=\"\"}) == 1)) * on (det_cluster,gpu_uuid) group_left (task_id,allocation_id) det:gpu_task:info{det_cluster=\"$cluster\",task_id=\"$task_id\",allocation_id=~\"$allocation_id\"}) * 1024 * 1024",
           "refId": "A",
-          "datasource": "Prometheus",
+          "datasource": {"type": "prometheus", "uid": "${prometheus_source}"},
           "instant": false,
           "range": true,
           "legendFormat": "{{allocation_id}} \u00b7 {{node}} \u00b7 {{gpu_uuid}}"
@@ -486,12 +503,12 @@
       "id": 9,
       "title": "Assigned GPU power",
       "type": "timeseries",
-      "datasource": "Prometheus",
+      "datasource": {"type": "prometheus", "uid": "${prometheus_source}"},
       "targets": [
         {
-          "expr": "(((DCGM_FI_DEV_POWER_USAGE{job=\"dcgm\",det_cluster=~\"${cluster:regex}\",gpu_uuid!=\"\"} >= 0) and on (det_cluster,gpu_uuid) (DCGM_FI_DEV_POWER_USAGE{job=\"dcgm\",det_cluster=~\"${cluster:regex}\",gpu_uuid!=\"\"} <= 10000)) and on (det_cluster,gpu_uuid) (count by (det_cluster,gpu_uuid) (DCGM_FI_DEV_POWER_USAGE{job=\"dcgm\",det_cluster=~\"${cluster:regex}\",gpu_uuid!=\"\"}) == 1)) * on (det_cluster,gpu_uuid) group_left (task_id,allocation_id) det:gpu_task:info{det_cluster=~\"${cluster:regex}\",task_id=~\"${task_id:regex}\",allocation_id=~\"${allocation_id:regex}\"}",
+          "expr": "(((DCGM_FI_DEV_POWER_USAGE{job=\"dcgm\",det_cluster=\"$cluster\",gpu_uuid!=\"\"} >= 0) and on (det_cluster,gpu_uuid) (DCGM_FI_DEV_POWER_USAGE{job=\"dcgm\",det_cluster=\"$cluster\",gpu_uuid!=\"\"} <= 10000)) and on (det_cluster,gpu_uuid) (count by (det_cluster,gpu_uuid) (DCGM_FI_DEV_POWER_USAGE{job=\"dcgm\",det_cluster=\"$cluster\",gpu_uuid!=\"\"}) == 1)) * on (det_cluster,gpu_uuid) group_left (task_id,allocation_id) det:gpu_task:info{det_cluster=\"$cluster\",task_id=\"$task_id\",allocation_id=~\"$allocation_id\"}",
           "refId": "A",
-          "datasource": "Prometheus",
+          "datasource": {"type": "prometheus", "uid": "${prometheus_source}"},
           "instant": false,
           "range": true,
           "legendFormat": "{{allocation_id}} \u00b7 {{node}} \u00b7 {{gpu_uuid}}"
@@ -538,12 +555,12 @@
       "id": 10,
       "title": "Assigned GPU temperature",
       "type": "timeseries",
-      "datasource": "Prometheus",
+      "datasource": {"type": "prometheus", "uid": "${prometheus_source}"},
       "targets": [
         {
-          "expr": "(((DCGM_FI_DEV_GPU_TEMP{job=\"dcgm\",det_cluster=~\"${cluster:regex}\",gpu_uuid!=\"\"} >= 0) and on (det_cluster,gpu_uuid) (DCGM_FI_DEV_GPU_TEMP{job=\"dcgm\",det_cluster=~\"${cluster:regex}\",gpu_uuid!=\"\"} <= 150)) and on (det_cluster,gpu_uuid) (count by (det_cluster,gpu_uuid) (DCGM_FI_DEV_GPU_TEMP{job=\"dcgm\",det_cluster=~\"${cluster:regex}\",gpu_uuid!=\"\"}) == 1)) * on (det_cluster,gpu_uuid) group_left (task_id,allocation_id) det:gpu_task:info{det_cluster=~\"${cluster:regex}\",task_id=~\"${task_id:regex}\",allocation_id=~\"${allocation_id:regex}\"}",
+          "expr": "(((DCGM_FI_DEV_GPU_TEMP{job=\"dcgm\",det_cluster=\"$cluster\",gpu_uuid!=\"\"} >= 0) and on (det_cluster,gpu_uuid) (DCGM_FI_DEV_GPU_TEMP{job=\"dcgm\",det_cluster=\"$cluster\",gpu_uuid!=\"\"} <= 150)) and on (det_cluster,gpu_uuid) (count by (det_cluster,gpu_uuid) (DCGM_FI_DEV_GPU_TEMP{job=\"dcgm\",det_cluster=\"$cluster\",gpu_uuid!=\"\"}) == 1)) * on (det_cluster,gpu_uuid) group_left (task_id,allocation_id) det:gpu_task:info{det_cluster=\"$cluster\",task_id=\"$task_id\",allocation_id=~\"$allocation_id\"}",
           "refId": "A",
-          "datasource": "Prometheus",
+          "datasource": {"type": "prometheus", "uid": "${prometheus_source}"},
           "instant": false,
           "range": true,
           "legendFormat": "{{allocation_id}} \u00b7 {{node}} \u00b7 {{gpu_uuid}}"
@@ -590,20 +607,20 @@
       "id": 11,
       "title": "Confirmed resource identities",
       "type": "table",
-      "datasource": "Prometheus",
+      "datasource": {"type": "prometheus", "uid": "${prometheus_source}"},
       "targets": [
         {
-          "expr": "det:runtime_task:info{det_cluster=~\"${cluster:regex}\",task_id=~\"${task_id:regex}\",allocation_id=~\"${allocation_id:regex}\"}",
+          "expr": "det:runtime_task:info{det_cluster=\"$cluster\",task_id=\"$task_id\",allocation_id=~\"$allocation_id\"}",
           "refId": "A",
-          "datasource": "Prometheus",
+          "datasource": {"type": "prometheus", "uid": "${prometheus_source}"},
           "instant": true,
           "range": false,
           "format": "table"
         },
         {
-          "expr": "det:gpu_task:info{det_cluster=~\"${cluster:regex}\",task_id=~\"${task_id:regex}\",allocation_id=~\"${allocation_id:regex}\"}",
+          "expr": "det:gpu_task:info{det_cluster=\"$cluster\",task_id=\"$task_id\",allocation_id=~\"$allocation_id\"}",
           "refId": "B",
-          "datasource": "Prometheus",
+          "datasource": {"type": "prometheus", "uid": "${prometheus_source}"},
           "instant": true,
           "range": false,
           "format": "table"
@@ -643,68 +660,68 @@
       "id": 12,
       "title": "Mapping conflicts \u2014 cluster-wide",
       "type": "table",
-      "datasource": "Prometheus",
+      "datasource": {"type": "prometheus", "uid": "${prometheus_source}"},
       "targets": [
         {
-          "expr": "det:allocation_task_conflict:count{det_cluster=~\"${cluster:regex}\"}",
+          "expr": "det:allocation_task_conflict:count{det_cluster=\"$cluster\"}",
           "refId": "A",
-          "datasource": "Prometheus",
+          "datasource": {"type": "prometheus", "uid": "${prometheus_source}"},
           "instant": true,
           "range": false,
           "format": "table"
         },
         {
-          "expr": "det:container_allocation_conflict:count{det_cluster=~\"${cluster:regex}\"}",
+          "expr": "det:container_allocation_conflict:count{det_cluster=\"$cluster\"}",
           "refId": "B",
-          "datasource": "Prometheus",
+          "datasource": {"type": "prometheus", "uid": "${prometheus_source}"},
           "instant": true,
           "range": false,
           "format": "table"
         },
         {
-          "expr": "det:runtime_container_conflict:count{det_cluster=~\"${cluster:regex}\"}",
+          "expr": "det:runtime_container_conflict:count{det_cluster=\"$cluster\"}",
           "refId": "C",
-          "datasource": "Prometheus",
+          "datasource": {"type": "prometheus", "uid": "${prometheus_source}"},
           "instant": true,
           "range": false,
           "format": "table"
         },
         {
-          "expr": "det:container_runtime_conflict:count{det_cluster=~\"${cluster:regex}\"}",
+          "expr": "det:container_runtime_conflict:count{det_cluster=\"$cluster\"}",
           "refId": "D",
-          "datasource": "Prometheus",
+          "datasource": {"type": "prometheus", "uid": "${prometheus_source}"},
           "instant": true,
           "range": false,
           "format": "table"
         },
         {
-          "expr": "det:gpu_container_conflict:count{det_cluster=~\"${cluster:regex}\"}",
+          "expr": "det:gpu_container_conflict:count{det_cluster=\"$cluster\"}",
           "refId": "E",
-          "datasource": "Prometheus",
+          "datasource": {"type": "prometheus", "uid": "${prometheus_source}"},
           "instant": true,
           "range": false,
           "format": "table"
         },
         {
-          "expr": "det:cadvisor_cpu_conflict:count{det_cluster=~\"${cluster:regex}\"}",
+          "expr": "det:cadvisor_cpu_conflict:count{det_cluster=\"$cluster\"}",
           "refId": "F",
-          "datasource": "Prometheus",
+          "datasource": {"type": "prometheus", "uid": "${prometheus_source}"},
           "instant": true,
           "range": false,
           "format": "table"
         },
         {
-          "expr": "det:cadvisor_memory_conflict:count{det_cluster=~\"${cluster:regex}\"}",
+          "expr": "det:cadvisor_memory_conflict:count{det_cluster=\"$cluster\"}",
           "refId": "G",
-          "datasource": "Prometheus",
+          "datasource": {"type": "prometheus", "uid": "${prometheus_source}"},
           "instant": true,
           "range": false,
           "format": "table"
         },
         {
-          "expr": "det:dcgm_gpu_conflict:count{det_cluster=~\"${cluster:regex}\"}",
+          "expr": "det:dcgm_gpu_conflict:count{det_cluster=\"$cluster\"}",
           "refId": "H",
-          "datasource": "Prometheus",
+          "datasource": {"type": "prometheus", "uid": "${prometheus_source}"},
           "instant": true,
           "range": false,
           "format": "table"
@@ -744,60 +761,60 @@
       "id": 13,
       "title": "Missing mapping links \u2014 cluster-wide",
       "type": "table",
-      "datasource": "Prometheus",
+      "datasource": {"type": "prometheus", "uid": "${prometheus_source}"},
       "targets": [
         {
-          "expr": "det:container_without_task:info{det_cluster=~\"${cluster:regex}\"}",
+          "expr": "det:container_without_task:info{det_cluster=\"$cluster\"}",
           "refId": "A",
-          "datasource": "Prometheus",
+          "datasource": {"type": "prometheus", "uid": "${prometheus_source}"},
           "instant": true,
           "range": false,
           "format": "table"
         },
         {
-          "expr": "det:runtime_without_allocation:info{det_cluster=~\"${cluster:regex}\"}",
+          "expr": "det:runtime_without_allocation:info{det_cluster=\"$cluster\"}",
           "refId": "B",
-          "datasource": "Prometheus",
+          "datasource": {"type": "prometheus", "uid": "${prometheus_source}"},
           "instant": true,
           "range": false,
           "format": "table"
         },
         {
-          "expr": "det:container_without_runtime:info{det_cluster=~\"${cluster:regex}\"}",
+          "expr": "det:container_without_runtime:info{det_cluster=\"$cluster\"}",
           "refId": "C",
-          "datasource": "Prometheus",
+          "datasource": {"type": "prometheus", "uid": "${prometheus_source}"},
           "instant": true,
           "range": false,
           "format": "table"
         },
         {
-          "expr": "det:gpu_without_task:info{det_cluster=~\"${cluster:regex}\"}",
+          "expr": "det:gpu_without_task:info{det_cluster=\"$cluster\"}",
           "refId": "D",
-          "datasource": "Prometheus",
+          "datasource": {"type": "prometheus", "uid": "${prometheus_source}"},
           "instant": true,
           "range": false,
           "format": "table"
         },
         {
-          "expr": "det:runtime_without_cadvisor:info{det_cluster=~\"${cluster:regex}\"}",
+          "expr": "det:runtime_without_cadvisor:info{det_cluster=\"$cluster\"}",
           "refId": "E",
-          "datasource": "Prometheus",
+          "datasource": {"type": "prometheus", "uid": "${prometheus_source}"},
           "instant": true,
           "range": false,
           "format": "table"
         },
         {
-          "expr": "det:gpu_without_dcgm:info{det_cluster=~\"${cluster:regex}\"}",
+          "expr": "det:gpu_without_dcgm:info{det_cluster=\"$cluster\"}",
           "refId": "F",
-          "datasource": "Prometheus",
+          "datasource": {"type": "prometheus", "uid": "${prometheus_source}"},
           "instant": true,
           "range": false,
           "format": "table"
         },
         {
-          "expr": "det:dcgm_gpu_invalid:info{det_cluster=~\"${cluster:regex}\"}",
+          "expr": "det:dcgm_gpu_invalid:info{det_cluster=\"$cluster\"}",
           "refId": "G",
-          "datasource": "Prometheus",
+          "datasource": {"type": "prometheus", "uid": "${prometheus_source}"},
           "instant": true,
           "range": false,
           "format": "table"
