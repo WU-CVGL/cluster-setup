@@ -1,6 +1,6 @@
 global:
-  scrape_interval: 15s
-  scrape_timeout: 5s
+  scrape_interval: 5s
+  scrape_timeout: 1s
   evaluation_interval: 15s
 rule_files:
   - /etc/prometheus/rules/*.yml
@@ -10,6 +10,8 @@ scrape_configs:
       - targets:
           - "localhost:9090"
   - job_name: "node"
+    scrape_interval: 15s
+    scrape_timeout: 5s
     relabel_configs:
       - target_label: det_cluster
         replacement: cvgl
@@ -56,6 +58,7 @@ scrape_configs:
         target_label: container_runtime_id
         replacement: '$1'
     scrape_interval: 15s
+    scrape_timeout: 5s
     static_configs:
       - targets:
           - "cvglsuppvm.lan:9080"
@@ -82,6 +85,7 @@ scrape_configs:
         replacement: login.cvgl.lab
     honor_timestamps: true
     scrape_interval: 15s
+    scrape_timeout: 5s
     static_configs:
       - targets:
           - "cvgl-node01.lan:9400"
@@ -125,6 +129,7 @@ scrape_configs:
         replacement: login.cvgl.lab
     honor_timestamps: true
     scrape_interval: 15s
+    scrape_timeout: 5s
     metrics_path: /prom/det-state-metrics
     scheme: http
     follow_redirects: true
