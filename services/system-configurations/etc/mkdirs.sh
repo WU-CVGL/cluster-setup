@@ -1,49 +1,52 @@
-mkdir /SSD
-mkdir /SSD_home
-mkdir /SSD_datasets
-mkdir /SSD3
-mkdir /SSD3_home
-mkdir /SSD3_datasets
-mkdir /UNSAFE_SSD4
-mkdir /datasets
-mkdir /workspace
-mkdir /workspace/lzzhao
-mkdir /workspace/wangpeng
-mkdir /workspace/mrj
-mkdir /workspace/lyh
-mkdir /workspace/lmy
-mkdir /workspace/lzq
-mkdir /workspace/zzj
-mkdir /workspace/peter
-mkdir /workspace/hj
-mkdir /workspace/wujing
-mkdir /workspace/wanpian
-mkdir /workspace/cym
-mkdir /workspace/xulu
-mkdir /workspace/songwei
-mkdir /workspace/lwp
-mkdir /workspace/dcr
-mkdir /workspace/wmz
-mkdir /workspace/liuxiang
-mkdir /workspace/gcc
-mkdir /workspace/wdx
-mkdir /workspace/hxn
-mkdir /workspace/cxh
-mkdir /workspace/hzc
-mkdir /workspace/lxh
-mkdir /workspace/xuqi
-mkdir /workspace/test1
-mkdir /workspace/temp1
-mkdir /workspace/sht
-mkdir /workspace/ghq
-mkdir /workspace/wanghan
-mkdir /workspace/scy
-mkdir /workspace/xyf
-mkdir /workspace/lihao
-mkdir /workspace/xjz
-mkdir /workspace/xiangfeng
-mkdir /workspace/zhenhua
-mkdir /workspace/wangchi
-mkdir /workspace/snc
-mkdir /workspace/liyaohui
-mkdir /workspace/lzh
+#!/bin/sh
+set -eu
+
+mkdir -p /SSD
+mkdir -p /SSD_home
+mkdir -p /SSD_datasets
+mkdir -p /SSD3
+mkdir -p /SSD3_home
+mkdir -p /SSD3_datasets
+mkdir -p /UNSAFE_SSD4
+mkdir -p /datasets
+mkdir -p /workspace
+mkdir -p /workspace/lzzhao
+mkdir -p /workspace/wangpeng
+mkdir -p /workspace/mrj
+mkdir -p /workspace/lyh
+mkdir -p /workspace/lmy
+mkdir -p /workspace/lzq
+mkdir -p /workspace/zzj
+mkdir -p /workspace/peter
+mkdir -p /workspace/hj
+mkdir -p /workspace/wujing
+mkdir -p /workspace/wanpian
+mkdir -p /workspace/cym
+mkdir -p /workspace/xulu
+mkdir -p /workspace/songwei
+mkdir -p /workspace/lwp
+mkdir -p /workspace/dcr
+mkdir -p /workspace/wmz
+mkdir -p /workspace/liuxiang
+mkdir -p /workspace/gcc
+mkdir -p /workspace/wdx
+mkdir -p /workspace/hxn
+mkdir -p /workspace/cxh
+mkdir -p /workspace/hzc
+mkdir -p /workspace/lxh
+mkdir -p /workspace/xuqi
+mkdir -p /workspace/test1
+mkdir -p /workspace/temp1
+mkdir -p /workspace/sht
+mkdir -p /workspace/ghq
+mkdir -p /workspace/wanghan
+mkdir -p /workspace/scy
+mkdir -p /workspace/xyf
+mkdir -p /workspace/lihao
+mkdir -p /workspace/xjz
+mkdir -p /workspace/xiangfeng
+mkdir -p /workspace/zhenhua
+mkdir -p /workspace/wangchi
+mkdir -p /workspace/snc
+mkdir -p /workspace/liyaohui
+mkdir -p /workspace/lzh
