@@ -153,10 +153,10 @@ Set up reservations for critical workloads:
 
  Post-installation:
 
- Add the IP of the core service VM to the login node's `/etc/environment`:
+ Add the IP of the core service VM to the login node's `/etc/environment` (as in the [reference file](../services/system-configurations/etc/environment)):
 
  ```bash
- DET_MASTER="10.0.1.66"
+ DET_MASTER="192.168.233.6"
  ```
 
 ## Configure TrueNAS
@@ -533,22 +533,22 @@ The open-source project `Project X` originates from XTLS protocol, and provides 
 
 1) Download and extract the latest release of `Xray-core` [from here](https://github.com/XTLS/Xray-core/releases). (Note that you should choose `Xray-linux-64.zip`)
 
-2) Create a client configuration file `config.json`. An off-the-shelf configuration is available at [here (TBA)](../services/xray/jp-central/config/config.json), which will open SOCKS5 proxy on port `1089` and HTTP proxy on port `8889`. More examples can be found at [XTLS/Xray-examples](https://github.com/XTLS/Xray-examples)
+2) Create a client configuration file `config.json`. It can be generated from a share link with `vless_to_config.py` (see the [Xray tools](../services/xray/README.md#tools)); its default output opens SOCKS5 proxy on port `1089` and HTTP proxy on port `8889`. The configurations of the running services are not in git. More examples can be found at [XTLS/Xray-examples](https://github.com/XTLS/Xray-examples)
 
 3) Execute `./xray -config ./config.json`.
 
-> Note: Just use the proxy service on the supplementary node (http://10.0.1.68:8889)
+> Note: Just use the proxy service on the supplementary node (http://192.168.233.8:59889, the one in the [reference `proxy.conf`](../services/system-configurations/etc/systemd/system/docker.service.d/proxy.conf))
 
 ### Verify the proxy service
 
 First, launch an HTTP proxy on the node (or in the LAN).
 
-For example, **suppose** you have such a proxy service http://10.0.1.68:8889.
+For example, **suppose** you have such a proxy service http://192.168.233.8:59889.
 
 To verify it:
 
 ```bash
-export https_proxy=http://10.0.1.68:8889
+export https_proxy=http://192.168.233.8:59889
 curl https://google.com.hk
 ```
 
@@ -573,25 +573,27 @@ it shows that the proxy service is working.
     sudo mkdir -p /etc/systemd/system/docker.service.d
     ```
 
-2) Add environment variables to the configuration file `/etc/systemd/system/docker.service.d/proxy.conf`:
+2) Add environment variables to the configuration file `/etc/systemd/system/docker.service.d/proxy.conf` (the [reference file](../services/system-configurations/etc/systemd/system/docker.service.d/proxy.conf) has the values used on the supplementary services VM):
 
     ```conf
     [Service]
-    Environment="HTTP_PROXY=http://10.0.1.68:8889"
-    Environment="HTTPS_PROXY=http://10.0.1.68:8889"
-    Environment="NO_PROXY=localhost,127.0.0.1,nvcr.io,aliyuncs.com,edu.cn,cvgl.lab"
+    Environment="HTTP_PROXY=http://192.168.233.8:59889"
+    Environment="HTTPS_PROXY=http://192.168.233.8:59889"
+    Environment="NO_PROXY=localhost,127.0.0.1,nvcr.io,aliyuncs.com,cvgl.lab,harbor.cvgl.lab,10.0.1.68,192.168.233.8"
     ```
 
-    You should change `10.0.1.68` and `8889` to the actual proxy address and port respectively.
+    You should change `192.168.233.8` and `59889` to the actual proxy address and port respectively (host port `59889` is the HTTP inbound of the `xray-usca5-bwh-sla-1tb` service in `services/docker-compose.yml`).
 
     Note that the `http` is intentionally used in `HTTPS_PROXY` - this is how most HTTP proxies work.
 
 3) Update configuration and restart `Docker`:
 
     ```sh
-    systemctl daemon-reload
-    systemctl restart docker
+    sudo systemctl daemon-reload
+    sudo systemctl restart docker
     ```
+
+    Restarting Docker stops the running containers (including Determined tasks), so drain the node first.
 
 4) Check the proxy:
 

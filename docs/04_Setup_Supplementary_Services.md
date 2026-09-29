@@ -57,42 +57,40 @@ System Topology:
 
 ## Proxy as a service
 
-In the [previous section](./01_First-time_Setup_of_Cluster_Nodes.md#setup-a-temporary-proxy-service), we used a temporary proxy service. In this section, we will set up a production-ready proxy service via docker-compose, along with a monitoring endpoint for a Grafana dashboard.
+In the [previous section](./01_First-time_Setup_of_Cluster_Nodes.md#deprecated-setup-a-temporary-proxy-service), we used a temporary proxy service. In this section, we will set up a production-ready proxy service via docker-compose, along with a monitoring endpoint for a Grafana dashboard.
 
-Here is an example, whose full version can be found in [all-in-one configuration](#all-in-one):
+Here is an example (the `xray-usca6-bwh-1tb` service, which the proxy examples below use), whose full version can be found in [all-in-one configuration](#all-in-one). New services of this shape are added with [`create_xray_service.py`](../services/xray/scripts/README.md):
 
 ```yaml
-version: '3'
-
 networks:
   grafana_monitor:
     driver: bridge
 
 services:
-  xray-jp-central:
-    image: teddysun/xray
+  xray-usca6-bwh-1tb:
+    image: teddysun/xray:latest
     restart: unless-stopped
-    networks:
-      - grafana_monitor
     environment:
       TZ: Asia/Shanghai
+    networks:
+      - grafana_monitor
     ports:
       - 10089:1089
       - 18889:8889
     volumes: 
-      - ./xray/jp-central/config:/etc/xray
-      - ./xray/jp-central/log:/var/log/xray
+      - ./xray/usca6-bwh-1tb/config:/etc/xray
+      - ./xray/usca6-bwh-1tb/log:/var/log/xray
     expose:
       - 10085
 
-  xray-jp-central-exporter:
+  xray-usca6-bwh-1tb-exporter:
     image: wi1dcard/v2ray-exporter:master
-    networks:
-      - grafana_monitor
     environment:
       TZ: Asia/Shanghai
+    networks:
+      - grafana_monitor
     restart: unless-stopped
-    command: 'v2ray-exporter --v2ray-endpoint "xray-jp-central:10085" --listen ":9550"'
+    command: 'v2ray-exporter --v2ray-endpoint "xray-usca6-bwh-1tb:10085" --listen ":9550"'
     expose:
       - 9550
 ```
@@ -243,8 +241,6 @@ The certificates will be stored in `/etc/ssl/private`.
 You can add a temporary `docker-compose.yaml` in the `nginx` folder to test the configurations:
 
 ```yaml
-version: '3'
-
 services:
   reverseproxy:
     build: ./build
@@ -288,7 +284,7 @@ Open the URLs in your browser:
 Note: You can copy the `CA.cer` to NGINX data for occasional downloads:
 
 ```bash
-sudo cp /etc/ssl/private/CA.cer CVGL-Services/nginx/data/html/cvgl.crt
+sudo cp /etc/ssl/private/CA.cer services/nginx/data/html/cvgl.crt   # in the repository root
 ```
 
 This will be useful in the [following section](#harbor).
@@ -310,7 +306,7 @@ In this section, we will discuss how to install and configure Harbor in our clus
 This is a typical Harbor installation showcase:
 
 - First download Harbor's [installer](https://github.com/goharbor/harbor/releases)
-- Edit `harbor.yaml`, update `hostname`, `http.port`, `external_url`, `data_volume`, `log.location`
+- Edit `harbor.yml`, update `hostname`, `http.port`, `external_url`, `data_volume`, `log.location`
 - Run `sudo install.sh`
 - Run `docker compose down`
 - Edit `docker-compose.yml`, update PostgreSQL database volume path
@@ -340,21 +336,20 @@ Create NFS share for database:
 Set up both NFSv4 and v3 compatablity:
 ![Set up both NFSv4 and v3 compatablity](./images/04_Harbor_nfsv4.png)
 
-Example of `/etc/fstab`:
+Example of `/etc/fstab` (the current entries are in the [reference fstab](../services/system-configurations/etc/fstab)):
 
 ```text
-nas.cvgl.lab:/mnt/HDD/SupplementaryServices/harbor/data       /srv/nfs/var/harbor/data        nfs vers=4,rw,hard,intr,rsize=8192,wsize=8192,timeo=14,_netdev 0 2
-
-nas.cvgl.lab:/mnt/HDD/SupplementaryServices/harbor/database   /srv/nfs/var/harbor/database    nfs vers=3,rw,hard,intr,rsize=8192,wsize=8192,timeo=14,_netdev 0 2
+nas.cvgl.lab:/mnt/Peter/SupplementaryServices/harbor/data       /srv/nfs/var/harbor/data        nfs vers=3,defaults,async,noatime,hard,rsize=1048576,wsize=1048576,_netdev 0 2
+nas.cvgl.lab:/mnt/Peter/SupplementaryServices/harbor/database   /srv/nfs/var/harbor/database    nfs vers=3,defaults,async,noatime,hard,rsize=1048576,wsize=1048576,_netdev 0 2
 ```
 
 #### Provided configuration and patch
 
-You can use the provided [`harbor.yml`](../services/harbor/harbor.yml) to install [Harbor](https://github.com/goharbor/harbor/releases/tag/v2.8.3) and switch to NFS by replacing `/srv/nfs/var/harbor/data/database` to `/srv/nfs/var/harbor/database` :
+You can use the provided [`harbor.yml`](../services/harbor/harbor.yml) to install [Harbor](https://github.com/goharbor/harbor/releases/tag/v2.15.2) and switch to NFS by replacing `/srv/nfs/var/harbor/data/database` to `/srv/nfs/var/harbor/database` :
 
 ```bash
 cd <project_root>/services/harbor
-tar -xvzf /path/to/harbor-offline-installer-v2.8.3.tgz    # tested version
+tar -xvzf /path/to/harbor-offline-installer-v2.15.2.tgz    # current version (harbor.yml has _version: 2.15.0)
 mv harbor installer && cd installer
 cp ../harbor.yml .
 sudo bash ./install.sh
@@ -370,16 +365,16 @@ hostname: harbor.cvgl.lab
 external_url: https://harbor.cvgl.lab
 database.password: <secrect>
 data_volume: /srv/nfs/var/harbor/data
-log.location: /srv/nfs/var/harbor/log
+log.location: /srv/nfs/var/harbor/data/log
 ```
 
 ### Post-installation
 
-1) Configure HOSTS on each node. Make sure these lines exist:
+1) Configure HOSTS on each node. Make sure these lines exist (as in the [reference hosts file](../services/system-configurations/etc/hosts)):
 
     ```text
-    10.0.1.68 cvgl.lab
-    10.0.1.68 harbor.cvgl.lab
+    192.168.233.8 cvgl.lab
+    192.168.233.8 harbor.cvgl.lab
     ```
 
 2) Trust the CA certificate on each node:
@@ -390,19 +385,19 @@ log.location: /srv/nfs/var/harbor/log
     sudo wget https://cvgl.lab/cvgl.crt --no-check-certificate
     ```
 
-3) Update the NGINX upstream
+3) Update the NGINX upstream (in [`nginx.conf`](../services/nginx/build/nginx.conf))
 
     ```nginx
     upstream harbor {
-        server 10.0.1.68:50000;
+        server 192.168.233.8:50000;
     }
     ```
 
-4) Rebuild and restart NGINX
+4) Rebuild and restart NGINX (in the `services` folder of the all-in-one configuration, where the service is called `nginx`)
 
     ```bash
-    docker compose build reverseproxy
-    docker compose up -d --force-recreate --no-deps reverseproxy
+    docker compose build nginx
+    docker compose up -d --force-recreate --no-deps nginx
     ```
 
 5) Log in with the URL `https://harbor.cvgl.lab`. Change the default password.
@@ -429,7 +424,7 @@ e07ee1baac5f: Pushed
 latest: digest: sha256:f54a58bc1aac5ea1a25d796ae155dc228b3f0e11d046ae276b39c4bf2f13d8c4 size: 525
 ```
 
-Note: to restart the Harbor services, go to the installation folder and use `docker-compose` commands:
+Note: to restart the Harbor services, go to the installation folder and use `docker compose` commands:
 
 ```bash
 sudo docker compose up -d --force-recreate --remove-orphans

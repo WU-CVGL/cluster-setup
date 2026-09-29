@@ -96,7 +96,7 @@ pip install -U determined
 
 ### Launch master & agents
 
-See [notes](../services/determined/README.md) and the [master configuration file](../services/determined/master.yaml).
+See [notes](../services/determined/README.md) and the [master configuration file](../services/system-configurations/etc/determined/master.yaml).
 
 ## Conduct an experiment with `Determined AI`
 
@@ -120,11 +120,11 @@ then, input `password` to log in.
 
 ### Upload code and data to the server
 
-Upload your code and data to a path `/labdata0/xxx/` on the server, where `/xxx/` is a directory created by you.
+Upload your code and data to a path `/workspace/xxx/` on the server, where `xxx` is your username (your NFS workspace).
 
 ### Configure your virtual environment
 
-Write a configuration document `config.yaml` under the path `/labdata0/xxx/`, in which:
+Write a configuration document `config.yaml` under the path `/workspace/xxx/`, in which:
 
 ```yaml
 description: your_task_name

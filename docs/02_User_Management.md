@@ -11,6 +11,7 @@
     - [KVM/Networking](#kvmnetworking)
     - [Post-installation configurations](#post-installation-configurations)
   - [Add New User to the cluster](#add-new-user-to-the-cluster)
+    - [Create users with `create_user.py` (recommended)](#create-users-with-create_userpy-recommended)
   - [Create a Linux account on the login node](#create-a-linux-account-on-the-login-node)
   - [Create a Determined AI account](#create-a-determined-ai-account)
   - [Create TrueNAS NFS share](#create-truenas-nfs-share)
@@ -193,14 +194,14 @@ Other servers can connect to it using IP `192.168.233.7` (or the slower 1GbE `10
 
 1) NFS mount
 
-    We also need to add the NFS shares to `/etc/fstab`, as we [did on the GPU nodes](./03_Setup_DeterminedAI.md#scale-to-multi-node-configure-nfs-export--nfs-client).
+    We also need to add the NFS shares to `/etc/fstab`, as we [did on the GPU nodes](#set-up-nfs-client-on-every-node).
 
 2) Environment variables
 
-    We should set the `DET_MASTER` for Determined AI's master node, so that the users won't need to set it by themselves. Append this line to `/etc/environment`:
+    We should set the `DET_MASTER` for Determined AI's master node, so that the users won't need to set it by themselves. Append this line to `/etc/environment` (as in the [reference file](../services/system-configurations/etc/environment)):
 
     ```sh
-    DET_MASTER="192.168.233.66"
+    DET_MASTER="192.168.233.6"
     ```
 
 
@@ -222,13 +223,59 @@ Other servers can connect to it using IP `192.168.233.7` (or the slower 1GbE `10
 └─────────────────────────────────────────────────────────────────┘
 ```
 
+### Create users with `create_user.py` (recommended)
+
+[`scripts/create_user.py`](../scripts/create_user.py) does all the steps of this page for a list of users. For each user it:
+
+1. creates the Linux account on the login node (`useradd -m -s /bin/bash`, the password is stored as a SHA-512 hash) and adds it to the `docker` group (skip this with `--no-docker-group`);
+2. creates the TrueNAS group and user (same GID/UID; the TrueNAS full name is the username), the home dataset `Peter/Workspace/<username>` with an 8 TiB quota, its ACL, and the NFS share for `192.168.233.0/24` and `10.0.1.64/27`;
+3. adds the share to `/etc/fstab` and mounts it at `/workspace/<username>` on the login node and on every GPU node, and at `/home/<username>` on the login node, with the options `defaults,vers=3,async,noatime,soft,rsize=32768,wsize=32768,_netdev 0 2`;
+4. copies `/etc/skel` into the new home;
+5. creates the Determined AI user, links it to the Linux UID/GID and sets its display name to the full name;
+6. creates the Harbor user and adds it to the `library` project as Developer.
+
+Prerequisites on the machine that runs it (the supplementary services VM or an admin box, Python 3.8 or newer):
+
+- `pip install -r scripts/requirements.txt`
+- `scripts/my_secrets.py` (gitignored, never commit it) defining `TRUENAS_USERNAME`, `TRUENAS_PASSWORD`, `SUDO_PASSWORD` (cvgladmin's sudo password), `DET_PASSWORD` (Determined `admin`) and `HARBOR_PASSWORD` (Harbor `admin`).
+- SSH key login to the login node as the host alias `login` (user `cvgladmin`) and to the eight GPU nodes as `S1` ... `S8`, defined in your `~/.ssh/config`. If the key has a passphrase, export it as `SSH_PASSPHRASE`.
+- On the login node: `openssl` (for `openssl passwd -6`), `mountpoint` (util-linux) and the `det` CLI with `DET_MASTER` set (see [Post-installation configurations](#post-installation-configurations)).
+- Access to the TrueNAS API (`http://10.0.1.70`) and the Harbor API (`http://10.0.1.68:50000`).
+
+Put the new users into a CSV file and run the script:
+
+```bash
+cp scripts/new_users.example.csv scripts/new_users.csv   # scripts/new_users*.csv is gitignored
+# edit scripts/new_users.csv: one row per new user
+python3 scripts/create_user.py --users scripts/new_users.csv
+```
+
+The CSV columns are `username,full_name,password` (see [`new_users.example.csv`](../scripts/new_users.example.csv) and `python3 scripts/create_user.py --help`):
+
+- username: `^[a-z_][a-z0-9_-]{0,31}$`;
+- password: 8-128 characters with an uppercase letter, a lowercase letter and a number, no control characters, no leading or trailing whitespace. The same password is set for Linux, Determined and Harbor;
+- quote a field that contains a comma or a double quote (`""` for a literal `"`); lines starting with `#` and blank lines are ignored.
+
+The whole file is validated before anything is changed. Every step checks first and only creates what is missing, so after a failure, fix the cause and rerun the same command. Exit status: `0` = all users done, `1` = some step failed (the failed steps are listed at the end), `2` = invalid input (nothing was changed). The file holds passwords: delete it when you are done.
+
+Notes:
+
+- Accounts that already exist keep their password on Linux, Determined and Harbor; a rerun never resets it.
+- While `det user create` runs, the new password is visible in the process list of the login node (the `det` CLI takes it as an argument).
+- Users created by older versions of the script whose password contains characters such as `$`, `` ` `` or `\` may have a different (mangled) Linux password. The script reports it as already set and does not repair it: reset it with `sudo passwd <username>` on the login node.
+- The script does not update the reference files [`fstab`](../services/system-configurations/etc/fstab), [`mkdirs.sh`](../services/system-configurations/etc/mkdirs.sh) or the watchdog's `User.json` (Slack IDs); update them by hand.
+- The script and the manual steps below still differ in three places, pending a decision: the Harbor role (script: Developer, manual: maintainer), the dataset ACL (the script asks TrueNAS for its default ACL, `set_default_acl`, which TrueNAS 23.10/24.04 applies as the `NFS4_RESTRICTED` template, not the `NFS4_HOME` preset), and the quota (script: 8 TiB, manual: 4 TiB).
+- Tests (offline, they stub SSH, TrueNAS and Harbor): `python3 -B -m unittest discover -s scripts/tests -v` in the repository root.
+
+The following sections describe the same steps by hand.
+
 ## Create a Linux account on the login node
 
 First, create a Linux account for the new user on the login node:
 
 ```bash
 export USERNAME=<username> # Change to new user's name
-sudo useradd $USERNAME -s /usr/bin/bash
+sudo useradd -m -s /bin/bash $USERNAME
 sudo passwd $USERNAME
 ```
 
@@ -285,12 +332,12 @@ det user list
 
 ### Create home dataset for the new user
 
-In the previous section, we have configured a **Dataset** `home`
+In the previous section, we have configured a **Dataset** `Workspace` (in the pool `Peter`)
 that will be used to store user files.
 Now we need to create NFS share for every user separately.
 
-1. Open the TrueNAS web dashboard. In **Datasets->HDD->home**,
-   navigate to the Dataset `HDD/home` (or you can directly [click this url](http://10.0.1.70/ui/datasets/HDD%2Fhome/)),
+1. Open the TrueNAS web dashboard. In **Datasets->Peter->Workspace**,
+   navigate to the Dataset `Peter/Workspace` (or you can directly [click this url](http://10.0.1.70/ui/datasets/Peter%2FWorkspace/)),
    then click **Add Dataset** to add a sub-dataset of it, type in the same username into `Name`. Then take a breath for the `Advanced Options`:
 
    ![TrueNAS Scale - Create New Dataset for User (Basic)](images/02_TrueNAS_Scale02.png)
@@ -335,12 +382,12 @@ Now we need to create NFS share for every user separately.
    Append this line to `/etc/hosts`:
 
    ```text
-   192.168.233.234 nas.cvgl.lab
+   192.168.233.233 nas.cvgl.lab
    ```
 
    While on EVERY GPU (agent) node:
 
-   Append this line to `/etc/hosts`:
+   Append this line to `/etc/hosts` (see the [reference hosts file](../services/system-configurations/etc/hosts)):
 
    ```text
    192.168.233.233 nas.cvgl.lab
@@ -353,19 +400,26 @@ Now we need to create NFS share for every user separately.
    First, create the mount point for the new user
 
    ```bash
-   sudo mkdir /workspace/<username>
+   sudo mkdir -p /workspace/<username>
    ```
 
-   Edit the file `/etc/fstab`, add this new line for the new user
+   Edit the file `/etc/fstab`, add this new line for the new user (the same options as `scripts/create_user.py` uses)
 
    ```text
-   nas.cvgl.lab:/mnt/Peter/Workspace/<username> /workspace/<username> nfs defaults,noatime,hard,nointr,rsize=32768,wsize=32768,_netdev 0 2
+   nas.cvgl.lab:/mnt/Peter/Workspace/<username> /workspace/<username> nfs defaults,vers=3,async,noatime,soft,rsize=32768,wsize=32768,_netdev 0 2
    ```
 
-   To take effect, execute
+   On the login node only, also mount the same share as the user's home: `sudo mkdir -p /home/<username>` and add
+
+   ```text
+   nas.cvgl.lab:/mnt/Peter/Workspace/<username> /home/<username> nfs defaults,vers=3,async,noatime,soft,rsize=32768,wsize=32768,_netdev 0 2
+   ```
+
+   To take effect, mount the new entries (`mount -a` would also try every other entry in `/etc/fstab`)
 
    ```bash
-   sudo mount -a
+   sudo mount /workspace/<username>
+   sudo mount /home/<username>   # login node only
    ```
 
    Check if the configuration is successful, execute
@@ -389,7 +443,7 @@ The user's home folder is empty now and we need to generate the default contents
 ```bash
 sudo -u $USERNAME chsh -s /bin/bash
 sudo -u $USERNAME xdg-user-dirs-update --force
-sudo -u $USERNAME cp /etc/skel/.* /home/$USERNAME
+sudo -u $USERNAME cp -a /etc/skel/. /home/$USERNAME/
 ```
 
 > Note: You will be prompted to input the user's default password.
@@ -402,7 +456,7 @@ sudo -u $USERNAME cp /etc/skel/.* /home/$USERNAME
 
     ![Harbor new user](images/02_HARBOR.png)
 
-2. Add the new user to the maintainers of the public library, in **Projects -> libaray -> Members** (URL: https://harbor.cvgl.lab/harbor/projects/1/members)
+2. Add the new user to the maintainers of the public library, in **Projects -> library -> Members** (URL: https://harbor.cvgl.lab/harbor/projects/1/members)
 
     ![Harbor library maintainer](images/02_HARBOR_02.png)
 
