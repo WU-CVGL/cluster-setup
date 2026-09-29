@@ -40,8 +40,6 @@ USER appuser
 # Copy the source code into the container.
 COPY . .
 
-# Expose the port that the application listens on.
-EXPOSE 8000
-
-# Run the application.
-CMD python alert_response_handler_v02.py
+# Run the application. Exec form: python is PID 1 and receives SIGTERM directly
+# (the app installs a SIGTERM handler, so `docker stop` exits promptly).
+CMD ["python", "alert_response_handler_v02.py"]

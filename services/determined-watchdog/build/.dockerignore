@@ -32,3 +32,9 @@
 **/values.dev.yaml
 LICENSE
 README.md
+# Unit tests are not shipped: ../tests/ is outside this build context anyway, and
+# the test_*.py here (PR #3's test_metrics_token.py, PR #4's test_startup_refresh.py)
+# run from a checkout.
+**/tests
+**/test_*.py
+**/*.pyc
