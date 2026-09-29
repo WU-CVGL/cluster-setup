@@ -50,3 +50,4 @@ mkdir -p /workspace/wangchi
 mkdir -p /workspace/snc
 mkdir -p /workspace/liyaohui
 mkdir -p /workspace/lzh
+mkdir -p /workspace/zyz
