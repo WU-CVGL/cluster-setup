@@ -5,6 +5,11 @@ Read a vless:// share URL and emit a standalone Xray config JSON.
 
 This script intentionally does not touch docker-compose, Prometheus, service
 directories, or any cluster/deployment files.
+
+To use the output as services/xray/<name>/config/config.json of an existing
+compose service, pass --stats-api (the exporter needs the stats API) and keep
+the default --http-port/--socks-port: they are the ports inside the container
+(8889/1089), not the host ports published in docker-compose.yml.
 """
 
 from __future__ import annotations
@@ -17,7 +22,7 @@ from typing import Optional
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
-from XrayConfigHandler import DEFAULT_HTTP_PORT, DEFAULT_SOCKS_PORT, XrayConfigHandler
+from XrayConfigHandler import DEFAULT_API_PORT, DEFAULT_HTTP_PORT, DEFAULT_SOCKS_PORT, XrayConfigHandler
 
 
 def read_vless_url(vless_url: Optional[str], input_file: Optional[str]) -> str:
@@ -84,6 +89,15 @@ def parse_args() -> argparse.Namespace:
         default=4,
         help="JSON indentation. Default: 4.",
     )
+    parser.add_argument(
+        "--stats-api",
+        action="store_true",
+        help=(
+            "Also emit the stats/api/policy sections, the dokodemo-door 'api' inbound "
+            f"on port {DEFAULT_API_PORT} and its routing rule, which the v2ray exporter "
+            "in docker-compose.yml needs. Default: off."
+        ),
+    )
     return parser.parse_args()
 
 
@@ -99,6 +113,7 @@ def main() -> int:
             http_port=args.http_port,
             socks_port=args.socks_port,
             loglevel=args.loglevel,
+            include_stats_api=args.stats_api,
         )
         output = json.dumps(xray_config, indent=args.indent, ensure_ascii=False)
 

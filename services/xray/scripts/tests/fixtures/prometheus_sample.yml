@@ -1,0 +1,150 @@
+# prometheus.yml for the create_xray_service tests: a verbatim copy of
+# services/prometheus/prometheus.yml as of 2cd63d3 (PR #3: rule_files, relabel_configs,
+# per-job scrape_timeout, det-master authorization.credentials_file as the last lines),
+# except that the v2ray targets are the two xray services of compose_sample.yml
+# (the second one has underscores in its name). No credentials.
+global:
+  scrape_interval: 5s
+  scrape_timeout: 1s
+  evaluation_interval: 15s
+rule_files:
+  - /etc/prometheus/rules/*.yml
+scrape_configs:
+  - job_name: "prometheus"
+    static_configs:
+      - targets:
+          - "localhost:9090"
+  - job_name: "node"
+    scrape_interval: 15s
+    scrape_timeout: 5s
+    relabel_configs:
+      - target_label: det_cluster
+        replacement: cvgl
+      - source_labels: [__address__]
+        regex: '([^:]+):[0-9]+'
+        target_label: node
+        replacement: '$1'
+      - source_labels: [node]
+        regex: 'cvglloginnode\.lan'
+        target_label: node
+        replacement: login.cvgl.lab
+    static_configs:
+      - targets:
+          - "cvglcorevm.lan:9100"
+          - "cvglsuppvm.lan:9100"
+          - "login.cvgl.lab:9100"
+          - "cvgl-node01.lan:9100"
+          - "cvgl-node02.lan:9100"
+          - "cvgl-node03.lan:9100"
+          - "cvgl-node04.lan:9100"
+          - "cvgl-node05.lan:9100"
+          - "cvgl-node06.lan:9100"
+          - "cvgl-node07.lan:9100"
+          - "cvgl-node08.lan:9100"
+  - job_name: "cadvisor"
+    relabel_configs:
+      - target_label: det_cluster
+        replacement: cvgl
+      - source_labels: [__address__]
+        regex: '([^:]+):[0-9]+'
+        target_label: node
+        replacement: '$1'
+      - source_labels: [node]
+        regex: 'cvglloginnode\.lan'
+        target_label: node
+        replacement: login.cvgl.lab
+    metric_relabel_configs:
+      - source_labels: [id]
+        regex: '.*/docker/([0-9a-f]{64})'
+        target_label: container_runtime_id
+        replacement: '$1'
+      - source_labels: [id]
+        regex: '.*docker-([0-9a-f]{64})\.scope'
+        target_label: container_runtime_id
+        replacement: '$1'
+    scrape_interval: 15s
+    scrape_timeout: 5s
+    static_configs:
+      - targets:
+          - "cvglsuppvm.lan:9080"
+          - "cvglloginnode.lan:9080"
+          - "cvgl-node01.lan:9080"
+          - "cvgl-node02.lan:9080"
+          - "cvgl-node03.lan:9080"
+          - "cvgl-node04.lan:9080"
+          - "cvgl-node05.lan:9080"
+          - "cvgl-node06.lan:9080"
+          - "cvgl-node07.lan:9080"
+          - "cvgl-node08.lan:9080"
+  - job_name: "dcgm"
+    relabel_configs:
+      - target_label: det_cluster
+        replacement: cvgl
+      - source_labels: [__address__]
+        regex: '([^:]+):[0-9]+'
+        target_label: node
+        replacement: '$1'
+      - source_labels: [node]
+        regex: 'cvglloginnode\.lan'
+        target_label: node
+        replacement: login.cvgl.lab
+    honor_timestamps: true
+    scrape_interval: 15s
+    scrape_timeout: 5s
+    static_configs:
+      - targets:
+          - "cvgl-node01.lan:9400"
+          - "cvgl-node02.lan:9400"
+          - "cvgl-node03.lan:9400"
+          - "cvgl-node04.lan:9400"
+          - "cvgl-node05.lan:9400"
+          - "cvgl-node06.lan:9400"
+          - "cvgl-node07.lan:9400"
+          - "cvgl-node08.lan:9400"
+    metrics_path: /metrics
+    scheme: http
+    follow_redirects: true
+    metric_relabel_configs:
+    - source_labels: [__name__, UUID]
+      separator: ;
+      regex: DCGM.*;(.*)
+      target_label: gpu_uuid
+      replacement: $1
+      action: replace
+  - job_name: "v2ray"
+    metrics_path: /scrape
+    static_configs:
+      - targets:
+          - "xray-usca5-bwh-sla-1tb-exporter:9550"
+          - "xray-miyaip-jp-01_relay_jpty1-bwh-2tb-exporter:9550"
+  - job_name: det-master
+    relabel_configs:
+      - target_label: det_cluster
+        replacement: cvgl
+      - source_labels: [__address__]
+        regex: '([^:]+):[0-9]+'
+        target_label: node
+        replacement: '$1'
+      - source_labels: [node]
+        regex: 'cvglloginnode\.lan'
+        target_label: node
+        replacement: login.cvgl.lab
+    honor_timestamps: true
+    scrape_interval: 15s
+    scrape_timeout: 5s
+    metrics_path: /prom/det-state-metrics
+    scheme: http
+    follow_redirects: true
+    metric_relabel_configs:
+    - source_labels: [task_actor]
+      separator: ;
+      regex: /experiments/(.+)\/.*\/.*
+      target_label: experiment_id
+      replacement: $1
+      action: replace
+    static_configs:
+    - targets:
+      - cvglcorevm.lan:8080
+    authorization:
+      type: Bearer
+      credentials_file: /run/determined-metrics/token

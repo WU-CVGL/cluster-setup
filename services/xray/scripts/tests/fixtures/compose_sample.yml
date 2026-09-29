@@ -1,0 +1,149 @@
+# Synthetic docker-compose.yml for the create_xray_service tests.
+# Same shapes as services/docker-compose.yml (top-level networks/volumes before services,
+# quoted and unquoted ports, 8-space nginx port items, underscores in xray names,
+# network_mode: host services), plus a few other port syntaxes. No real values.
+networks:
+  grafana_monitor:
+    driver: bridge
+  nextcloud:
+    external: false
+
+volumes:
+  portainer_data:
+    driver: local
+
+services:
+  hbbs:
+    container_name: hbbs
+    image: rustdesk/rustdesk-server
+    command: hbbs
+    network_mode: "host"
+    restart: unless-stopped
+
+  wandb:
+    image: wandb/local
+    restart: always
+    ports:
+      - 8081:8080
+    environment:
+      - WANDB_BASE_URL="http://localhost:8080"
+
+  portainer:
+    image: portainer/portainer-ce:alpine
+    ports:
+      - 9000:9000
+    volumes:
+      - portainer_data:/data
+
+  frp:
+    image: snowdreamtech/frps:0.51.3
+    network_mode: "host"
+    restart: always
+
+  nginx:
+    build: ./nginx/build
+    image: reverseproxy
+    ports:
+        - "80:80"
+        - "443:443"
+        - "33322:22"
+        - "8080:8080"
+    restart: always
+
+  flare:
+    image: soulteary/flare
+    ports:
+      - "5005:5005"
+
+  xray-usca5-bwh-sla-1tb:
+    image: teddysun/xray:latest
+    restart: unless-stopped
+    environment:
+      TZ: Asia/Shanghai
+    networks:
+      - grafana_monitor
+    ports:
+      - 59880:1089
+      - 59889:8889
+    volumes: 
+      - ./xray/usca5-bwh-sla-1tb/config:/etc/xray
+      - ./xray/usca5-bwh-sla-1tb/log:/var/log/xray
+    expose:
+      - 10085
+
+  xray-usca5-bwh-sla-1tb-exporter:
+    image: wi1dcard/v2ray-exporter:master
+    environment:
+      TZ: Asia/Shanghai
+    networks:
+      - grafana_monitor
+    restart: unless-stopped
+    command: 'v2ray-exporter --v2ray-endpoint "xray-usca5-bwh-sla-1tb:10085" --listen ":9550"'
+    expose:
+      - 9550
+
+  xray-miyaip-jp-01_relay_jpty1-bwh-2tb:
+    image: teddysun/xray:latest
+    restart: unless-stopped
+    environment:
+      TZ: Asia/Shanghai
+    networks:
+      - grafana_monitor
+    ports:
+      - 52089:1089
+      - 52889:8889
+    volumes: 
+      - ./xray/miyaip-jp-01_relay_jpty1-bwh-2tb/config:/etc/xray
+      - ./xray/miyaip-jp-01_relay_jpty1-bwh-2tb/log:/var/log/xray
+    expose:
+      - 10085
+
+  xray-miyaip-jp-01_relay_jpty1-bwh-2tb-exporter:
+    image: wi1dcard/v2ray-exporter:master
+    environment:
+      TZ: Asia/Shanghai
+    networks:
+      - grafana_monitor
+    restart: unless-stopped
+    command: 'v2ray-exporter --v2ray-endpoint "xray-miyaip-jp-01_relay_jpty1-bwh-2tb:10085" --listen ":9550"'
+    expose:
+      - 9550
+
+  grafana:
+    image: grafana/grafana:13.0.1-security-01
+    restart: unless-stopped
+    networks:
+      - grafana_monitor
+    ports:
+      - "10080:3000"
+
+  grafana-renderer:
+    image: grafana/grafana-image-renderer:latest
+    networks:
+      - grafana_monitor
+    ports:
+      - 8081
+
+  csr-port-forms:
+    image: busybox
+    ports:
+      - "127.0.0.1:6100:80"
+      - '6200:53/udp'
+      - 6300-6302:7300-7302
+      - "[::1]:6400:80"
+      - "6500"
+      - "127.0.0.1::6550"
+      - target: 80
+        published: 6600
+        protocol: tcp
+      - published: "6700"
+        target: 81
+      - 6800:80 # trailing comment
+
+  nextcloud-nginx:
+    image: nginx:alpine
+    restart: always
+    networks:
+      - nextcloud
+    ports:
+      - 8008:80
