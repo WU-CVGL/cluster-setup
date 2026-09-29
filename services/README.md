@@ -630,6 +630,8 @@ https://github.com/nginx/nginx
 
 https://github.com/determined-ai/determined
 
+https://github.com/WU-CVGL/determined (our fork, which this cluster runs)
+
 https://github.com/nextcloud/server
 
 https://github.com/goharbor/harbor

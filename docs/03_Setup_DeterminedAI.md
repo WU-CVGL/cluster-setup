@@ -16,6 +16,9 @@
     - [Upload code and data to the server](#upload-code-and-data-to-the-server)
     - [Configure your virtual environment](#configure-your-virtual-environment)
   - [Maintainance](#maintainance)
+    - [Upgrade Determined](#upgrade-determined)
+
+The cluster runs our fork of Determined, [WU-CVGL/determined](https://github.com/WU-CVGL/determined) (currently `0.40.1`): the `det` CLI, the master image `ghcr.io/wu-cvgl/determined-master` and the agent image `ghcr.io/wu-cvgl/determined-agent` all come from its releases. The upstream documentation linked below still describes the concepts and the configuration.
 
 ## Deploy a Determined AI Single-Node Cluster
 
@@ -90,9 +93,13 @@ You can first check the availability of the NFS service on the client using the 
 
 ### Installation
 
+Install the CLI of our fork, in the version of the master (`0.40.1`); see [Install Determined AI Systemwide](./01_First-time_Setup_of_Cluster_Nodes.md#install-determined-ai-systemwide) for the nodes:
+
 ```bash
-pip install -U determined
+pip install -U "https://github.com/WU-CVGL/determined/releases/download/0.40.1/determined-0.40.1-py3-none-any.whl"
 ```
+
+Not `pip install determined`: that is the upstream package.
 
 ### Launch master & agents
 
@@ -155,5 +162,16 @@ Then, `cd` to `/run/determined/workdir/xxx/` inside the container and run your c
 ## Maintainance
 
 See [Maintainance: Upgrade APT packages & `Determined AI`](./01_First-time_Setup_of_Cluster_Nodes.md#maintainance-upgrade-apt-packages--determined-ai).
+
+### Upgrade Determined
+
+Upgrade to a [release of our fork](https://github.com/WU-CVGL/determined/releases), following its [installation and deployment guide](https://github.com/WU-CVGL/determined/blob/main/docs/maintenance/distribution.md). Keep the CLI, the master and all agents on the same version. In short:
+
+1. Disable the agents: `det agent disable --all --drain` lets the running tasks finish first, plain `det agent disable --all` stops them now (announce either). Once nothing runs, back up the PostgreSQL database.
+2. On the master node, install the new CLI (see [Installation](#installation)) and start the new master: `det deploy local master-down`, then the `master-up` command of the [notes](../services/determined/README.md) with the new `--det-version`. Check that the database migration finished and that you can log in.
+3. On every agent node, install the new CLI and restart the agent with the `agent-down`/`agent-up` commands of the [notes](../services/determined/README.md) and the new `--det-version`; enable the agents again (`det agent enable --all`).
+4. Check tasks, metrics and checkpoints.
+
+Rollback: stop the agents and the master, restore the database backup, and start the previous version again. Switching back to the old images alone does not undo the database migration.
 
 Warning: Do not upgrade when the cluster is in use! Upgrading packages especially those related to the kernel, DKMS, GPU drivers and containers will kill running tasks.

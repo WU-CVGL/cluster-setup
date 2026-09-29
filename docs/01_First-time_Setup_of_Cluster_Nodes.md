@@ -603,10 +603,16 @@ it shows that the proxy service is working.
 
 ## Install Determined AI Systemwide
 
+The cluster runs our fork, [WU-CVGL/determined](https://github.com/WU-CVGL/determined), currently version `0.40.1`. Install the `det` CLI from the fork's release wheel, with the same version as the master (the WebUI shows it, or `det master info`):
+
 ```sh
+DET_VERSION=0.40.1
 sudo pip install -U pip
-sudo pip install -U determined
+sudo pip install -U "https://github.com/WU-CVGL/determined/releases/download/$DET_VERSION/determined-$DET_VERSION-py3-none-any.whl"
+det --version     # must show 0.40.1
 ```
+
+Do not `pip install determined` from PyPI: that is the upstream package, and its `det deploy local` starts the upstream images. If the node cannot reach GitHub directly, add `--proxy http://192.168.233.8:59889` (the proxy of the Docker section above) to the `pip install` of the wheel. Details: the fork's [installation and deployment guide](https://github.com/WU-CVGL/determined/blob/main/docs/maintenance/distribution.md).
 
 ### Pypi cryptography & pyOpenSSL dependency conflict
 
@@ -700,16 +706,15 @@ Warning: Do not upgrade when the cluster is in use! Upgrading packages especiall
 ```sh
 sudo apt update
 sudo apt upgrade -y
-
-sudo pip install -U pip
-sudo pip install -U determined
 ```
+
+Upgrade Determined (CLI, master and agents together, to a release of our fork) only as described in [Upgrade Determined](./03_Setup_DeterminedAI.md#upgrade-determined).
 
 # Common References
 
 ## Cluster Management System
 
-- [Determined AI](https://docs.determined.ai/latest/)
+- [Determined AI, WU-CVGL fork](https://github.com/WU-CVGL/determined) (upstream documentation: https://docs.determined.ai/latest/)
 - [Microsoft OpenPAI](https://github.com/microsoft/pai)
 - [Kubeflow](https://github.com/kubeflow/kubeflow)
 - [HAI Platform](https://github.com/HFAiLab/hai-platform)

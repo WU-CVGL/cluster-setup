@@ -1,17 +1,19 @@
 # Determined Configuration Files
 
+The cluster runs our fork, [WU-CVGL/determined](https://github.com/WU-CVGL/determined), currently version `0.40.1`, with its images `ghcr.io/wu-cvgl/determined-master` and `ghcr.io/wu-cvgl/determined-agent`. Install the fork's `det` CLI first (see [docs/01](../../docs/01_First-time_Setup_of_Cluster_Nodes.md#install-determined-ai-systemwide)). Without `--image-repo-prefix ghcr.io/wu-cvgl`, `det deploy local` starts the upstream `determinedai/` images; `--det-version` defaults to the CLI's version. Keep the CLI, the master and all agents on the same version.
+
 - [Configuration file](../system-configurations/etc/determined/master.yaml) location: /etc/determined/master.yaml
 
 ## Master-up command
 
 ```bash
-det deploy local master-up --master-config-path /etc/determined/master.yaml
+det deploy local master-up --image-repo-prefix ghcr.io/wu-cvgl --det-version 0.40.1 --master-config-path /etc/determined/master.yaml
 ```
 
 ## Agent-up command
 
 ```bash
-det deploy local agent-up $DET_MASTER --agent-resource-pool=<pool>
+det deploy local agent-up $DET_MASTER --image-repo-prefix ghcr.io/wu-cvgl --det-version 0.40.1 --agent-resource-pool=<pool>
 ```
 
 `<pool>` must be one of the resource pools defined in `master.yaml`:

@@ -239,7 +239,7 @@ Prerequisites on the machine that runs it (the supplementary services VM or an a
 - `pip install -r scripts/requirements.txt`
 - `scripts/my_secrets.py` (gitignored, never commit it) defining `TRUENAS_USERNAME`, `TRUENAS_PASSWORD`, `SUDO_PASSWORD` (cvgladmin's sudo password), `DET_PASSWORD` (Determined `admin`) and `HARBOR_PASSWORD` (Harbor `admin`).
 - SSH key login to the login node as the host alias `login` (user `cvgladmin`) and to the eight GPU nodes as `S1` ... `S8`, defined in your `~/.ssh/config`. If the key has a passphrase, export it as `SSH_PASSPHRASE`.
-- On the login node: `openssl` (for `openssl passwd -6`), `mountpoint` (util-linux) and the `det` CLI with `DET_MASTER` set (see [Post-installation configurations](#post-installation-configurations)).
+- On the login node: `openssl` (for `openssl passwd -6`), `mountpoint` (util-linux) and the `det` CLI of our fork (see [Install Determined AI Systemwide](01_First-time_Setup_of_Cluster_Nodes.md#install-determined-ai-systemwide)) with `DET_MASTER` set (see [Post-installation configurations](#post-installation-configurations)).
 - Access to the TrueNAS API (`http://10.0.1.70`) and the Harbor API (`http://10.0.1.68:50000`).
 
 Put the new users into a CSV file and run the script:
