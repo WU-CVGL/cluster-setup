@@ -37,6 +37,10 @@ secret provisioning mechanism; do not paste credentials into YAML or shell
 history. The directory is Git-ignored. Prometheus mounts it read-only at
 `/run/determined-metrics`; watchdog mounts the same directory read/write.
 
+Host paths in `docker-compose.yml` come from `services/.env` (see
+[`../.env.example`](../.env.example)): `DET_METRICS_SECRETS_DIR` for this directory
+(default `./prometheus/secrets`) and the required `PROMETHEUS_TSDB_DIR` for the TSDB.
+
 Rebuild/recreate **only watchdog and Prometheus** when applying the new mounts.
 The updated watchdog validates login success, writes the token atomically, and
 does not rewrite Prometheus YAML or restart Prometheus during later refreshes.
@@ -45,8 +49,10 @@ old inode after atomic replacement. `DETERMINED_METRICS_TOKEN_FILE` overrides th
 watchdog path if you also update the Prometheus credential path/mounts.
 
 Provision the initial token before starting Prometheus, or expect the Determined
-target to be down until the watchdog successfully writes it. Token renewal still
-uses the deployment's existing watchdog schedule. Monitor target authentication
+target to be down until the watchdog successfully writes it. The watchdog renews
+the token at start and hourly when it is missing, undecodable, within 48 hours of
+expiry, or rejected by Determined (see
+[its README](../determined-watchdog/README.md#determined-token-shared-with-prometheus)). Monitor target authentication
 failures; this change does not create a new independent credential-renewal service.
 
 ## Task dashboard and permissions

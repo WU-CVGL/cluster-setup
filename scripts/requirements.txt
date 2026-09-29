@@ -1,3 +1,6 @@
 fabric>3
+# pyopenssl is not imported by create_user.py. It is listed so that pip upgrades
+# an old (e.g. distro) pyOpenSSL, which otherwise breaks requests/urllib3 when
+# fabric/paramiko pull in a newer cryptography. Keep it.
 pyopenssl>24
 requests

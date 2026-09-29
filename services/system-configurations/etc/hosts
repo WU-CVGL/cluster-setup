@@ -18,7 +18,6 @@
 192.168.233.8 wandb.cvgl.lab
 192.168.233.8 pan.cvgl.lab
 192.168.233.8 gpu.cvgl.lab
-192.168.233.8 git.cvgl.lab
 192.168.233.8 frp.cvgl.lab
 192.168.233.8 portainer.cvgl.lab
 192.168.233.8 grafana.cvgl.lab
@@ -31,7 +30,6 @@
 #10.0.1.68 wandb.cvgl.lab
 #10.0.1.68 pan.cvgl.lab
 #10.0.1.68 gpu.cvgl.lab
-#10.0.1.68 git.cvgl.lab
 #10.0.1.68 frp.cvgl.lab
 #10.0.1.68 portainer.cvgl.lab
 #10.0.1.68 grafana.cvgl.lab

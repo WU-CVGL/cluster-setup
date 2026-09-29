@@ -1,0 +1,10 @@
+# Example input for create_user.py. Copy it to new_users.csv (gitignored),
+# replace the commented sample rows below the header with one uncommented row
+# per new user, then run:
+#   python3 create_user.py --users new_users.csv
+# Lines starting with '#' and blank lines are ignored.
+# password: 8-128 characters with an uppercase letter, a lowercase letter and a
+# number; quote a field that contains a comma or a double quote ("" = literal ").
+username,full_name,password
+# alice,Alice Example,Placeholder-Passw0rd
+# bob_2,"Example, Bob",Another-Placeholder9

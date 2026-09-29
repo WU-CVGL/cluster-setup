@@ -1,2 +1,4 @@
 __pycache__/
 my_secrets.py
+new_users*.csv
+!new_users.example.csv

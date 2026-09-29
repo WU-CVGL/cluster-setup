@@ -6,9 +6,6 @@
   - [Contents](#contents)
   - [Introduction](#introduction)
   - [Proxy as a service](#proxy-as-a-service)
-  - [Configure proxy service on the login node](#configure-proxy-service-on-the-login-node)
-      - [Proxychains](#proxychains)
-      - [Environment variable](#environment-variable)
   - [SSL, HTTPS and reverse proxy](#ssl-https-and-reverse-proxy)
     - [Background knowledge](#background-knowledge)
     - [Create an SSL certificate](#create-an-ssl-certificate)
@@ -57,111 +54,7 @@ System Topology:
 
 ## Proxy as a service
 
-In the [previous section](./01_First-time_Setup_of_Cluster_Nodes.md#setup-a-temporary-proxy-service), we used a temporary proxy service. In this section, we will set up a production-ready proxy service via docker-compose, along with a monitoring endpoint for a Grafana dashboard.
-
-Here is an example, whose full version can be found in [all-in-one configuration](#all-in-one):
-
-```yaml
-version: '3'
-
-networks:
-  grafana_monitor:
-    driver: bridge
-
-services:
-  xray-jp-central:
-    image: teddysun/xray
-    restart: unless-stopped
-    networks:
-      - grafana_monitor
-    environment:
-      TZ: Asia/Shanghai
-    ports:
-      - 10089:1089
-      - 18889:8889
-    volumes: 
-      - ./xray/jp-central/config:/etc/xray
-      - ./xray/jp-central/log:/var/log/xray
-    expose:
-      - 10085
-
-  xray-jp-central-exporter:
-    image: wi1dcard/v2ray-exporter:master
-    networks:
-      - grafana_monitor
-    environment:
-      TZ: Asia/Shanghai
-    restart: unless-stopped
-    command: 'v2ray-exporter --v2ray-endpoint "xray-jp-central:10085" --listen ":9550"'
-    expose:
-      - 9550
-```
-
-## Configure proxy service on the login node
-
-#### Proxychains
-
-[Proxychains](https://github.com/rofl0r/proxychains-ng) is a useful CLI tool that hooks network-related libc functions
-in DYNAMICALLY LINKED programs via a preloaded DLL (dlsym(), LD_PRELOAD) and redirects the connections through SOCKS4a/5 or HTTP proxies.
-
-1. Installation
-
-    ```bash
-    sudo apt install proxychains4
-    ```
-
-2. Configuration
-
-    Edit `/etc/proxychains4.conf`, change the last line into
-
-    ```text
-    socks5 10.0.1.68 10089
-    ```
-
-3. Check the configuration
-
-    ```text
-    cvgladmin@cvgl-loginnode:~$ proxychains curl google.com
-    [proxychains] config file found: /etc/proxychains4.conf
-    [proxychains] preloading /usr/lib/x86_64-linux-gnu/libproxychains.so.4
-    [proxychains] DLL init: proxychains-ng 4.14
-    [proxychains] Strict chain  ...  10.0.1.68:10089  ...  google.com:80  ...  OK
-    <HTML><HEAD><meta http-equiv="content-type" content="text/html;charset=utf-8">
-    <TITLE>301 Moved</TITLE></HEAD><BODY>
-    <H1>301 Moved</H1>
-    The document has moved
-    <A HREF="http://www.google.com/">here</A>.
-    </BODY></HTML>
-    ```
-
-    It shows that the configuration is successful.
-
-#### Environment variable
-
-Export these environment variables before program execution.
-
-This is useful when some programs that do not use `libc` cannot be hooked by `proxychains`,
-such as many programs written in `python` or `golang`.
-
-```bash
-export http_proxy=http://10.0.1.68:18889 &&\
-export https_proxy=http://10.0.1.68:18889 &&\
-export HTTP_PROXY=http://10.0.1.68:18889 &&\
-export HTTPS_PROXY=http://10.0.1.68:18889
-curl google.com
-```
-
-Outputs:
-
-```text
-<HTML><HEAD><meta http-equiv="content-type" content="text/html;charset=utf-8">
-<TITLE>301 Moved</TITLE></HEAD><BODY>
-<H1>301 Moved</H1>
-The document has moved
-<A HREF="http://www.google.com/">here</A>.
-</BODY></HTML>
-```
-
+The HTTP/SOCKS5 proxies of the cluster run on this VM as the `xray-*` services of the [all-in-one configuration](#all-in-one), each with an exporter for the Grafana v2ray dashboard. [Chapter 00](00_Network_Proxy.md) describes them, the default proxy (`xray-usca5-bwh-sla-1tb`, HTTP `59889`, SOCKS5 `59880`), how to add one with [`create_xray_service.py`](../services/xray/scripts/README.md), and how the login node and the other machines use them (Docker daemon, environment variables, proxychains, pip, git).
 
 ## SSL, HTTPS and reverse proxy
 
@@ -243,8 +136,6 @@ The certificates will be stored in `/etc/ssl/private`.
 You can add a temporary `docker-compose.yaml` in the `nginx` folder to test the configurations:
 
 ```yaml
-version: '3'
-
 services:
   reverseproxy:
     build: ./build
@@ -288,7 +179,7 @@ Open the URLs in your browser:
 Note: You can copy the `CA.cer` to NGINX data for occasional downloads:
 
 ```bash
-sudo cp /etc/ssl/private/CA.cer CVGL-Services/nginx/data/html/cvgl.crt
+sudo cp /etc/ssl/private/CA.cer services/nginx/data/html/cvgl.crt   # in the repository root
 ```
 
 This will be useful in the [following section](#harbor).
@@ -310,7 +201,7 @@ In this section, we will discuss how to install and configure Harbor in our clus
 This is a typical Harbor installation showcase:
 
 - First download Harbor's [installer](https://github.com/goharbor/harbor/releases)
-- Edit `harbor.yaml`, update `hostname`, `http.port`, `external_url`, `data_volume`, `log.location`
+- Edit `harbor.yml`, update `hostname`, `http.port`, `external_url`, `data_volume`, `log.location`
 - Run `sudo install.sh`
 - Run `docker compose down`
 - Edit `docker-compose.yml`, update PostgreSQL database volume path
@@ -340,21 +231,20 @@ Create NFS share for database:
 Set up both NFSv4 and v3 compatablity:
 ![Set up both NFSv4 and v3 compatablity](./images/04_Harbor_nfsv4.png)
 
-Example of `/etc/fstab`:
+Example of `/etc/fstab` (the current entries are in the [reference fstab](../services/system-configurations/etc/fstab)):
 
 ```text
-nas.cvgl.lab:/mnt/HDD/SupplementaryServices/harbor/data       /srv/nfs/var/harbor/data        nfs vers=4,rw,hard,intr,rsize=8192,wsize=8192,timeo=14,_netdev 0 2
-
-nas.cvgl.lab:/mnt/HDD/SupplementaryServices/harbor/database   /srv/nfs/var/harbor/database    nfs vers=3,rw,hard,intr,rsize=8192,wsize=8192,timeo=14,_netdev 0 2
+nas.cvgl.lab:/mnt/Peter/SupplementaryServices/harbor/data       /srv/nfs/var/harbor/data        nfs vers=3,defaults,async,noatime,hard,rsize=1048576,wsize=1048576,_netdev 0 2
+nas.cvgl.lab:/mnt/Peter/SupplementaryServices/harbor/database   /srv/nfs/var/harbor/database    nfs vers=3,defaults,async,noatime,hard,rsize=1048576,wsize=1048576,_netdev 0 2
 ```
 
 #### Provided configuration and patch
 
-You can use the provided [`harbor.yml`](../services/harbor/harbor.yml) to install [Harbor](https://github.com/goharbor/harbor/releases/tag/v2.8.3) and switch to NFS by replacing `/srv/nfs/var/harbor/data/database` to `/srv/nfs/var/harbor/database` :
+You can use the provided [`harbor.yml`](../services/harbor/harbor.yml) to install [Harbor](https://github.com/goharbor/harbor/releases/tag/v2.15.2) and switch to NFS by replacing `/srv/nfs/var/harbor/data/database` to `/srv/nfs/var/harbor/database` :
 
 ```bash
 cd <project_root>/services/harbor
-tar -xvzf /path/to/harbor-offline-installer-v2.8.3.tgz    # tested version
+tar -xvzf /path/to/harbor-offline-installer-v2.15.2.tgz    # current version (harbor.yml has _version: 2.15.0)
 mv harbor installer && cd installer
 cp ../harbor.yml .
 sudo bash ./install.sh
@@ -370,16 +260,16 @@ hostname: harbor.cvgl.lab
 external_url: https://harbor.cvgl.lab
 database.password: <secrect>
 data_volume: /srv/nfs/var/harbor/data
-log.location: /srv/nfs/var/harbor/log
+log.location: /srv/nfs/var/harbor/data/log
 ```
 
 ### Post-installation
 
-1) Configure HOSTS on each node. Make sure these lines exist:
+1) Configure HOSTS on each node. Make sure these lines exist (as in the [reference hosts file](../services/system-configurations/etc/hosts)):
 
     ```text
-    10.0.1.68 cvgl.lab
-    10.0.1.68 harbor.cvgl.lab
+    192.168.233.8 cvgl.lab
+    192.168.233.8 harbor.cvgl.lab
     ```
 
 2) Trust the CA certificate on each node:
@@ -390,19 +280,19 @@ log.location: /srv/nfs/var/harbor/log
     sudo wget https://cvgl.lab/cvgl.crt --no-check-certificate
     ```
 
-3) Update the NGINX upstream
+3) Update the NGINX upstream (in [`nginx.conf`](../services/nginx/build/nginx.conf))
 
     ```nginx
     upstream harbor {
-        server 10.0.1.68:50000;
+        server 192.168.233.8:50000;
     }
     ```
 
-4) Rebuild and restart NGINX
+4) Rebuild and restart NGINX (in the `services` folder of the all-in-one configuration, where the service is called `nginx`)
 
     ```bash
-    docker compose build reverseproxy
-    docker compose up -d --force-recreate --no-deps reverseproxy
+    docker compose build nginx
+    docker compose up -d --force-recreate --no-deps nginx
     ```
 
 5) Log in with the URL `https://harbor.cvgl.lab`. Change the default password.
@@ -429,7 +319,7 @@ e07ee1baac5f: Pushed
 latest: digest: sha256:f54a58bc1aac5ea1a25d796ae155dc228b3f0e11d046ae276b39c4bf2f13d8c4 size: 525
 ```
 
-Note: to restart the Harbor services, go to the installation folder and use `docker-compose` commands:
+Note: to restart the Harbor services, go to the installation folder and use `docker compose` commands:
 
 ```bash
 sudo docker compose up -d --force-recreate --remove-orphans

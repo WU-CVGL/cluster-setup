@@ -1,0 +1,118 @@
+{
+    "log": {
+        "loglevel": "warning"
+    },
+    "dns": {
+        "servers": [
+            "1.1.1.1",
+            "8.8.8.8",
+            "8.8.4.4"
+        ]
+    },
+    "inbounds": [
+        {
+            "listen": "0.0.0.0",
+            "port": 8889,
+            "protocol": "http",
+            "settings": {
+                "allowTransparent": true,
+                "timeout": 300
+            },
+            "sniffing": {},
+            "tag": "http_IN"
+        },
+        {
+            "listen": "0.0.0.0",
+            "port": 1089,
+            "protocol": "socks",
+            "settings": {
+                "auth": "noauth",
+                "ip": "0.0.0.0",
+                "udp": true
+            },
+            "sniffing": {},
+            "tag": "socks_IN"
+        }
+    ],
+    "outbounds": [
+        {
+            "protocol": "vless",
+            "sendThrough": "0.0.0.0",
+            "settings": {
+                "vnext": [
+                    {
+                        "address": "reality.example.com",
+                        "port": 443,
+                        "users": [
+                            {
+                                "id": "00000000-0000-4000-8000-000000000001",
+                                "encryption": "none",
+                                "flow": "xtls-rprx-vision"
+                            }
+                        ]
+                    }
+                ]
+            },
+            "streamSettings": {
+                "network": "tcp",
+                "security": "reality",
+                "realitySettings": {
+                    "serverName": "www.example.org",
+                    "fingerprint": "chrome",
+                    "publicKey": "AAECAwQFBgcICQoLDA0ODxAREhMUFRYXGBkaGxwdHh8",
+                    "shortId": "6ba85179e30d4fc2",
+                    "spiderX": "/"
+                }
+            },
+            "tag": "SG-Reality"
+        },
+        {
+            "protocol": "freedom",
+            "sendThrough": "0.0.0.0",
+            "settings": {
+                "domainStrategy": "AsIs",
+                "redirect": ":0"
+            },
+            "streamSettings": {},
+            "tag": "DIRECT"
+        },
+        {
+            "protocol": "blackhole",
+            "sendThrough": "0.0.0.0",
+            "settings": {
+                "response": {
+                    "type": "none"
+                }
+            },
+            "streamSettings": {},
+            "tag": "BLACKHOLE"
+        }
+    ],
+    "routing": {
+        "domainStrategy": "AsIs",
+        "domainMatcher": "mph",
+        "rules": [
+            {
+                "ip": [
+                    "geoip:private"
+                ],
+                "outboundTag": "DIRECT",
+                "type": "field"
+            },
+            {
+                "ip": [
+                    "geoip:cn"
+                ],
+                "outboundTag": "DIRECT",
+                "type": "field"
+            },
+            {
+                "domain": [
+                    "geosite:cn"
+                ],
+                "outboundTag": "DIRECT",
+                "type": "field"
+            }
+        ]
+    }
+}

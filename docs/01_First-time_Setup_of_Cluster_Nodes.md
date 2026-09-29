@@ -38,9 +38,6 @@
   - [Install Docker-CE](#install-docker-ce)
   - [Install Nvidia-docker](#install-nvidia-docker)
   - [Configure a Proxy for Docker](#configure-a-proxy-for-docker)
-    - [(Deprecated) Setup a temporary proxy service](#deprecated-setup-a-temporary-proxy-service)
-    - [Verify the proxy service](#verify-the-proxy-service)
-    - [Configure `Docker` to use the proxy](#configure-docker-to-use-the-proxy)
   - [Install Determined AI Systemwide](#install-determined-ai-systemwide)
     - [Pypi cryptography \& pyOpenSSL dependency conflict](#pypi-cryptography--pyopenssl-dependency-conflict)
     - [Disable i386](#disable-i386)
@@ -153,10 +150,10 @@ Set up reservations for critical workloads:
 
  Post-installation:
 
- Add the IP of the core service VM to the login node's `/etc/environment`:
+ Add the IP of the core service VM to the login node's `/etc/environment` (as in the [reference file](../services/system-configurations/etc/environment)):
 
  ```bash
- DET_MASTER="10.0.1.66"
+ DET_MASTER="192.168.233.6"
  ```
 
 ## Configure TrueNAS
@@ -522,89 +519,25 @@ sudo apt-get install -y nvidia-docker2
 sudo systemctl restart docker
 ```
 
-> Note: `proxychains -q` is added before curl since *github.io* often gets blocked
+> Note: `proxychains -q` sends curl through the cluster proxy, since *github.io* is often blocked; set up proxychains first as in [chapter 00](00_Network_Proxy.md#proxychains).
 
 
 ## Configure a Proxy for Docker
 
-### (Deprecated) Setup a temporary proxy service
-
-The open-source project `Project X` originates from XTLS protocol, and provides a set of network tools such as `Xray-core`, supporting the most popular protocols/configurations: `shadowsocks`(deprecated), `vmess`, `vless` and `trojan`. In this section, we will use it to provide an example of how to set up a temporary proxy service.
-
-1) Download and extract the latest release of `Xray-core` [from here](https://github.com/XTLS/Xray-core/releases). (Note that you should choose `Xray-linux-64.zip`)
-
-2) Create a client configuration file `config.json`. An off-the-shelf configuration is available at [here (TBA)](../services/xray/jp-central/config/config.json), which will open SOCKS5 proxy on port `1089` and HTTP proxy on port `8889`. More examples can be found at [XTLS/Xray-examples](https://github.com/XTLS/Xray-examples)
-
-3) Execute `./xray -config ./config.json`.
-
-> Note: Just use the proxy service on the supplementary node (http://10.0.1.68:8889)
-
-### Verify the proxy service
-
-First, launch an HTTP proxy on the node (or in the LAN).
-
-For example, **suppose** you have such a proxy service http://10.0.1.68:8889.
-
-To verify it:
-
-```bash
-export https_proxy=http://10.0.1.68:8889
-curl https://google.com.hk
-```
-
-if there are output lines with an HTTP response like:
-
-```html
-<HTML><HEAD><meta http-equiv="content-type" content="text/html;charset=utf-8">
-<TITLE>301 Moved</TITLE></HEAD><BODY>
-<H1>301 Moved</H1>
-The document has moved
-<A HREF="https://www.google.com.hk/">here</A>.
-</BODY></HTML>
-```
-
-it shows that the proxy service is working.
-
-### Configure `Docker` to use the proxy
-
-1) To proceed, recursively create the folder:
-
-    ```sh
-    sudo mkdir -p /etc/systemd/system/docker.service.d
-    ```
-
-2) Add environment variables to the configuration file `/etc/systemd/system/docker.service.d/proxy.conf`:
-
-    ```conf
-    [Service]
-    Environment="HTTP_PROXY=http://10.0.1.68:8889"
-    Environment="HTTPS_PROXY=http://10.0.1.68:8889"
-    Environment="NO_PROXY=localhost,127.0.0.1,nvcr.io,aliyuncs.com,edu.cn,cvgl.lab"
-    ```
-
-    You should change `10.0.1.68` and `8889` to the actual proxy address and port respectively.
-
-    Note that the `http` is intentionally used in `HTTPS_PROXY` - this is how most HTTP proxies work.
-
-3) Update configuration and restart `Docker`:
-
-    ```sh
-    systemctl daemon-reload
-    systemctl restart docker
-    ```
-
-4) Check the proxy:
-
-    ```sh
-    docker info
-    ```
+Docker pulls images from Docker Hub, which is blocked from the campus network, through the cluster proxy: configure the Docker daemon as in [chapter 00, Docker daemon](00_Network_Proxy.md#docker-daemon). During the first-time setup, before the supplementary services VM runs, use [a temporary proxy](00_Network_Proxy.md#bootstrap-a-temporary-proxy-on-one-machine) instead.
 
 ## Install Determined AI Systemwide
 
+The cluster runs our fork, [WU-CVGL/determined](https://github.com/WU-CVGL/determined), currently version `0.40.1`. Install the `det` CLI from the fork's release wheel, with the same version as the master (the WebUI shows it, or `det master info`):
+
 ```sh
+DET_VERSION=0.40.1
 sudo pip install -U pip
-sudo pip install -U determined
+sudo pip install -U "https://github.com/WU-CVGL/determined/releases/download/$DET_VERSION/determined-$DET_VERSION-py3-none-any.whl"
+det --version     # must show 0.40.1
 ```
+
+Do not `pip install determined` from PyPI: that is the upstream package, and its `det deploy local` starts the upstream images. If the node cannot reach GitHub directly, add `--proxy http://192.168.233.8:59889` (the cluster proxy, see [chapter 00](00_Network_Proxy.md#pip-and-git)) to the `pip install` of the wheel. Details: the fork's [installation and deployment guide](https://github.com/WU-CVGL/determined/blob/main/docs/maintenance/distribution.md).
 
 ### Pypi cryptography & pyOpenSSL dependency conflict
 
@@ -698,16 +631,15 @@ Warning: Do not upgrade when the cluster is in use! Upgrading packages especiall
 ```sh
 sudo apt update
 sudo apt upgrade -y
-
-sudo pip install -U pip
-sudo pip install -U determined
 ```
+
+Upgrade Determined (CLI, master and agents together, to a release of our fork) only as described in [Upgrade Determined](./03_Setup_DeterminedAI.md#upgrade-determined).
 
 # Common References
 
 ## Cluster Management System
 
-- [Determined AI](https://docs.determined.ai/latest/)
+- [Determined AI, WU-CVGL fork](https://github.com/WU-CVGL/determined) (upstream documentation: https://docs.determined.ai/latest/)
 - [Microsoft OpenPAI](https://github.com/microsoft/pai)
 - [Kubeflow](https://github.com/kubeflow/kubeflow)
 - [HAI Platform](https://github.com/HFAiLab/hai-platform)

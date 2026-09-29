@@ -4,6 +4,8 @@ This is a manual for system admin.
 
 ## Quick Guide
 
+[0. Network Proxy](docs/00_Network_Proxy.md)
+
 [1. First-time Setup of Cluster Nodes](docs/01_First-time_Setup_of_Cluster_Nodes.md)
 
 [2. User Management](docs/02_User_Management.md)
