@@ -1,5 +1,3 @@
-version: '3'
-
 networks:
   grafana_monitor:
     driver: bridge
@@ -59,18 +57,21 @@ services:
     volumes:
       - ./determined-watchdog/data:/app/data
       # Directory mount lets atomic token rotation become visible to Prometheus.
-      - ./prometheus/secrets:/run/determined-metrics
+      # Host dir: DET_METRICS_SECRETS_DIR from services/.env (default ./prometheus/secrets).
+      - ${DET_METRICS_SECRETS_DIR:-./prometheus/secrets}:/run/determined-metrics
     networks:
       - grafana_monitor
     env_file:
       - ./determined-watchdog/.env
 
   frp:
-    image: snowdreamtech/frps
+    image: snowdreamtech/frps:0.51.3
     network_mode: "host"
     restart: always
     volumes:
       - ./frp/frps.ini:/etc/frp/frps.ini
+    env_file:
+      - ./frp/.env
 
   nginx:
     build: ./nginx/build
@@ -231,8 +232,170 @@ services:
     expose:
       - 9550
 
+  xray-temp-bwh-2tb:
+    image: teddysun/xray:latest
+    restart: unless-stopped
+    environment:
+      TZ: Asia/Shanghai
+    networks:
+      - grafana_monitor
+    ports:
+      - 57089:1089
+      - 57889:8889
+    volumes: 
+      - ./xray/temp-bwh-2tb/config:/etc/xray
+      - ./xray/temp-bwh-2tb/log:/var/log/xray
+    expose:
+      - 10085
+
+  xray-temp-bwh-2tb-exporter:
+    image: wi1dcard/v2ray-exporter:master
+    environment:
+      TZ: Asia/Shanghai
+    networks:
+      - grafana_monitor
+    restart: unless-stopped
+    command: 'v2ray-exporter --v2ray-endpoint "xray-temp-bwh-2tb:10085" --listen ":9550"'
+    expose:
+      - 9550
+
+  xray-jpty1-bwh-2tb:
+    image: teddysun/xray:latest
+    restart: unless-stopped
+    environment:
+      TZ: Asia/Shanghai
+    networks:
+      - grafana_monitor
+    ports:
+      - 55089:1089
+      - 55889:8889
+    volumes: 
+      - ./xray/jpty1-bwh-2tb/config:/etc/xray
+      - ./xray/jpty1-bwh-2tb/log:/var/log/xray
+    expose:
+      - 10085
+
+  xray-jpty1-bwh-2tb-exporter:
+    image: wi1dcard/v2ray-exporter:master
+    environment:
+      TZ: Asia/Shanghai
+    networks:
+      - grafana_monitor
+    restart: unless-stopped
+    command: 'v2ray-exporter --v2ray-endpoint "xray-jpty1-bwh-2tb:10085" --listen ":9550"'
+    expose:
+      - 9550
+
+  xray-miyaip-uk-01_relay_jpty1-bwh-2tb:
+    image: teddysun/xray:latest
+    restart: unless-stopped
+    environment:
+      TZ: Asia/Shanghai
+    networks:
+      - grafana_monitor
+    ports:
+      - 54089:1089
+      - 54889:8889
+    volumes: 
+      - ./xray/miyaip-uk-01_relay_jpty1-bwh-2tb/config:/etc/xray
+      - ./xray/miyaip-uk-01_relay_jpty1-bwh-2tb/log:/var/log/xray
+    expose:
+      - 10085
+
+  xray-miyaip-uk-01_relay_jpty1-bwh-2tb-exporter:
+    image: wi1dcard/v2ray-exporter:master
+    environment:
+      TZ: Asia/Shanghai
+    networks:
+      - grafana_monitor
+    restart: unless-stopped
+    command: 'v2ray-exporter --v2ray-endpoint "xray-miyaip-uk-01_relay_jpty1-bwh-2tb:10085" --listen ":9550"'
+    expose:
+      - 9550
+
+  xray-miyaip-uk-01_relay_usca5-bwh-sla-2tb:
+    image: teddysun/xray:latest
+    restart: unless-stopped
+    environment:
+      TZ: Asia/Shanghai
+    networks:
+      - grafana_monitor
+    ports:
+      - 53089:1089
+      - 53889:8889
+    volumes: 
+      - ./xray/miyaip-uk-01_relay_usca5-bwh-sla-2tb/config:/etc/xray
+      - ./xray/miyaip-uk-01_relay_usca5-bwh-sla-2tb/log:/var/log/xray
+    expose:
+      - 10085
+
+  xray-miyaip-uk-01_relay_usca5-bwh-sla-2tb-exporter:
+    image: wi1dcard/v2ray-exporter:master
+    environment:
+      TZ: Asia/Shanghai
+    networks:
+      - grafana_monitor
+    restart: unless-stopped
+    command: 'v2ray-exporter --v2ray-endpoint "xray-miyaip-uk-01_relay_usca5-bwh-sla-2tb:10085" --listen ":9550"'
+    expose:
+      - 9550
+
+  xray-miyaip-jp-01_relay_usca5-bwh-sla-2tb:
+    image: teddysun/xray:latest
+    restart: unless-stopped
+    environment:
+      TZ: Asia/Shanghai
+    networks:
+      - grafana_monitor
+    ports:
+      - 51089:1089
+      - 51889:8889
+    volumes: 
+      - ./xray/miyaip-jp-01_relay_usca5-bwh-sla-2tb/config:/etc/xray
+      - ./xray/miyaip-jp-01_relay_usca5-bwh-sla-2tb/log:/var/log/xray
+    expose:
+      - 10085
+
+  xray-miyaip-jp-01_relay_usca5-bwh-sla-2tb-exporter:
+    image: wi1dcard/v2ray-exporter:master
+    environment:
+      TZ: Asia/Shanghai
+    networks:
+      - grafana_monitor
+    restart: unless-stopped
+    command: 'v2ray-exporter --v2ray-endpoint "xray-miyaip-jp-01_relay_usca5-bwh-sla-2tb:10085" --listen ":9550"'
+    expose:
+      - 9550
+
+  xray-miyaip-jp-01_relay_jpty1-bwh-2tb:
+    image: teddysun/xray:latest
+    restart: unless-stopped
+    environment:
+      TZ: Asia/Shanghai
+    networks:
+      - grafana_monitor
+    ports:
+      - 52089:1089
+      - 52889:8889
+    volumes: 
+      - ./xray/miyaip-jp-01_relay_jpty1-bwh-2tb/config:/etc/xray
+      - ./xray/miyaip-jp-01_relay_jpty1-bwh-2tb/log:/var/log/xray
+    expose:
+      - 10085
+
+  xray-miyaip-jp-01_relay_jpty1-bwh-2tb-exporter:
+    image: wi1dcard/v2ray-exporter:master
+    environment:
+      TZ: Asia/Shanghai
+    networks:
+      - grafana_monitor
+    restart: unless-stopped
+    command: 'v2ray-exporter --v2ray-endpoint "xray-miyaip-jp-01_relay_jpty1-bwh-2tb:10085" --listen ":9550"'
+    expose:
+      - 9550
+
   grafana:
-    image: grafana/grafana
+    image: grafana/grafana:13.0.1-security-01
     restart: unless-stopped
     user: "472:0"
     environment:
@@ -240,8 +403,8 @@ services:
       - TZ=Asia/Shanghai
       - GF_RENDERING_SERVER_URL=http://grafana-renderer:8081/render
       - GF_RENDERING_CALLBACK_URL=http://grafana:3000/
-      - GF_RENDERING_RENDERER_TOKEN=CVGLGRAFANARENDER
-      - GF_LOG_FILTERS=rendering:debug
+    env_file:
+      - ./grafana/.env
     volumes:
       - ./grafana/custom.ini:/etc/grafana/grafana.ini
       - ./grafana/data:/var/lib/grafana
@@ -253,15 +416,16 @@ services:
 
   grafana-renderer:
     image: grafana/grafana-image-renderer:latest
+    restart: unless-stopped
     networks:
       - grafana_monitor
-    ports:
+    expose:
       - 8081
-    environment:
-      - AUTH_TOKEN=CVGLGRAFANARENDER
+    env_file:
+      - ./grafana/.env
 
   prometheus:
-    image: prom/prometheus
+    image: prom/prometheus:v3.11.3
     user: "1000:1000"
     restart: unless-stopped
     networks:
@@ -269,9 +433,12 @@ services:
     environment:
       TZ: Asia/Shanghai
     volumes:
-      - /srv/nfs/var/prometheus:/prometheus
+      # TSDB host dir: PROMETHEUS_TSDB_DIR from services/.env. Required on purpose,
+      # no default: a missing value must stop compose, never start Prometheus on
+      # the old NFS copy (/srv/nfs/var/prometheus, kept only as a rollback copy).
+      - "${PROMETHEUS_TSDB_DIR:?set it in services/.env to the local TSDB directory (see services/.env.example), never to the NFS rollback copy}:/prometheus"
       - ./prometheus:/etc/prometheus:ro
-      - ./prometheus/secrets:/run/determined-metrics:ro
+      - ${DET_METRICS_SECRETS_DIR:-./prometheus/secrets}:/run/determined-metrics:ro
     command:
       - '--config.file=/etc/prometheus/prometheus.yml'
       - '--web.enable-admin-api'

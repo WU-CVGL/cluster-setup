@@ -61,8 +61,6 @@ scrape_configs:
     scrape_timeout: 5s
     static_configs:
       - targets:
-          - "cvglsuppvm.lan:9080"
-          - "cvglloginnode.lan:9080"
           - "cvgl-node01.lan:9080"
           - "cvgl-node02.lan:9080"
           - "cvgl-node03.lan:9080"
@@ -115,6 +113,12 @@ scrape_configs:
           - "xray-usca1-bwh-megaboxpro-2tb-exporter:9550"
           - "xray-usca5-bwh-sla-1tb-exporter:9550"
           - "xray-usca6-bwh-1tb-exporter:9550"
+          - "xray-temp-bwh-2tb-exporter:9550"
+          - "xray-jpty1-bwh-2tb-exporter:9550"
+          - "xray-miyaip-jp-01_relay_jpty1-bwh-2tb-exporter:9550"
+          - "xray-miyaip-jp-01_relay_usca5-bwh-sla-2tb-exporter:9550"
+          - "xray-miyaip-uk-01_relay_usca5-bwh-sla-2tb-exporter:9550"
+          - "xray-miyaip-uk-01_relay_jpty1-bwh-2tb-exporter:9550"
   - job_name: det-master
     relabel_configs:
       - target_label: det_cluster

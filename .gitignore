@@ -10,3 +10,13 @@
 services/prometheus/secrets/
 
 __pycache__/
+
+# Python tooling (virtualenvs, bytecode, test and type-checker caches)
+.venv/
+venv/
+*.py[cod]
+.pytest_cache/
+.mypy_cache/
+
+# Local Claude Code settings
+.claude/settings.local.json
