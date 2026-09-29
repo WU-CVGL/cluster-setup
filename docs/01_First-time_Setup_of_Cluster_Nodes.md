@@ -38,9 +38,6 @@
   - [Install Docker-CE](#install-docker-ce)
   - [Install Nvidia-docker](#install-nvidia-docker)
   - [Configure a Proxy for Docker](#configure-a-proxy-for-docker)
-    - [(Deprecated) Setup a temporary proxy service](#deprecated-setup-a-temporary-proxy-service)
-    - [Verify the proxy service](#verify-the-proxy-service)
-    - [Configure `Docker` to use the proxy](#configure-docker-to-use-the-proxy)
   - [Install Determined AI Systemwide](#install-determined-ai-systemwide)
     - [Pypi cryptography \& pyOpenSSL dependency conflict](#pypi-cryptography--pyopenssl-dependency-conflict)
     - [Disable i386](#disable-i386)
@@ -522,84 +519,12 @@ sudo apt-get install -y nvidia-docker2
 sudo systemctl restart docker
 ```
 
-> Note: `proxychains -q` is added before curl since *github.io* often gets blocked
+> Note: `proxychains -q` sends curl through the cluster proxy, since *github.io* is often blocked; set up proxychains first as in [chapter 00](00_Network_Proxy.md#proxychains).
 
 
 ## Configure a Proxy for Docker
 
-### (Deprecated) Setup a temporary proxy service
-
-The open-source project `Project X` originates from XTLS protocol, and provides a set of network tools such as `Xray-core`, supporting the most popular protocols/configurations: `shadowsocks`(deprecated), `vmess`, `vless` and `trojan`. In this section, we will use it to provide an example of how to set up a temporary proxy service.
-
-1) Download and extract the latest release of `Xray-core` [from here](https://github.com/XTLS/Xray-core/releases). (Note that you should choose `Xray-linux-64.zip`)
-
-2) Create a client configuration file `config.json`. It can be generated from a share link with `vless_to_config.py` (see the [Xray tools](../services/xray/README.md#tools)); its default output opens SOCKS5 proxy on port `1089` and HTTP proxy on port `8889`. The configurations of the running services are not in git. More examples can be found at [XTLS/Xray-examples](https://github.com/XTLS/Xray-examples)
-
-3) Execute `./xray -config ./config.json`.
-
-> Note: Just use the proxy service on the supplementary node (http://192.168.233.8:59889, the one in the [reference `proxy.conf`](../services/system-configurations/etc/systemd/system/docker.service.d/proxy.conf))
-
-### Verify the proxy service
-
-First, launch an HTTP proxy on the node (or in the LAN).
-
-For example, **suppose** you have such a proxy service http://192.168.233.8:59889.
-
-To verify it:
-
-```bash
-export https_proxy=http://192.168.233.8:59889
-curl https://google.com.hk
-```
-
-if there are output lines with an HTTP response like:
-
-```html
-<HTML><HEAD><meta http-equiv="content-type" content="text/html;charset=utf-8">
-<TITLE>301 Moved</TITLE></HEAD><BODY>
-<H1>301 Moved</H1>
-The document has moved
-<A HREF="https://www.google.com.hk/">here</A>.
-</BODY></HTML>
-```
-
-it shows that the proxy service is working.
-
-### Configure `Docker` to use the proxy
-
-1) To proceed, recursively create the folder:
-
-    ```sh
-    sudo mkdir -p /etc/systemd/system/docker.service.d
-    ```
-
-2) Add environment variables to the configuration file `/etc/systemd/system/docker.service.d/proxy.conf` (the [reference file](../services/system-configurations/etc/systemd/system/docker.service.d/proxy.conf) has the values used on the supplementary services VM):
-
-    ```conf
-    [Service]
-    Environment="HTTP_PROXY=http://192.168.233.8:59889"
-    Environment="HTTPS_PROXY=http://192.168.233.8:59889"
-    Environment="NO_PROXY=localhost,127.0.0.1,nvcr.io,aliyuncs.com,cvgl.lab,harbor.cvgl.lab,10.0.1.68,192.168.233.8"
-    ```
-
-    You should change `192.168.233.8` and `59889` to the actual proxy address and port respectively (host port `59889` is the HTTP inbound of the `xray-usca5-bwh-sla-1tb` service in `services/docker-compose.yml`).
-
-    Note that the `http` is intentionally used in `HTTPS_PROXY` - this is how most HTTP proxies work.
-
-3) Update configuration and restart `Docker`:
-
-    ```sh
-    sudo systemctl daemon-reload
-    sudo systemctl restart docker
-    ```
-
-    Restarting Docker stops the running containers (including Determined tasks), so drain the node first.
-
-4) Check the proxy:
-
-    ```sh
-    docker info
-    ```
+Docker pulls images from Docker Hub, which is blocked from the campus network, through the cluster proxy: configure the Docker daemon as in [chapter 00, Docker daemon](00_Network_Proxy.md#docker-daemon). During the first-time setup, before the supplementary services VM runs, use [a temporary proxy](00_Network_Proxy.md#bootstrap-a-temporary-proxy-on-one-machine) instead.
 
 ## Install Determined AI Systemwide
 
@@ -612,7 +537,7 @@ sudo pip install -U "https://github.com/WU-CVGL/determined/releases/download/$DE
 det --version     # must show 0.40.1
 ```
 
-Do not `pip install determined` from PyPI: that is the upstream package, and its `det deploy local` starts the upstream images. If the node cannot reach GitHub directly, add `--proxy http://192.168.233.8:59889` (the proxy of the Docker section above) to the `pip install` of the wheel. Details: the fork's [installation and deployment guide](https://github.com/WU-CVGL/determined/blob/main/docs/maintenance/distribution.md).
+Do not `pip install determined` from PyPI: that is the upstream package, and its `det deploy local` starts the upstream images. If the node cannot reach GitHub directly, add `--proxy http://192.168.233.8:59889` (the cluster proxy, see [chapter 00](00_Network_Proxy.md#pip-and-git)) to the `pip install` of the wheel. Details: the fork's [installation and deployment guide](https://github.com/WU-CVGL/determined/blob/main/docs/maintenance/distribution.md).
 
 ### Pypi cryptography & pyOpenSSL dependency conflict
 

@@ -94,7 +94,7 @@ P.S. The Harbor service is not in the all-in-one file, thus needs to be launched
 
 #### 3. Xray
 
-Check the [note to add the configuration files](xray/README.md) and the [scripts that create a new Xray service](xray/scripts/README.md).
+Check the [note to add the configuration files](xray/README.md) and the [scripts that create a new Xray service](xray/scripts/README.md). What the proxies are for and how the machines use them: [docs/00](../docs/00_Network_Proxy.md).
 
 #### 4. Grafana, Prometheus and Wandb
 
