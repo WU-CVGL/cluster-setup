@@ -11,7 +11,6 @@ task_container_defaults:
     - NVIDIA_DRIVER_CAPABILITIES=all
 
 ## Resource manager configuration. Defaults to using the agent resource manager.
-## Synced with the live master (0.40.1) on 2026-09-30.
 resource_manager:
   type: agent
   scheduler:
@@ -25,7 +24,7 @@ resource_manager:
 ## tasks; 10m instead of the default 2m30s, so that short node maintenance does not kill tasks.
 ## Dynamic pools are created at runtime with `det resource-pool create` and stored in the database
 ## (services/determined/resource-pools/). NEVER list a dynamic pool here: the master refuses to start
-## when a static pool has the name of a dynamic one. Current dynamic pools: 128c256t_1536_4090_48.
+## when a static pool has the name of a dynamic one.
 resource_pools:
   - pool_name: 32c64t_256_3090
     description: "2x AMD Epyc 7302 16c32t 3.0-3.3GHz CPU; 256GiB RAM; NVIDIA RTX 3090 24G GPU."

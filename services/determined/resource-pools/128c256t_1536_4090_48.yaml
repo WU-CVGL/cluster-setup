@@ -1,4 +1,4 @@
-# Dynamic resource pool (WU-CVGL/determined >= 0.40.1), created 2026-09-30 with
+# Dynamic resource pool (WU-CVGL/determined >= 0.40.1), created with
 #   det resource-pool create 128c256t_1536_4090_48.yaml --idempotency-key create-128c256t_1536_4090_48-20260930
 # (the same request as POST /api/v1/resource-pools/dynamic). It lives in the master's database:
 # never add it to master.yaml (the master refuses to start on a name collision). It cannot be
