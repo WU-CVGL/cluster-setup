@@ -17,6 +17,7 @@
     - [Configure your virtual environment](#configure-your-virtual-environment)
   - [Maintainance](#maintainance)
     - [Upgrade Determined](#upgrade-determined)
+    - [Add a resource pool](#add-a-resource-pool)
 
 The cluster runs our fork of Determined, [WU-CVGL/determined](https://github.com/WU-CVGL/determined) (currently `0.40.1`): the `det` CLI, the master image `ghcr.io/wu-cvgl/determined-master` and the agent image `ghcr.io/wu-cvgl/determined-agent` all come from its releases. The upstream documentation linked below still describes the concepts and the configuration.
 
@@ -173,5 +174,21 @@ Upgrade to a [release of our fork](https://github.com/WU-CVGL/determined/release
 4. Check tasks, metrics and checkpoints.
 
 Rollback: stop the agents and the master, restore the database backup, and start the previous version again. Switching back to the old images alone does not undo the database migration.
+
+### Add a resource pool
+
+Add pools at runtime as dynamic pools of our fork ([guide](https://github.com/WU-CVGL/determined/blob/main/docs/maintenance/dynamic-pools.md)); do not edit `master.yaml` for that. A dynamic pool cannot be renamed, updated or deleted, so choose its name and settings carefully, and never list it in `master.yaml` afterwards (the master would refuse to start).
+
+1. Write the pool as its own file in [`services/determined/resource-pools/`](../services/determined/resource-pools/) (the pool object itself, not a `resource_pools:` list). Use the settings of the other pools (`agent_reconnect_wait: 10m`, `max_aux_containers_per_agent: 100`, `agent_reattach_enabled: false`; see the [reference `master.yaml`](../services/system-configurations/etc/determined/master.yaml)). The scheduler and the task container defaults are copied from the master when the pool is created and do not follow later `master.yaml` changes.
+2. As an administrator, create it with a fixed idempotency key (safe to repeat with the same file and key), and check that it becomes `Ready`:
+
+    ```bash
+    det resource-pool create <pool>.yaml --idempotency-key create-<pool>-<date>
+    det resource-pool list-dynamic      # Pending -> Ready; Failed shows the error
+    ```
+
+    `--cluster-name` is not needed: the cluster has a single agent resource manager. If it ends `Failed`, fix the cause and run `det resource-pool retry <pool>` (it reuses the saved configuration, not the file).
+3. Start the agents of the pool with `--agent-resource-pool=<pool>` (see the [notes](../services/determined/README.md)). Creating a pool does not move agents; move a busy agent only after disabling it with `--drain` and waiting for its tasks.
+4. Check it with a small task: `det command run --config resources.resource_pool=<pool> --config resources.slots=1 nvidia-smi`.
 
 Warning: Do not upgrade when the cluster is in use! Upgrading packages especially those related to the kernel, DKMS, GPU drivers and containers will kill running tasks.
