@@ -14,25 +14,39 @@ task_container_defaults:
 resource_manager:
   type: agent
   scheduler:
-    type: fair_share
+    type: priority
     fitting_policy: best
-  default_cpu_resource_pool: 48c96t_512_3090
-  default_gpu_resource_pool: 32c64t_256_3090
+  default_compute_resource_pool: 48c96t_512_3090
+  default_aux_resource_pool: 128c256t_1536_4090
 
-## Resource pools configuration.
+## Resource pools configuration (static pools).
+## agent_reconnect_wait: how long the master waits for a disconnected agent before giving up its
+## tasks; 10m instead of the default 2m30s, so that short node maintenance does not kill tasks.
+## Dynamic pools are created at runtime with `det resource-pool create` and stored in the database
+## (services/determined/resource-pools/). NEVER list a dynamic pool here: the master refuses to start
+## when a static pool has the name of a dynamic one.
 resource_pools:
   - pool_name: 32c64t_256_3090
-    description: "2x AMD Epyc 7302 16c32t 3.0-3.3GHz CPU; 256GiB RAM; RTX 3090 24G GPU."
+    description: "2x AMD Epyc 7302 16c32t 3.0-3.3GHz CPU; 256GiB RAM; NVIDIA RTX 3090 24G GPU."
+    agent_reconnect_wait: 10m
   - pool_name: 48c96t_512_3090
-    description: "2x AMD Epyc 7402 24c48t 2.8-3.35GHz CPU; 512GiB RAM; RTX 3090 24G GPU."
+    description: "2x AMD Epyc 7402 24c48t 2.8-3.35GHz CPU; 512GiB RAM; NVIDIA RTX 3090 24G GPU."
+    agent_reconnect_wait: 10m
   - pool_name: 48c96t_512_4090
-    description: "2x AMD Epyc 7402 24c48t 2.8-3.35GHz CPU; 512GB RAM; RTX 4090 24G GPU."
+    description: "2x AMD Epyc 7402 24c48t 2.8-3.35GHz CPU; 512GB RAM; NVIDIA RTX 4090 24G GPU."
+    agent_reconnect_wait: 10m
   - pool_name: 64c128t_512_4090
-    description: "2x AMD Epyc 7543 32c64t 2.8-3.7GHz CPU; 512GB RAM; RTX 4090 24G GPU."
+    description: "2x AMD Epyc 7543 32c64t 2.8-3.7GHz CPU; 512GB RAM; NVIDIA RTX 4090 24G GPU."
+    agent_reconnect_wait: 10m
   - pool_name: 128c256t_1536_4090
-    description: "2x AMD Epyc 9554 64c128t 3.1-3.75GHz CPU; 1536GB RAM; RTX 4090 24G GPU."
+    description: "2x AMD Epyc 9554 64c128t 3.1-3.75GHz CPU; 1536GB RAM; NVIDIA RTX 4090 24G GPU."
+    agent_reconnect_wait: 10m
   - pool_name: 128c256t_1536_6000Ada
     description: "2x AMD Epyc 9554 64c128t 3.1-3.75GHz CPU; 1536GB RAM; NVIDIA RTX 6000 Ada Generation 48G GPU."
+    agent_reconnect_wait: 10m
+  - pool_name: temp
+    description: "pool for temporary use"
+    agent_reconnect_wait: 10m
 
 ## The maximum CPU containers for the agent. Defaults to 100.
 #    max_cpu_containers_per_agent: 100

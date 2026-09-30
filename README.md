@@ -146,13 +146,13 @@ GPU Node 5:
 |  Model | ASUS ESC8000A-E11|
 |  CPU   | AMD EPYC 7543 * 2 (64C/128T, 2.8-3.7GHz)|
 |  RAM   | Samsung M393A4K40EB3-CWE DDR4 512G (32G*16) 3200MT/s ECC REG|
-|  GPU   | MANLI (NVIDIA/0x10DE) RTX 4090 * 8 |
+|  GPU   | MSI (NVIDIA/0x10DE) RTX 4090 * 8 |
 |  SSD   | Intel S4610 (SSDSC2KG96) 960G (SATA) (RAID 1) * 2|
 |  NIC   | Intel I350-T4 1GbE Quad Port|
 |  NIC   | Mellanox ConnectX-4 VPI EDR QSFP28 MCX455A-ECAT 100Gb ETH/IB Single Port|
 |  RAID  | LSI SAS3008 PCI-Express Fusion-MPT SAS-3 |
 
-GPU Node 6, 7:
+GPU Node 6:
 
 |  Name  |  Spec  |
 | :----: | :----  |
@@ -160,6 +160,18 @@ GPU Node 6, 7:
 |  CPU   | AMD EPYC 9554 * 2 (128C/256T, 3.1-3.75GHz)|
 |  RAM   | Samsung M321R8GA0BB0-CQKZJ / Micron MTC40F2046S1RC48BA1 DDR5 1536G (64G*24) 4800MT/s ECC REG|
 |  GPU   | MSI (NVIDIA/0x10DE) RTX 4090 * 8 |
+|  SSD   | Samsung PM9A3 1.92T (U.2 PCIe 4.0) * 1|
+|  NIC   | Intel I350-AM2 1GbE Dual Port |
+|  NIC   | Mellanox ConnectX-4 VPI EDR QSFP28 MCX455A-ECAT 100Gb ETH/IB Single Port|
+
+GPU Node 7:
+
+|  Name  |  Spec  |
+| :----: | :----  |
+|  Model | ASUS ESC8000A-E12|
+|  CPU   | AMD EPYC 9554 * 2 (128C/256T, 3.1-3.75GHz)|
+|  RAM   | Samsung M321R8GA0BB0-CQKZJ / Micron MTC40F2046S1RC48BA1 DDR5 1536G (64G*24) 4800MT/s ECC REG|
+|  GPU   | NVIDIA (0x10DE) RTX 4090 48GB GDDR6X AI * 8 |
 |  SSD   | Samsung PM9A3 1.92T (U.2 PCIe 4.0) * 1|
 |  NIC   | Intel I350-AM2 1GbE Dual Port |
 |  NIC   | Mellanox ConnectX-4 VPI EDR QSFP28 MCX455A-ECAT 100Gb ETH/IB Single Port|
