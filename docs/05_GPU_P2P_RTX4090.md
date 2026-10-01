@@ -32,6 +32,7 @@
   - [Using P2P in jobs](#using-p2p-in-jobs)
   - [Rollback](#rollback)
   - [Appendix A: Results, RTX 4090 24 GB](#appendix-a-results-rtx-4090-24-gb)
+    - [Opt-in (`uvm_bar1_p2p_managed=1`)](#opt-in-uvm_bar1_p2p_managed1)
   - [Appendix B: Results, RTX 4090 48 GB](#appendix-b-results-rtx-4090-48-gb)
     - [Hardware and software](#hardware-and-software)
     - [aikitoria v3 alone](#aikitoria-v3-alone)
@@ -140,9 +141,9 @@ The UVM BAR1 fix (`29eae1b`, `7a01901`) is the `nvidia_uvm` module parameter `uv
 | Value | Behaviour |
 | :--- | :--- |
 | `0` (default, the gate) | UVM does not use BAR1 peer access for managed memory on Turing/Ampere/Ada: managed pages migrate through host memory. External mappings keep P2P. |
-| `1` (opt-in, experimental) | Managed memory uses BAR1 peer mappings and copies with the new encodings. **Experimental**: validate it in an opt-in window ([script README](../scripts/gpu-p2p/README.md#managed-memory-and-the-uvm-bar1-fix)) before relying on it. Applies only to static pairs with a 2 MB aligned DMA window; dynamic (Method 3) pairs never use it. |
+| `1` (opt-in) | Managed memory uses BAR1 peer mappings and copies with the new encodings. Validated on 24 GB cards on EPYC Milan with the debug and the release UVM build ([Appendix A](#opt-in-uvm_bar1_p2p_managed1)). Pass an opt-in window ([script README](../scripts/gpu-p2p/README.md#managed-memory-and-the-uvm-bar1-fix)) on each platform before running services with it. Applies only to static pairs with a 2 MB aligned DMA window; dynamic (Method 3) pairs never use it. |
 
-Hopper and newer GPUs are not affected by the parameter. Run services with the gate. Testing the opt-in needs a maintenance window in which a reboot is acceptable: [procedure](../scripts/gpu-p2p/README.md#managed-memory-and-the-uvm-bar1-fix).
+Hopper and newer GPUs are not affected by the parameter. The gate is the default and needs no extra validation; use `1` only on a platform where the opt-in window passed. The window needs a maintenance window in which a reboot is acceptable: [procedure](../scripts/gpu-p2p/README.md#managed-memory-and-the-uvm-bar1-fix).
 
 ### Other caveats
 
@@ -264,8 +265,8 @@ scripts/gpu-p2p/verify.sh
 
 Pass: `verify.sh` ends with `RESULT: PASS`. If it reports `nvidia_modeset` or `nvidia_drm` not loaded (a headless node), load them with `sudo modprobe nvidia_drm` and run it again. Then check the UVM gate by hand:
 
-- `modinfo -k <K> -F parm nvidia_uvm | grep uvm_bar1_p2p_managed` must print the parameter (no output: the modules lack the [UVM BAR1 fix](#managed-memory-uvm)), and `cat /sys/module/nvidia_uvm/parameters/uvm_bar1_p2p_managed` must print `0`.
-- If the parameter is missing or not `0`: stop. Do not run `MANAGED=1` and do not enable the node. Missing: rebuild from `<version>-p2p-48g` ([step 3](#3-build-the-patched-modules)) and reinstall. Not `0`: remove the `uvm_bar1_p2p_managed=1` option from `/etc/modprobe.d/` and reboot.
+- `modinfo -k <K> -F parm nvidia_uvm | grep uvm_bar1_p2p_managed` must print the parameter (no output: the modules lack the [UVM BAR1 fix](#managed-memory-uvm)), and `cat /sys/module/nvidia_uvm/parameters/uvm_bar1_p2p_managed` must print `0` (or `1` on a platform where the [opt-in window](../scripts/gpu-p2p/README.md#managed-memory-and-the-uvm-bar1-fix) passed with this build).
+- If the parameter is missing, or `1` without a passed opt-in window: stop. Do not run `MANAGED=1` and do not enable the node. Missing: rebuild from `<version>-p2p-48g` ([step 3](#3-build-the-patched-modules)) and reinstall. `1` without a passed window: remove the `uvm_bar1_p2p_managed=1` option from `/etc/modprobe.d/` and reboot.
 
 ### 6. Run the tests
 
@@ -289,13 +290,13 @@ OUT_DIR=~/p2p-logs MANAGED=1 RESIDENT_GB=<n> scripts/gpu-p2p/tests/run_host.sh <
 | `nccl` | `nccl_allreduce.py` via `torchrun` over GPU sets (all, each socket, same- and cross-socket pairs), with NCCL defaults and with `NCCL_P2P_LEVEL=SYS` (`p2p-sys`): busbw, correctness, transport, resident tensor intact. |
 | `managedtest` (`MANAGED=1`) | `cudaMallocManaged` across every ordered GPU pair: fault, prefetch, memcpy, `SetAccessedBy`, peer `atomicAdd`, oversubscription. `run_host.sh` refuses it when the UVM module lacks the `uvm_bar1_p2p_managed` parameter (driver without the fix). |
 
-Pass: both logs have the header `UVM managed memory on BAR1 peers: gate on`, `OVERALL: PASS` and `KERNEL LOG: PASS`; in 6b every all-reduce is `correct=True` and the `p2p-sys` runs use a `P2P/...` transport (the `default` runs may use SHM on newer NCCL; [why](#using-p2p-in-jobs)).
+Pass: both logs have the header `UVM managed memory on BAR1 peers: gate on` (`OPT-IN window` with `uvm_bar1_p2p_managed=1`), `OVERALL: PASS` and `KERNEL LOG: PASS`; in 6b every all-reduce is `correct=True` and the `p2p-sys` runs use a `P2P/...` transport (the `default` runs may use SHM on newer NCCL; [why](#using-p2p-in-jobs)).
 
 **Do not add `ATOMICS=1` or `COMPRESS=1` to service validation.** `atomics` can log Xid 31 (fails the kernel-log check). `compress` without the RM fix for compressible peer allocations (`c811a9c`/`37d11f9` in the installed build, see `updates/p2p/SOURCE`) writes host RAM at 1 TiB + offset; run it only as described in the [script README](../scripts/gpu-p2p/README.md#compressible-memory). All options: [script README](../scripts/gpu-p2p/README.md#settings).
 
 ### 7. Enable the node again
 
-Only after step 5 (`verify.sh` `RESULT: PASS`, hold test as expected, `uvm_bar1_p2p_managed` = `0`) and step 6 (both logs `OVERALL: PASS` and `KERNEL LOG: PASS`, header `gate on`) passed, and with no `uvm_bar1_p2p_managed=1` option in `/etc/modprobe.d/`:
+Only after step 5 (`verify.sh` `RESULT: PASS`, hold test as expected, `uvm_bar1_p2p_managed` as checked there) and step 6 (both logs `OVERALL: PASS` and `KERNEL LOG: PASS`; header `gate on`, or `OPT-IN window` when the node keeps the opt-in after a passed window) passed, with the release UVM build installed:
 
 ```bash
 det agent enable <agent>
@@ -418,6 +419,21 @@ Measured hardware: GPU Node 5 (cvgl-node05), 8x MSI RTX 4090 24 GB, 2x EPYC 7543
 - x8 links: every set that contains GPU1 or GPU4 is capped at about 12.4-12.9 GB/s (8 GPUs and both sockets 12.9, pairs 0,1 and 4,5 12.8, pair 0,4 12.4).
 - Cross socket: P2P copies from socket 1 to socket 0 reach only about 10 GB/s on this platform (asymmetric); pair 3,7 (x16, cross socket) reached 19.2 against 25.1 for the same-socket pair 2,3.
 - Milan's host staging makes NCCL without P2P very slow, as on the blog's Rome platform. With P2P, the x8-capped sets gained about 2.8-3.2x, pair 2,3 about 5.6x, and the cross-socket sets (8 GPUs, pairs 0,4 and 3,7) about 16-24x (ratios of the table values).
+
+### Opt-in (`uvm_bar1_p2p_managed=1`)
+
+Same node, build and settings, in an [opt-in window](../scripts/gpu-p2p/README.md#managed-memory-and-the-uvm-bar1-fix) (node disabled in the scheduler). `nvidia-uvm` was swapped between the debug build (`UVM_BUILD_TYPE=debug`, asserts active) and the release build by unloading and reloading the module, with the option in `/etc/modprobe.d/`. UVM's procfs peer info showed link type `UVM_GPU_LINK_PCIE_BAR1` with aperture `UVM_APERTURE_SYS_NON_COHERENT` for every pair, and the log header said `OPT-IN window`. No DMA window was misaligned (no `NOTE:` line).
+
+| UVM build | Run | Result |
+| :--- | :--- | :--- |
+| debug | `managedtest --quick --pair 0,1 --modes accessedby` (page-table encoding alone) | PASS |
+| debug | `--quick --pair 0,1`, modes fault, prefetch, memcpy (copy-engine encoding) | PASS |
+| debug | fault, prefetch, memcpy, 56 pairs | PASS |
+| debug | `--quick`, accessedby and atomic, 56 pairs | PASS |
+| release | accessedby, 56 pairs | PASS |
+| release | service run: default stages and `MANAGED=1`, `RESIDENT_GB=20` (all six managed modes, 56 pairs, oversub 28.3 GiB managed vs 22.7 GiB free) | `OVERALL: PASS` |
+
+Every run ended with `KERNEL LOG: PASS` (no Xid, no assert). The NCCL results matched the gate run (8 GPUs 12.9 GB/s, every all-reduce `correct=True`), as expected: NCCL does not use managed memory. Not covered: `uvm_peer_copy=virt`, `oversub` with the debug build, and the managed-memory migration speed compared with the gate.
 
 ## Appendix B: Results, RTX 4090 48 GB
 
