@@ -67,7 +67,9 @@ TS=$(date +%Y%m%d-%H%M%S)
 
 [ "$(id -u)" = 0 ] || die "run as root (sudo)"
 [ -d "/lib/modules/$K" ] || die "/lib/modules/$K does not exist"
-if pgrep -x 'apt|apt-get|aptitude|dpkg|unattended-upgr' >/dev/null; then
+# unattended-upgrade by its command line: its 15-character process name also matches the idle
+# unattended-upgrade-shutdown helper, which runs all the time and holds no lock.
+if pgrep -x 'apt|apt-get|aptitude|dpkg' >/dev/null || pgrep -f '/unattended-upgrade( |$)' >/dev/null; then
     die "apt/dpkg is running; wait until it has finished"
 fi
 if command -v fuser >/dev/null &&
