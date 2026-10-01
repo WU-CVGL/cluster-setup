@@ -33,6 +33,7 @@
   - [Rollback](#rollback)
   - [Appendix A: Results, RTX 4090 24 GB](#appendix-a-results-rtx-4090-24-gb)
     - [Opt-in (`uvm_bar1_p2p_managed=1`)](#opt-in-uvm_bar1_p2p_managed1)
+    - [Second platform: EPYC 9554 (Genoa)](#second-platform-epyc-9554-genoa)
   - [Appendix B: Results, RTX 4090 48 GB](#appendix-b-results-rtx-4090-48-gb)
     - [Hardware and software](#hardware-and-software)
     - [aikitoria v3 alone](#aikitoria-v3-alone)
@@ -436,6 +437,29 @@ Same node, build and settings, in an [opt-in window](../scripts/gpu-p2p/README.m
 | release | service run: default stages and `MANAGED=1`, `RESIDENT_GB=20` (all six managed modes, 56 pairs, oversub 28.3 GiB managed vs 22.7 GiB free) | `OVERALL: PASS` |
 
 Every run ended with `KERNEL LOG: PASS` (no Xid, no assert). The NCCL results matched the gate run (8 GPUs 12.9 GB/s, every all-reduce `correct=True`), as expected: NCCL does not use managed memory. Not covered: `uvm_peer_copy=virt`, `oversub` with the debug build, and the managed-memory migration speed compared with the gate.
+
+### Second platform: EPYC 9554 (Genoa)
+
+Measured hardware: GPU Node 6 (cvgl-node06), 8x RTX 4090 24 GB, 2x EPYC 9554 (Genoa), 1.5 TiB, kernel 6.5.0-25-generic. GPU6 trained at Gen4 x8. Same build and settings as above (UVM gate on), installed with `install-p2p-modules.sh`; `verify.sh` `RESULT: PASS`, static BAR1 on. Service run with `MANAGED=1`, `RESIDENT_GB=20` on the idle node: `OVERALL: PASS`, kernel log clean. No stock-driver baseline was measured on this node; the host-staged row is the same run with peer access disabled.
+
+| Test | With P2P (`610.57.04-p2p-48g`) |
+| :--- | ---: |
+| Host<->GPU, x16 GPUs (GB/s, H2D / D2H) | 26.8 / 26.4 |
+| Host<->GPU, x8 GPU (GB/s, H2D / D2H) | 13.3 / 13.2 |
+| Peer copy, host staged (GB/s) | 22.0-22.6; pairs with the x8 GPU 12.9-13.0 |
+| P2P copy, unidirectional (GB/s) | 26.3-26.4 for every x16 pair, same or cross socket, both directions; pairs with the x8 GPU 13.2 |
+| P2P copy, bidirectional (GB/s) | 52.1 for every x16 pair; pairs with the x8 GPU 26.0 |
+| P2P integrity (`p2ptest`) | 56/56 pairs; 2016 blocks up to a 21.0 GiB offset, 0 bad words |
+| `ordering`, `stale`, `hostnuma` | PASS |
+| Managed memory (`managedtest`) | PASS with the gate on: 56 pairs x fault, prefetch, memcpy, accessedby, atomic; oversub 28.3 GiB managed vs 22.7 GiB free |
+| NCCL busbw, 8 GPUs (GB/s) | 13.0 |
+| NCCL busbw, GPU0-3 / GPU4-7 | 25.6 / 13.0 |
+| NCCL busbw, pairs 0,1 / 4,5 | 25.2 / 25.1 |
+| NCCL busbw, pairs 0,4 / 3,7 (cross socket) | 23.5 / 23.6 |
+
+- NCCL: PyTorch 2.3 / NCCL 2.20.5, busbw at 1024 MiB, `P2P/IPC` in every run, every all-reduce `correct=True`; `NCCL_P2P_LEVEL=SYS` measured the same (within 0.2 GB/s).
+- Unlike Milan, cross-socket P2P on Genoa runs at full speed in both directions, so the cross-socket pairs reach 23.5 GB/s (Milan: pair 3,7 19.2, pair 0,4 limited by its x8 GPU). The pair results match the 48 GB cards on the same platform ([Appendix B](#appendix-b-results-rtx-4090-48-gb)).
+- The x8 GPU (GPU6) caps every set that contains it at about 13 GB/s (8 GPUs, GPU4-7), as on node05.
 
 ## Appendix B: Results, RTX 4090 48 GB
 
