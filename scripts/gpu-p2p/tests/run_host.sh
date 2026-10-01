@@ -4,6 +4,9 @@
 #   image  an image with the CUDA toolkit (nvcc) and PyTorch (torchrun), e.g. an NGC PyTorch image
 #   label  log name (default p2p-test-<timestamp>); the log goes to $OUT_DIR (default: current directory)
 # The node must be idle: the script refuses while GPUs run compute processes (FORCE=1 overrides).
+# GPUS: comma-separated GPU indices or UUIDs to test (default: all). Only these GPUs are given to the
+#   container (docker --gpus device=...) and queried for the idle check, BAR1 and the link sampling; use it
+#   to leave out a faulty GPU.
 # Needs docker access, not root. Besides the container output the log has: driver, kernel command line,
 # BAR1, nvidia-smi topo, the UVM managed-memory mode; the PCIe link (gen/width) sampled every 500 ms during
 # the run with the maximum seen per GPU; and kernel-log lines (Xid, METHOD3, asserts, nvidia-uvm) since the
@@ -32,16 +35,22 @@ LOG=$OUT_DIR/$LABEL.log
 PASS_VARS=(STAGES ATOMICS MANAGED MANAGED_ARGS COMPRESS COMPRESS_ARGS HOST_RAM_END KEEP_GOING P2PTEST_BUF_GB HOSTNUMA_GB GPU_SETS NCCL_VARIANTS RESIDENT_GB SIZES_MB ITERS CUDA_ARCH TIMEOUT_NCCL)
 
 command -v nvidia-smi >/dev/null || { echo "nvidia-smi not found"; exit 1; }
+sel=()
+gpus_arg=all
+if [ -n "${GPUS:-}" ]; then
+    sel=(-i "$GPUS")
+    gpus_arg="\"device=$GPUS\""
+fi
 command -v docker >/dev/null || { echo "docker not found"; exit 1; }
 
-apps=$(nvidia-smi --query-compute-apps=pid,process_name,used_memory --format=csv,noheader 2>/dev/null)
+apps=$(nvidia-smi "${sel[@]}" --query-compute-apps=pid,process_name,used_memory --format=csv,noheader 2>/dev/null)
 if [ -n "$apps" ] && [ "${FORCE:-0}" != 1 ]; then
     echo "GPUs are in use; the tests need an idle node (disable it in the scheduler first, FORCE=1 overrides):"
     echo "$apps"
     exit 1
 fi
 
-bar=$(nvidia-smi -q -d MEMORY | awk '
+bar=$(nvidia-smi "${sel[@]}" -q -d MEMORY | awk '
     /^GPU / {gpu = $2}
     /FB Memory Usage/ {sec = "fb"} /BAR1 Memory Usage/ {sec = "bar1"}
     /^ *Total *:/ && sec != "" {v[sec] = $3; if (sec == "bar1") print gpu, v["fb"], v["bar1"]; sec = ""}')
@@ -119,14 +128,14 @@ since=$(date '+%Y-%m-%d %H:%M:%S')
     [ "${ATOMICS:-0}" = 1 ] && echo "ATOMICS=1: the atomics stage runs (diagnostic, not a service run)"
     [ "${COMPRESS:-0}" = 1 ] &&
         echo "COMPRESS=1: the compress stage runs (host-RAM hazard without the RM fix); System RAM ends at ${HOST_RAM_END:-unknown}"
-    nvidia-smi --query-gpu=index,pci.bus_id,name --format=csv,noheader
+    nvidia-smi "${sel[@]}" --query-gpu=index,pci.bus_id,name --format=csv,noheader
     nvidia-smi topo -p2p r | sed -n '/^Legend/q;p'
     nvidia-smi topo -m | sed -n '/^Legend/q;p'
 } >"$LOG" 2>&1
 cat "$LOG"
 
 links=$(mktemp)
-nvidia-smi --query-gpu=index,pcie.link.gen.current,pcie.link.width.current,pcie.link.gen.max,pcie.link.gen.hostmax,pcie.link.width.max \
+nvidia-smi "${sel[@]}" --query-gpu=index,pcie.link.gen.current,pcie.link.width.current,pcie.link.gen.max,pcie.link.gen.hostmax,pcie.link.width.max \
     --format=csv,noheader -lms 500 >"$links" 2>/dev/null &
 sampler=$!
 
@@ -137,7 +146,7 @@ done
 # --init: bash is not PID 1, so the SIGTERM that timeout sends (proxied by the docker CLI) stops the tests;
 # -k and the final docker rm -f make sure the container is gone after a TIMEOUT.
 name=gpu-p2p-test-$$
-timeout -k 60 "${TIMEOUT:-10800}" docker run --init --name "$name" --rm --gpus all --ipc=host --ulimit memlock=-1 \
+timeout -k 60 "${TIMEOUT:-10800}" docker run --init --name "$name" --rm --gpus "$gpus_arg" --ipc=host --ulimit memlock=-1 \
     --ulimit stack=67108864 --entrypoint bash -v "$HERE:/w:ro" "${envargs[@]}" "$IMAGE" /w/run_tests.sh 2>&1 | tee -a "$LOG"
 rc=${PIPESTATUS[0]}
 docker rm -f "$name" >/dev/null 2>&1 || true

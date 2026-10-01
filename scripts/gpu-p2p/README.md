@@ -202,6 +202,7 @@ Environment variables of `run_host.sh` (passed into the container) and `run_test
 | `BUILD_DIR` | `/tmp/gpu-p2p-build` | `run_tests.sh` only (`run_host.sh` does not pass it): build directory of the test binaries inside the container. |
 | `TIMEOUT_NCCL` | `600` | Seconds per `torchrun`. |
 | `OUT_DIR`, `TIMEOUT`, `FORCE` | `.`, `10800`, `0` | `run_host.sh` only: log directory, container timeout in seconds, skip the idle check. |
+| `GPUS` | all | `run_host.sh` only: comma-separated GPU indices or UUIDs to test, e.g. to leave out a faulty GPU. Only these GPUs go into the container (`docker --gpus device=...`, where CUDA renumbers them from 0) and into the idle check, BAR1 and link sampling. |
 | `MANAGED_FORCE` | `0` | `run_host.sh` only: `1` runs `MANAGED=1` even when the `uvm_bar1_p2p_managed` parameter is missing (static BAR1: expect a reboot; dynamic BAR1 without the guard: host RAM corruption). |
 
 ### Building and running the tests by hand
