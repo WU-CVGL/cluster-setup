@@ -143,7 +143,7 @@ The UVM BAR1 fix (`29eae1b`, `7a01901`) is the `nvidia_uvm` module parameter `uv
 | `0` (default, the gate) | UVM does not use BAR1 peer access for managed memory on Turing/Ampere/Ada: managed pages migrate through host memory. External mappings keep P2P. |
 | `1` (opt-in) | Managed memory uses BAR1 peer mappings and copies with the new encodings. Validated on 24 GB cards on EPYC Milan with the debug and the release UVM build ([Appendix A](#opt-in-uvm_bar1_p2p_managed1)). Pass an opt-in window ([script README](../scripts/gpu-p2p/README.md#managed-memory-and-the-uvm-bar1-fix)) on each platform before running services with it. Applies only to static pairs with a 2 MB aligned DMA window; dynamic (Method 3) pairs never use it. |
 
-Hopper and newer GPUs are not affected by the parameter. The gate is the default and needs no extra validation; use `1` only on a platform where the opt-in window passed. The window needs a maintenance window in which a reboot is acceptable: [procedure](../scripts/gpu-p2p/README.md#managed-memory-and-the-uvm-bar1-fix).
+Hopper and newer GPUs are not affected by the parameter. The gate is the default and needs no extra validation; use `1` only on a platform where the opt-in window passed. Testing the opt-in needs a maintenance window in which a reboot is acceptable: [procedure](../scripts/gpu-p2p/README.md#managed-memory-and-the-uvm-bar1-fix).
 
 ### Other caveats
 
@@ -422,7 +422,7 @@ Measured hardware: GPU Node 5 (cvgl-node05), 8x MSI RTX 4090 24 GB, 2x EPYC 7543
 
 ### Opt-in (`uvm_bar1_p2p_managed=1`)
 
-Same node, build and settings, in an [opt-in window](../scripts/gpu-p2p/README.md#managed-memory-and-the-uvm-bar1-fix) (node disabled in the scheduler). `nvidia-uvm` was swapped between the debug build (`UVM_BUILD_TYPE=debug`, asserts active) and the release build by unloading and reloading the module, with the option in `/etc/modprobe.d/`. UVM's procfs peer info showed link type `UVM_GPU_LINK_PCIE_BAR1` with aperture `UVM_APERTURE_SYS_NON_COHERENT` for every pair, and the log header said `OPT-IN window`. No DMA window was misaligned (no `NOTE:` line).
+Same node, build and settings, in an [opt-in window](../scripts/gpu-p2p/README.md#managed-memory-and-the-uvm-bar1-fix) (node disabled in the scheduler). `nvidia-uvm` was swapped between the debug build (`UVM_BUILD_TYPE=debug`, asserts active) and the release build by unloading and reloading the module, with the option in `/etc/modprobe.d/`. UVM's procfs peer info showed link type `UVM_GPU_LINK_PCIE_BAR1` with aperture `UVM_APERTURE_SYS_NON_COHERENT` for the pairs inspected, and the log header said `OPT-IN window`. No DMA window was misaligned (no `NOTE:` line).
 
 | UVM build | Run | Result |
 | :--- | :--- | :--- |
