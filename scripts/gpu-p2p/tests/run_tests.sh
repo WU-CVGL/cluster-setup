@@ -39,11 +39,14 @@
 #                     no-p2p   NCCL_P2P_DISABLE=1 (host-staged reference)
 #   RESIDENT_GB     resident GiB per GPU during the NCCL runs (default 0; e.g. 38 on 48 GB cards)
 #   SIZES_MB, ITERS passed to nccl_allreduce.py
-#   CUDA_ARCH       nvcc -arch (default sm_89 = RTX 4090); BUILD_DIR (default /tmp/gpu-p2p-build)
+#   CUDA_ARCH       nvcc -arch (default: GPU0's compute capability from nvidia-smi, e.g. sm_89 on the
+#                   RTX 4090, sm_86 on the RTX 3090; sm_89 if it cannot be read); BUILD_DIR (default /tmp/gpu-p2p-build)
 set -uo pipefail
 HERE=$(cd "$(dirname "$0")" && pwd)
 BUILD=${BUILD_DIR:-/tmp/gpu-p2p-build}
-ARCH=${CUDA_ARCH:-sm_89}
+cc=$(nvidia-smi -i 0 --query-gpu=compute_cap --format=csv,noheader 2>/dev/null | tr -d '. \r')
+[[ $cc =~ ^[0-9]+$ ]] || cc=89
+ARCH=${CUDA_ARCH:-sm_$cc}
 default_stages="p2ptest ordering stale hostnuma nccl"
 [ "${ATOMICS:-0}" = 1 ] && default_stages+=" atomics"
 [ "${MANAGED:-0}" = 1 ] && default_stages+=" managedtest"

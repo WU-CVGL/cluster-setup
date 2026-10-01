@@ -198,7 +198,7 @@ Environment variables of `run_host.sh` (passed into the container) and `run_test
 | `NCCL_VARIANTS` | `default p2p-sys` | Any of `default`, `p2p-sys`, `no-p2p` (`NCCL_P2P_DISABLE=1`). |
 | `RESIDENT_GB` | `0` | GiB per GPU held with a known pattern during the NCCL runs and checked afterwards. |
 | `SIZES_MB`, `ITERS` | `64,256,1024`, `10` | All-reduce sizes and timed iterations. |
-| `CUDA_ARCH` | `sm_89` | `nvcc -arch` (RTX 4090). |
+| `CUDA_ARCH` | GPU0's compute capability | `nvcc -arch`, e.g. `sm_89` (RTX 4090) or `sm_86` (RTX 3090); read with `nvidia-smi --query-gpu=compute_cap`. |
 | `BUILD_DIR` | `/tmp/gpu-p2p-build` | `run_tests.sh` only (`run_host.sh` does not pass it): build directory of the test binaries inside the container. |
 | `TIMEOUT_NCCL` | `600` | Seconds per `torchrun`. |
 | `OUT_DIR`, `TIMEOUT`, `FORCE` | `.`, `10800`, `0` | `run_host.sh` only: log directory, container timeout in seconds, skip the idle check. |
@@ -209,8 +209,9 @@ Environment variables of `run_host.sh` (passed into the container) and `run_test
 Inside any container or host with the CUDA toolkit (the GPU numbering then follows CUDA's default unless `CUDA_DEVICE_ORDER=PCI_BUS_ID` is set):
 
 ```bash
-for t in p2ptest ordering stale atomics managedtest; do nvcc -O2 -arch=sm_89 -o $t $t.cu; done
-nvcc -O2 -arch=sm_89 -o compress compress.cu -lcuda
+arch=sm_$(nvidia-smi -i 0 --query-gpu=compute_cap --format=csv,noheader | tr -d .)   # sm_89 on the RTX 4090
+for t in p2ptest ordering stale atomics managedtest; do nvcc -O2 -arch=$arch -o $t $t.cu; done
+nvcc -O2 -arch=$arch -o compress compress.cu -lcuda
 nvcc -O2 -o hostnuma hostnuma.cu -lcuda
 P2PTEST_BUF_GB=2 ./p2ptest
 ./ordering --gpus 0,1,2 && ./stale --pair 0,1 && ./atomics --owner 0 --peers 1,2
