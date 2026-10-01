@@ -124,6 +124,8 @@ det agent enable <agent>
 
 The script refuses while Determined task containers run. It remounts all mounts of a NAS together and skips a NAS whose mounts are in use (open files or a working directory; listed with the process IDs), so nothing is killed. Rerun it once those processes are gone, or reboot: the fstab is already rewritten. It ends with one line per NAS: mounts remounted, options applied, number of transports.
 
+On a node that is rarely idle (long-running tasks, interactive sessions on the login node), `sudo scripts/nfs-remount.sh --remount-later` rewrites the fstab only and leaves the mounts alone, also while tasks run; the options take effect at the next reboot or a later run without the flag. A single mount remounted before that gets 1 MiB and `hard` but joins the existing connections of its NAS, so `nconnect` waits until all mounts of that NAS are mounted again.
+
 ## Scale to multi-node: configure Determined AI
 
 > https://docs.determined.ai/latest/cluster-setup-guide/deploy-cluster/sysadmin-deploy-on-prem/deploy.html#deploy-a-standalone-master

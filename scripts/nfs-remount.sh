@@ -1,8 +1,12 @@
 #!/bin/bash
 # Apply the standard NFS client mount options to every NFS entry in /etc/fstab and remount them.
 #
-# usage: sudo scripts/nfs-remount.sh [--dry-run]
-#   --dry-run  show the fstab changes and what would be remounted; change nothing
+# usage: sudo scripts/nfs-remount.sh [--dry-run | --remount-later]
+#   --dry-run        show the fstab changes and what would be remounted; change nothing
+#   --remount-later  rewrite /etc/fstab only and leave the current mounts alone (safe while tasks run);
+#                    the options take effect at the next reboot or a later run without this flag. A
+#                    mount remounted alone before that gets 1 MiB and hard, but joins the server's
+#                    existing connections, so nconnect still waits for all its mounts to be remounted.
 #
 # Standard options: see OPTS below and docs/03 (NFS client mount options). nconnect is per NFS
 # server, not per mount: all mounts of one server on a node share one set of TCP connections, set
@@ -11,17 +15,23 @@
 # skipped as a whole and reported. Its fstab lines are still rewritten and take effect at the next
 # reboot or rerun.
 #
-# Refuses while Determined task containers run (FORCE=1 overrides): disable the agent first
-# (det agent disable --drain <agent>) and wait until no task runs on the node.
+# Refuses while Determined task containers run (FORCE=1 overrides; not checked with --remount-later):
+# disable the agent first (det agent disable --drain <agent>) and wait until no task runs on the node.
 # Writes a backup of /etc/fstab to /etc/fstab.nfs-remount-<timestamp>.
 set -euo pipefail
 
 OPTS="defaults,vers=3,noatime,hard,nconnect=16,rsize=1048576,wsize=1048576,_netdev"
 DRY=0
-[ "${1:-}" = "--dry-run" ] && DRY=1
+LATER=0
+case "${1:-}" in
+    "") ;;
+    --dry-run) DRY=1 ;;
+    --remount-later) LATER=1 ;;
+    *) sed -n '2,/^set -euo/p' "$0" | sed '$d; s/^# \{0,1\}//'; exit 1 ;;
+esac
 [ "$(id -u)" = 0 ] || { echo "run as root (sudo)"; exit 1; }
 
-if command -v docker >/dev/null && [ "${FORCE:-0}" != 1 ]; then
+if [ "$LATER" = 0 ] && command -v docker >/dev/null && [ "${FORCE:-0}" != 1 ]; then
     tasks=$(docker ps -q --filter label=ai.determined.container.description)
     if [ -n "$tasks" ]; then
         echo "Determined task containers are running; disable the agent and wait (FORCE=1 overrides):"
@@ -66,12 +76,24 @@ if [ "$DRY" = 1 ]; then
     exit 0
 fi
 
-backup=/etc/fstab.nfs-remount-$(date +%Y%m%d-%H%M%S)
-cp -p /etc/fstab "$backup"
-cat "$new" >/etc/fstab
-rm -f "$new"
-systemctl daemon-reload
-echo "== fstab written (backup: $backup)"
+if cmp -s /etc/fstab "$new"; then
+    rm -f "$new"
+    [ "$LATER" = 1 ] && { echo "== nothing to write"; exit 0; }
+else
+    backup=/etc/fstab.nfs-remount-$(date +%Y%m%d-%H%M%S)
+    cp -p /etc/fstab "$backup"
+    cat "$new" >/etc/fstab
+    rm -f "$new"
+    systemctl daemon-reload
+    echo "== fstab written (backup: $backup)"
+fi
+
+if [ "$LATER" = 1 ]; then
+    for srv in "${!targets[@]}"; do
+        echo "== $srv: $(wc -w <<<"${targets[$srv]}") mounts left as they are; the new options apply at the next reboot or a run without --remount-later"
+    done
+    exit 0
+fi
 
 rc=0
 for srv in "${!targets[@]}"; do
