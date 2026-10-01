@@ -302,6 +302,8 @@ Only after step 5 (`verify.sh` `RESULT: PASS`, hold test as expected, `uvm_bar1_
 det agent enable <agent>
 ```
 
+Check that the monitoring containers came back after the reboot (`docker ps`: `node-exporter`, `monitoring_cadvisor` and the `dcgm-exporter` service); each needs a restart policy ([check](../services/README.md#72-run)).
+
 Tell the users of the node about [the NCCL settings](#using-p2p-in-jobs).
 
 ## Pitfalls
