@@ -45,12 +45,13 @@ NCCL all-reduce bus bandwidth (GB/s, 1024 MiB, one process per GPU) without and 
 
 | Platform | 8 GPUs | 4 GPUs, one socket | Pair, cross socket | P2P copy per pair |
 | :--- | :--- | :--- | :--- | :--- |
+| EPYC 7402 (Rome), 24 GB, all GPUs at x16 | 1.3 -> 20.6 | 3.9 -> 25.1-25.2 | 1.2-1.3 -> 19.2-19.4 | 26.4; cross socket 21.8-22.7 |
 | EPYC 7543 (Milan), 24 GB | 0.8 -> 12.9 (x8 GPU) | 4.4-4.7 -> 12.9 (x8 GPU) | 0.8 -> 19.2 | 26.3; cross socket 10-22 (asymmetric) |
-| EPYC 9554 (Genoa), 24 GB and 48 GB, all GPUs at x16 (combined, see note) | about 16 -> about 23.5 (estimated) | 20.4-21.1 -> 25.6-25.7 | 15.9-16.4 -> 23.4-23.6 | 26.4 in both directions |
+| EPYC 9554 (Genoa), 24 GB and 48 GB, all GPUs at x16 (combined, see note) | about 16 -> about 24-25 (estimated) | 20.4-21.1 -> 25.6-25.7 | 15.9-16.4 -> 23.4-23.6 | 26.4 in both directions |
 
-- **Host staging speed decides the gain.** Milan (like Rome in duanyll's blog) stages through host memory slowly, so P2P gives about 3-24x. Genoa stages fast, so P2P gives 1.2-1.5x.
-- **A GPU at PCIe x8 caps every ring that contains it at about 13 GB/s**, with or without P2P. Each of our three nodes has one or two such GPUs ([PCIe link width](#pcie-link-width)).
-- **The Genoa row combines two nodes with the same platform.** node06 (24 GB) and node07 (48 GB) gave the same results wherever neither had an x8 GPU in the set: per-pair copies 26.4 vs 26.4 GB/s, one-socket 4-GPU all-reduce 25.6 vs 25.7, cross-socket pairs 23.5-23.6 vs 23.4-23.6. Their x8 GPUs sit on different sockets, so between them every 4-GPU and 2-GPU set was measured at x16. An 8-GPU set was not: on both nodes it contains an x8 GPU (13.0 measured). A ring all-reduce runs at the speed of its slowest link, and the slowest link of an 8-GPU ring on this platform is a cross-socket hop, so all x16 the 8-GPU result should be close to the cross-socket pair, about 23.5 GB/s with P2P and about 16 GB/s without (cross-socket pairs at x16 measured 15.9-16.4 over host memory). These two values are estimates.
+- **Host staging speed decides the gain.** Rome and Milan stage through host memory slowly, so P2P gives about 6-16x on Rome (all x16) and 3-24x on Milan. Genoa stages fast, so P2P gives 1.2-1.5x.
+- **A GPU at PCIe x8 caps every ring that contains it at about 13 GB/s**, with or without P2P. Nodes 5, 6 and 7 each have one or two such GPUs ([PCIe link width](#pcie-link-width)).
+- **The Genoa row combines two nodes with the same platform.** node06 (24 GB) and node07 (48 GB) gave the same results wherever neither had an x8 GPU in the set: per-pair copies 26.4 vs 26.4 GB/s, one-socket 4-GPU all-reduce 25.6 vs 25.7, cross-socket pairs 23.5-23.6 vs 23.4-23.6. Their x8 GPUs sit on different sockets, so between them every 4-GPU and 2-GPU set was measured at x16. An 8-GPU set was not: on both nodes it contains an x8 GPU (13.0 measured). The 8-GPU ring crosses the sockets, so its result follows the cross-socket pair: on Rome, all at x16, 8 GPUs reached 20.6 with P2P against 19.2-19.4 for the cross-socket pairs and 25.1 for four GPUs on one socket, and 1.3 without P2P against 1.2-1.3. The same relation on Genoa gives about 24-25 GB/s with P2P (cross-socket pairs 23.4-23.6, one socket 25.6-25.7) and about 16 without (cross-socket pairs at x16 measured 15.9-16.4 over host memory). These two values are estimates.
 
 ## How it works
 
@@ -250,6 +251,22 @@ A GPU trained at x8 gets about 13 instead of 26 GB/s to the host and to peers, a
 
 All runs used the branch `610.57.04-p2p-48g`, `iommu=pt`, HMM off and `uvm_bar1_p2p_managed=0` unless noted, and `run_host.sh` with `MANAGED=1` on the idle node. Every service run ended with `OVERALL: PASS` and a clean kernel log: peer access and integrity on 56/56 pairs, `ordering`, `stale` and `hostnuma` passed, every all-reduce was `correct=True`, and managed memory passed in all modes on all pairs including oversubscription. NCCL is PyTorch 2.3 / NCCL 2.20.5 (`P2P/IPC`) unless noted, busbw at 1024 MiB.
 
+### GPU Node 2: 24 GB, EPYC 7402 (Rome)
+
+8x RTX 4090 24 GB, 512 GB, Ubuntu 24.04, kernel 6.8.0-146-generic (modules built for it from the same branch). All GPUs at x16. Baseline: stock open driver 610.57.04, default IOMMU mode. Static BAR1 on (8 GiB held raised "BAR1 Used" to 8587 MiB).
+
+| | Stock | P2P |
+| :--- | ---: | ---: |
+| Host<->GPU (GB/s, H2D / D2H) | 24.5-26.0 / 21.2-22.7 | 25.8-26.1 / 25.3-26.1 |
+| Copy, same socket (GB/s) | 12.0-22.3 (staged) | 26.3-26.4 (bidirectional 51.0-51.3) |
+| Copy, cross socket | 12.7-22.6 (staged) | 21.8-22.7 (bidirectional 40.9-42.2) |
+| NCCL 8 GPUs | 1.3 | 20.6 |
+| NCCL GPU0-3 / GPU4-7 | 3.9 / 3.9 | 25.1 / 25.2 |
+| NCCL pairs 0,1 / 4,5 | 3.4 / 3.4 | 24.5-24.8 / 24.8-24.9 |
+| NCCL cross-socket pairs 0,4 / 3,7 | 1.2 / 1.3 | 19.2-19.4 / 19.3-19.4 |
+
+Rome's cross-socket P2P is symmetric (unlike Milan), but slower than within a socket.
+
 ### GPU Node 5: 24 GB, EPYC 7543 (Milan)
 
 8x RTX 4090 24 GB, 512 GB, kernel 6.5.0-25. GPU1 and GPU4 at x8. Baseline: stock open driver 610.57.04. Static BAR1 on (8 GiB held raised "BAR1 Used" from 1 to 8653 MiB).
@@ -304,14 +321,14 @@ A run with plain aikitoria v3 hit Xid 31 `FAULT_UNSUPPORTED_APERTURE` during man
 
 ### Comparison with duanyll's blog
 
-| | Blog, Xeon 4416+ | Blog, EPYC 7302 (Rome) | Ours, Genoa, all x16 |
-| :--- | :--- | :--- | :--- |
-| Cards | 8x 48 GB | 4x 48 GB | 24 GB and 48 GB |
-| P2P copy per pair | 22.7 | 26.3 | 26.4 |
-| NCCL 4 GPUs, without -> with P2P | 16.8 -> 20.4 | 4.1 -> 25.15 | 20.4-21.1 -> 25.6-25.7 |
-| NCCL 8 GPUs, without -> with P2P | 14.2 -> 20.46 | - | about 16 -> about 23.5 (estimated) |
+| | Blog, Xeon 4416+ | Blog, EPYC 7302 (Rome) | Ours, EPYC 7402 (Rome) | Ours, Genoa, all x16 |
+| :--- | :--- | :--- | :--- | :--- |
+| Cards | 8x 48 GB | 4x 48 GB | 8x 24 GB | 24 GB and 48 GB |
+| P2P copy per pair | 22.7 | 26.3 | 26.4 (cross socket 22.4) | 26.4 |
+| NCCL 4 GPUs, without -> with P2P | 16.8 -> 20.4 | 4.1 -> 25.15 | 3.9 -> 25.1-25.2 | 20.4-21.1 -> 25.6-25.7 |
+| NCCL 8 GPUs, without -> with P2P | 14.2 -> 20.46 | - | 1.3 -> 20.6 | about 16 -> about 24-25 (estimated) |
 
-The tools differ (blog: `cudaMemcpyPeer` and nccl-tests; ours: `p2ptest.cu` and `torchrun`), so compare trends, not decimals. Both AMD platforms reach the Gen4 x16 line rate per pair.
+The tools differ (blog: `cudaMemcpyPeer` and nccl-tests; ours: `p2ptest.cu` and `torchrun`), so compare trends, not decimals. Our Rome node reproduces the blog's Rome result for four GPUs. Every AMD platform reaches the Gen4 x16 line rate per pair within a socket.
 
 ## Appendix B: References
 
