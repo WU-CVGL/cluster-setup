@@ -14,6 +14,8 @@ This is a manual for system admin.
 
 [4. Setup Supplementary Services](docs/04_Setup_Supplementary_Services.md)
 
+[5. GPU P2P on RTX 4090](docs/05_GPU_P2P_RTX4090.md)
+
 [Notes on Supplementary Services](services/README.md)
 
 ## Cluster Information
