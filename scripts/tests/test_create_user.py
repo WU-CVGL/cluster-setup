@@ -585,9 +585,15 @@ class ImportTest(unittest.TestCase):
         self.assertEqual(CONNECTIONS_AT_IMPORT, 0)
         self.assertTrue(callable(cu.main))
 
-    def test_nfs_options_fixed_typo(self):
-        self.assertIn("rsize=32768,wsize=32768", cu.NFS_MOUNT_OPTIONS)
+    def test_nfs_options(self):
+        for opt in ("rsize=1048576", "wsize=1048576", "hard", "nconnect=16"):
+            self.assertIn(opt, cu.NFS_MOUNT_OPTIONS.split(","))
+        self.assertNotIn("soft", cu.NFS_MOUNT_OPTIONS.split(","))
         self.assertNotIn("32769", Path(cu.__file__).read_text())
+
+    def test_nfs_options_match_remount_script(self):
+        script = (Path(cu.__file__).parent / "nfs-remount.sh").read_text()
+        self.assertIn(f'OPTS="{cu.NFS_MOUNT_OPTIONS}"', script)
 
 
 class ValidationTest(unittest.TestCase):
@@ -787,7 +793,7 @@ class CreateUserTest(unittest.TestCase):
         self.assertEqual(api.owners["/mnt/Peter/Workspace/alice"], (1100, 1100))
         self.assertIn("/mnt/Peter/Workspace/alice", api.nfs_shares)
         line = "nas.cvgl.lab:/mnt/Peter/Workspace/alice /workspace/alice nfs " \
-               "defaults,vers=3,async,noatime,soft,rsize=32768,wsize=32768,_netdev 0 2"
+               "defaults,vers=3,noatime,hard,nconnect=16,rsize=1048576,wsize=1048576,_netdev 0 2"
         for host in cluster.hosts():
             self.assertEqual(host.fstab.splitlines().count(line), 1, host.name)
             self.assertIn("/workspace/alice", host.mounted)
