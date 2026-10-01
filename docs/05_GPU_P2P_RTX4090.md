@@ -107,6 +107,7 @@ Our fork adds the `nvidia_uvm` module parameter `uvm_bar1_p2p_managed` (set in `
 
 - [ ] **BIOS**: Above 4G Decoding and Resizable BAR on; the host bridge windows must fit a 32 GiB BAR1 per GPU.
 - [ ] **Secure Boot** off (or sign the modules yourself).
+- [ ] **`unattended-upgrades` purged** ([docs/01](01_First-time_Setup_of_Cluster_Nodes.md#disable-unattended-updates)): it installs new kernels, which then boot without the P2P modules, and driver updates that break the version match. The install script refuses and `verify.sh` fails while it is installed.
 - [ ] **Driver**: Ubuntu's `nvidia-driver-<N>-open` at **exactly** the version of the fork branch (`610.57.04`). The closed driver cannot be patched.
 - [ ] **Build tools**: `linux-headers-<K>` and the compiler the kernel was built with (`cat /proc/version`).
 - [ ] **One card type per node**: do not mix 24 GB and 48 GB cards.
@@ -157,7 +158,7 @@ The build takes about a minute.
 sudo SRC=<fork>/kernel-open scripts/gpu-p2p/install-p2p-modules.sh install   # K=<K> V=<version> optional
 ```
 
-The script checks the driver and kernel versions, Secure Boot, apt locks and GRUB, then:
+The script checks the driver and kernel versions, Secure Boot, `unattended-upgrades`, apt locks and GRUB, then:
 
 - turns UVM HMM off ([why](#hmm-breaks-host-cumem-allocations-under-iommu-passthrough)) and adds `amd_iommu=on iommu=pt` to GRUB;
 - checks that the default boot entry is `<K>` with `iommu=pt`, and stops before installing anything if not;

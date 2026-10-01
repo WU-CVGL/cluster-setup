@@ -10,9 +10,9 @@
 #   SRC the kernel-open directory of the patched source tree after `make modules` (absolute path)
 #
 # install:
-#   - refuses when apt/dpkg is running or holds its lock, Secure Boot is on, the installed
-#     nvidia-driver-*-open package is not version V, a .ko is not version V or not built for K, or GRUB
-#     already sets another iommu= mode
+#   - refuses when unattended-upgrades is installed, apt/dpkg is running or holds its lock, Secure Boot
+#     is on, the installed nvidia-driver-*-open package is not version V, a .ko is not version V or not
+#     built for K, or GRUB already sets another iommu= mode
 #   - backs up /etc/default/grub (once) and the package list to /var/backups/nvidia-p2p/
 #   - disables UVM HMM (/etc/modprobe.d/nvidia-uvm-hmm.conf)
 #   - adds "amd_iommu=on iommu=pt" (AMD) or "intel_iommu=on iommu=pt" (Intel) to GRUB_CMDLINE_LINUX_DEFAULT
@@ -67,9 +67,12 @@ TS=$(date +%Y%m%d-%H%M%S)
 
 [ "$(id -u)" = 0 ] || die "run as root (sudo)"
 [ -d "/lib/modules/$K" ] || die "/lib/modules/$K does not exist"
-# unattended-upgrade by its command line: its 15-character process name also matches the idle
-# unattended-upgrade-shutdown helper, which runs all the time and holds no lock.
-if pgrep -x 'apt|apt-get|aptitude|dpkg' >/dev/null || pgrep -f '/unattended-upgrade( |$)' >/dev/null; then
+# The cluster purges unattended-upgrades (docs/01): it installs new kernels, which become the default
+# boot entry without P2P modules, and driver updates that break the version pin.
+if dpkg-query -W -f='${db:Status-Abbrev}' unattended-upgrades 2>/dev/null | grep -q '^[ih]i'; then
+    die "unattended-upgrades is installed: sudo apt purge unattended-upgrades first (docs/01, Disable unattended-updates)"
+fi
+if pgrep -x 'apt|apt-get|aptitude|dpkg' >/dev/null; then
     die "apt/dpkg is running; wait until it has finished"
 fi
 if command -v fuser >/dev/null &&

@@ -161,6 +161,12 @@ if [ -n "$V" ]; then
     pkg=nvidia-driver-${V%%.*}-open
     if apt-mark showhold 2>/dev/null | grep -qx "$pkg"; then pass "$pkg is held"; else warn "$pkg is not held: an upgrade would break the driver/library version match"; fi
 fi
+# 11. unattended-upgrades must be purged (docs/01): it installs kernels and driver updates unattended
+if dpkg-query -W -f='${db:Status-Abbrev}' unattended-upgrades 2>/dev/null | grep -q '^[ih]i'; then
+    fail "unattended-upgrades is installed: sudo apt purge unattended-upgrades (docs/01, Disable unattended-updates)"
+else
+    pass "unattended-upgrades not installed"
+fi
 
 echo
 if [ "$fails" = 0 ]; then
