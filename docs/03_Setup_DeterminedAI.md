@@ -6,6 +6,7 @@
   - [Contents](#contents)
   - [Deploy a Determined AI Single-Node Cluster](#deploy-a-determined-ai-single-node-cluster)
   - [Scale to multi-node: configure NFS export \& NFS client](#scale-to-multi-node-configure-nfs-export--nfs-client)
+    - [NFS client mount options](#nfs-client-mount-options)
   - [Scale to multi-node: configure Determined AI](#scale-to-multi-node-configure-determined-ai)
   - [TL;DR](#tldr)
     - [Installation](#installation)
@@ -75,16 +76,53 @@ mount -a
 sudo su
 apt install nfs-common
 mkdir -p /shared-data
-echo "192.168.233.162:/data /shared-data nfs defaults,noatime,hard,nointr,rsize=32768,wsize=32768,_netdev 0 2" >> /etc/fstab
+echo "192.168.233.162:/data /shared-data nfs defaults,vers=3,noatime,hard,nconnect=16,rsize=1048576,wsize=1048576,_netdev 0 2" >> /etc/fstab
 mount -a
 ```
 
 Notes:
 
 1) In the server configuration, we did not expose our NFS service to the campus network (`10.0.1.64/27`) to comply with security rules.
-We only expose the NFS service to the private 10GbE network `192.168.233.0/24`.
+We only expose the NFS service to the private network `192.168.233.0/24` (100GbE on the GPU nodes).
 2) In the client configuration, `192.168.233.233` is the IP of the `NFS Server`.
 You can first check the availability of the NFS service on the client using the command `showmount -e 192.168.233.233`.
+
+### NFS client mount options
+
+Every NFS mount on the nodes uses the same options, set by `scripts/create_user.py` for new users and by `scripts/nfs-remount.sh` for existing entries:
+
+```text
+defaults,vers=3,noatime,hard,nconnect=16,rsize=1048576,wsize=1048576,_netdev
+```
+
+| Option | Why |
+| :--- | :--- |
+| `rsize=1048576,wsize=1048576` | 32 KiB reads and writes cap a mount at about 1 GB/s; 1 MiB reaches about 2.5 GB/s per TCP connection. |
+| `nconnect=16` | One TCP connection stops at about 2.5-2.7 GB/s; 16 connections reach the 100GbE line rate for reads. |
+| `hard` | A NAS outage stalls I/O until the NAS is back instead of returning errors; `soft` can lose writes silently after a timeout. |
+| `vers=3` | Same semantics as before (numeric IDs, no NFSv4 ID mapping or leases); NFSv4.2 measured only 5-10 % faster without `nconnect`. |
+
+`nconnect` applies per NFS server, not per mount: all mounts of one server on a node share the TCP connections set up by the first of them that is mounted. A mix of options on one node therefore leaves `nconnect` unused. Check it in `/proc/self/mountstats`: the section of each mount lists one `xprt:` line per connection, 16 with `nconnect=16` (`ss` shows fewer, connections open on demand).
+
+Measured from one GPU node (`fio`, direct I/O, 4 jobs, 1 MiB sequential and 4 KiB random reads, files on the SSD pools; reads of just-written files come largely from the NAS's RAM cache, so they show the network and protocol limit, not the disks):
+
+| Mount options | Sequential write (GB/s) | Sequential read (GB/s) | 4 KiB random read (IOPS) |
+| :--- | ---: | ---: | ---: |
+| 32 KiB, `soft` | 0.74-0.86 | 0.84-0.99 | 29k-46k |
+| 1 MiB, `hard` | 1.61-2.61 | 2.35-2.64 | 28k-46k |
+| 1 MiB, `hard`, `nconnect=16` | 1.47-6.14 | 10.5-12.3 | 115k-118k |
+
+Writes are limited by the NAS: ZFS pools above about 80-90 % full write much slower, so keep the pools below that.
+
+Applying the options to a node's existing mounts: disable and drain the node in Determined (`det agent disable --drain <agent>`), wait until no task runs on it, then:
+
+```bash
+sudo scripts/nfs-remount.sh --dry-run   # fstab changes, mounts per NAS, busy mounts
+sudo scripts/nfs-remount.sh             # rewrites fstab (backup in /etc/fstab.nfs-remount-*), remounts per NAS
+det agent enable <agent>
+```
+
+The script refuses while Determined task containers run. It remounts all mounts of a NAS together and skips a NAS whose mounts are in use (open files or a working directory; listed with the process IDs), so nothing is killed. Rerun it once those processes are gone, or reboot: the fstab is already rewritten. It ends with one line per NAS: mounts remounted, options applied, number of transports.
 
 ## Scale to multi-node: configure Determined AI
 
