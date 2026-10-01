@@ -36,6 +36,7 @@ We deploy one branch of our fork on every node: [`610.57.04-p2p-48g`](https://gi
 | :--- | :--- | :--- | :--- |
 | RTX 4090 | 24 GB | 32 GiB | static BAR1: all of VRAM is mapped once |
 | RTX 4090 48 GB (modded) | 48 GiB | 32 GiB | dynamic BAR1: each shared allocation is mapped on demand |
+| RTX 3090 | 24 GB | 32 GiB | static BAR1, as on the RTX 4090 (same branch; the tests build for the GPU's compute capability) |
 
 Placeholders: `<agent>` Determined agent ID, `<K>` kernel release (`uname -r`), `<N>` driver branch (e.g. `610`), `<version>` full driver version (e.g. `610.57.04`), `<revision>` Ubuntu package revision, `<gcc>` major version of the compiler the kernel was built with, `<fork>` absolute path of the built fork tree, `<image>` CUDA + PyTorch image.
 
@@ -46,6 +47,7 @@ NCCL all-reduce bus bandwidth (GB/s, 1024 MiB, one process per GPU) without and 
 | Platform | 8 GPUs | 4 GPUs, one socket | Pair, cross socket | P2P copy per pair |
 | :--- | :--- | :--- | :--- | :--- |
 | EPYC 7402 (Rome), 24 GB, all GPUs at x16 | 1.3 -> 20.6 | 3.9 -> 25.1-25.2 | 1.2-1.3 -> 19.2-19.4 | 26.4; cross socket 21.8-22.7 |
+| EPYC 7402 (Rome), RTX 3090, all GPUs at x16 | - -> 20.1 | - -> 24.7 | - -> 18.2-18.4 | 26.4; cross socket 21.9-22.7 |
 | EPYC 7543 (Milan), 24 GB | 0.8 -> 12.9 (x8 GPU) | 4.4-4.7 -> 12.9 (x8 GPU) | 0.8 -> 19.2 | 26.3; cross socket 10-22 (asymmetric) |
 | EPYC 9554 (Genoa), 24 GB and 48 GB, all GPUs at x16 (combined, see note) | about 16 -> about 24-25 (estimated) | 20.4-21.1 -> 25.6-25.7 | 15.9-16.4 -> 23.4-23.6 | 26.4 in both directions |
 
@@ -267,6 +269,22 @@ All runs used the branch `610.57.04-p2p-48g`, `iommu=pt`, HMM off and `uvm_bar1_
 | NCCL cross-socket pairs 0,4 / 3,7 | 1.2 / 1.3 | 19.2-19.4 / 19.3-19.4 |
 
 Rome's cross-socket P2P is symmetric (unlike Milan), but slower than within a socket.
+
+### GPU Node 4: RTX 3090, EPYC 7402 (Rome)
+
+8x RTX 3090 24 GB, 512 GB, kernel 6.8.0-138-generic. All GPUs at x16. The closed driver 590 ran before the patch, so there is no stock NCCL baseline; the host-staged copies are the same run with peer access off. Static BAR1 on (BAR1 resized from 256 MiB to 32 GiB; 8 GiB held raised "BAR1 Used" to 8457 MiB).
+
+| | Host staged | P2P |
+| :--- | ---: | ---: |
+| Host<->GPU (GB/s, H2D / D2H) | | 25.8-26.1 / 25.4-26.1 |
+| Copy, same socket (GB/s) | 7.8-11.2 | 26.3-26.4 (bidirectional 51.0-51.3) |
+| Copy, cross socket | 8.1-11.3 | 21.9-22.7 (bidirectional 41.1-42.2) |
+| NCCL 8 GPUs | | 20.1 |
+| NCCL GPU0-3 / GPU4-7 | | 24.7 / 24.7 |
+| NCCL pairs 0,1 / 4,5 | | 24.1 / 24.1-24.2 |
+| NCCL cross-socket pairs 0,4 / 3,7 | | 18.2 / 18.4 |
+
+Within 0.5-1 GB/s of the RTX 4090 on the same platform (Node 2).
 
 ### GPU Node 5: 24 GB, EPYC 7543 (Milan)
 
