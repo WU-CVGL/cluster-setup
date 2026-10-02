@@ -47,12 +47,12 @@ NCCL all-reduce bus bandwidth (GB/s, 1024 MiB, one process per GPU) without and 
 | Platform | 8 GPUs | 4 GPUs, one socket | Pair, cross socket | P2P copy per pair |
 | :--- | :--- | :--- | :--- | :--- |
 | EPYC 7402 (Rome), 24 GB, all GPUs at x16 | 1.3 -> 20.6 | 3.9 -> 25.1-25.2 | 1.2-1.3 -> 19.2-19.4 | 26.4; cross socket 21.8-22.7 |
-| EPYC 7402 (Rome), RTX 3090, all GPUs at x16 | - -> 20.1 | - -> 24.7 | - -> 18.2-18.4 | 26.4; cross socket 21.9-22.7 |
+| EPYC 7402 (Rome), RTX 3090, all GPUs at x16 | 1.6 -> 20.1 | 4.0 -> 24.6-24.7 | 1.4-1.6 -> 18.3-18.4 | 26.4; cross socket 21.5-22.7 |
 | EPYC 7302 (Rome), RTX 3090, 7 GPUs, 2 at x8 | 1.5-1.6 -> 12.6 (x8 GPU) | 3.3-3.6 -> 12.7 (x8 GPU) | 1.3-1.6 -> 11.9-12.0 (x8 GPU) | 26.4; cross socket 22.7; with an x8 GPU 13.2 |
 | EPYC 7543 (Milan), 24 GB | 0.8 -> 12.9 (x8 GPU) | 4.4-4.7 -> 12.9 (x8 GPU) | 0.8 -> 19.2 | 26.3; cross socket 10-22 (asymmetric) |
 | EPYC 9554 (Genoa), 24 GB and 48 GB, all GPUs at x16 (combined, see note) | about 16 -> about 24-25 (estimated) | 20.4-21.1 -> 25.6-25.7 | 15.9-16.4 -> 23.4-23.6 | 26.4 in both directions |
 
-- **Host staging speed decides the gain.** Rome and Milan stage through host memory slowly, so P2P gives about 6-16x on Rome (all x16) and 3-24x on Milan. Genoa stages fast, so P2P gives 1.2-1.5x.
+- **Host staging speed decides the gain.** Rome and Milan stage through host memory slowly, so P2P gives about 6-16x on Rome (all x16, RTX 4090 and RTX 3090 alike) and 3-24x on Milan. Genoa stages fast, so P2P gives 1.2-1.5x.
 - **A GPU at PCIe x8 caps every ring that contains it at about 13 GB/s**, with or without P2P. Nodes 1, 5, 6 and 7 each have one or two such GPUs ([PCIe link width](#pcie-link-width)).
 - **The Genoa row combines two nodes with the same platform.** node06 (24 GB) and node07 (48 GB) gave the same results wherever neither had an x8 GPU in the set: per-pair copies 26.4 vs 26.4 GB/s, one-socket 4-GPU all-reduce 25.6 vs 25.7, cross-socket pairs 23.5-23.6 vs 23.4-23.6. Their x8 GPUs sit on different sockets, so between them every 4-GPU and 2-GPU set was measured at x16. An 8-GPU set was not: on both nodes it contains an x8 GPU (13.0 measured). The 8-GPU ring crosses the sockets, so its result follows the cross-socket pair: on Rome, all at x16, 8 GPUs reached 20.6 with P2P against 19.2-19.4 for the cross-socket pairs and 25.1 for four GPUs on one socket, and 1.3 without P2P against 1.2-1.3. The same relation on Genoa gives about 24-25 GB/s with P2P (cross-socket pairs 23.4-23.6, one socket 25.6-25.7) and about 16 without (cross-socket pairs at x16 measured 15.9-16.4 over host memory). These two values are estimates.
 
@@ -289,6 +289,22 @@ Rome's cross-socket P2P is symmetric (unlike Milan), but slower than within a so
 
 Every set except pair 0,1 contains an x8 GPU and stops at about 12.6 GB/s; the x16 pair matches Node 4 (same CPU family and GPU). Without P2P, cross-socket all-reduce runs at 1.3-1.6 GB/s, about the speed of 10 GbE.
 
+### GPU Node 3: RTX 3090, EPYC 7402 (Rome)
+
+8x RTX 3090 24 GB, 512 GB, kernel 6.8.0-107-generic. All GPUs at x16. Baseline: stock closed driver 590.48.01. Static BAR1 on (8 GiB held raised "BAR1 Used" to 8457 MiB). Service run: `OVERALL: PASS`, kernel log clean.
+
+| | Stock | P2P |
+| :--- | ---: | ---: |
+| Host<->GPU (GB/s, H2D / D2H) | 24.4-26.0 / 19.9-23.1 | 25.8-26.1 / 24.8-26.1 |
+| Copy, same socket (GB/s) | 7.6-11.3 (staged) | 24.6-26.4 (bidirectional 50.1-51.2) |
+| Copy, cross socket | 8.0-11.2 (staged) | 21.5-22.7 (bidirectional 40.4-42.1) |
+| NCCL 8 GPUs | 1.6 | 20.1 |
+| NCCL GPU0-3 / GPU4-7 | 4.0 / 4.0 | 24.6 / 24.7 |
+| NCCL pairs 0,1 / 4,5 | 3.6 / 3.6 | 24.0-24.1 / 24.0-24.3 |
+| NCCL cross-socket pairs 0,4 / 3,7 | 1.4 / 1.6 | 18.3 / 18.3 |
+
+Gains: 12.6x for 8 GPUs, about 6x within a socket, 11-13x across sockets. The same as Node 4 (same hardware) within 0.2 GB/s.
+
 ### GPU Node 4: RTX 3090, EPYC 7402 (Rome)
 
 8x RTX 3090 24 GB, 512 GB, kernel 6.8.0-138-generic. All GPUs at x16. The closed driver 590 ran before the patch, so there is no stock NCCL baseline; the host-staged copies are the same run with peer access off. Static BAR1 on (BAR1 resized from 256 MiB to 32 GiB; 8 GiB held raised "BAR1 Used" to 8457 MiB).
@@ -303,7 +319,7 @@ Every set except pair 0,1 contains an x8 GPU and stops at about 12.6 GB/s; the x
 | NCCL pairs 0,1 / 4,5 | | 24.1 / 24.1-24.2 |
 | NCCL cross-socket pairs 0,4 / 3,7 | | 18.2 / 18.4 |
 
-Within 0.5-1 GB/s of the RTX 4090 on the same platform (Node 2). For a stock baseline on this platform and GPU, see Node 1.
+Within 0.5-1 GB/s of the RTX 4090 on the same platform (Node 2). Stock baseline on the same hardware: Node 3.
 
 ### GPU Node 5: 24 GB, EPYC 7543 (Milan)
 
