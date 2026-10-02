@@ -112,7 +112,7 @@ Our fork adds the `nvidia_uvm` module parameter `uvm_bar1_p2p_managed` (set in `
 - [ ] **Secure Boot** off (or sign the modules yourself).
 - [ ] **`unattended-upgrades` purged** ([docs/01](01_First-time_Setup_of_Cluster_Nodes.md#disable-unattended-updates)): it installs new kernels, which then boot without the P2P modules, and driver updates that break the version match. The install script refuses and `verify.sh` fails while it is installed.
 - [ ] **Driver**: Ubuntu's `nvidia-driver-<N>-open` at **exactly** the version of the fork branch (`610.57.04`). The closed driver cannot be patched.
-- [ ] **Build tools**: `linux-headers-<K>` and the compiler the kernel was built with (`cat /proc/version`).
+- [ ] **Build tools**: `linux-headers-<K>`, and the C and C++ compilers of the version the kernel was built with (`cat /proc/version`), e.g. `gcc-12` and `g++-12`: part of the driver is C++.
 - [ ] **One card type per node**: do not mix 24 GB and 48 GB cards.
 - [ ] **PCIe links**: every GPU at full width under load (`nvidia-smi --query-gpu=index,pcie.link.width.current,pcie.link.width.max --format=csv -lms 500` while a job runs).
 - [ ] **Maintenance window**: the node reboots; its tasks must finish or be stopped.
@@ -147,7 +147,7 @@ Unprivileged, on the node or a machine with the same kernel and headers:
 git clone --depth 1 -b <version>-p2p-48g https://github.com/LingzheZhao/open-gpu-kernel-modules.git
 cd open-gpu-kernel-modules
 git rev-parse HEAD > .source-commit    # recorded in updates/p2p/SOURCE by the installer
-make modules -j"$(nproc)" SYSSRC=/lib/modules/<K>/build CC=x86_64-linux-gnu-gcc-<gcc>
+make modules -j"$(nproc)" SYSSRC=/lib/modules/<K>/build CC=x86_64-linux-gnu-gcc-<gcc> CXX=x86_64-linux-gnu-g++-<gcc>
 modinfo -F vermagic kernel-open/nvidia.ko   # must start with <K>
 ```
 
