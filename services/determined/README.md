@@ -47,6 +47,9 @@ Rules:
 1. Never change an agent's GPU set or pool while tasks run on it: `det agent disable --drain <agent>` and wait until nothing runs on it first.
 2. After stopping or removing an agent container, wait until `det agent list` no longer lists the agent (up to `agent_reconnect_wait`) before starting one with a different GPU set or pool. Masters without the fork fix [WU-CVGL/determined#24](https://github.com/WU-CVGL/determined/pull/24) otherwise drop the new agent one `agent_reconnect_wait` later: it stays connected, but `det agent list` no longer shows it and the API answers `agent '<agent>' not found`. There is no API or CLI command to remove an agent from the master.
 
+- `det deploy local agent-down --agent-name <name>` removes only the container that `agent-up` created for that name (the container is named after `--agent-name`). Agent containers started otherwise (e.g. `det-agent-<host>` below) are not found: stop them with `docker rm -f` before `agent-up`.
+- Never run two agent containers with the same agent ID on a node: the master accepts only one connection per ID, and the other one restarts in a loop with `websocket already connected` (`docker ps` shows `Restarting`).
+
 ### Leaving out a faulty GPU
 
 Hide the GPU from the agent: the agent then has one slot less, which survives reboots and reconnects. Select the remaining GPUs by UUID (`nvidia-smi --query-gpu=pci.bus_id,uuid --format=csv,noheader`), so that a changed numbering cannot bring the faulty GPU back, and follow the rules above (the slot count changes):

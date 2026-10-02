@@ -541,28 +541,23 @@ Do not `pip install determined` from PyPI: that is the upstream package, and its
 
 ### Pypi cryptography & pyOpenSSL dependency conflict
 
-Problem description:
+`det` fails right at the start with an error from `OpenSSL/crypto.py`, e.g.
 
 ```log
-.
-.
-.
-  File "/usr/local/lib/python3.8/site-packages/OpenSSL/crypto.py", line 3224, in <module>
-    utils.deprecated(
+AttributeError: module 'lib' has no attribute 'GEN_EMAIL'
 TypeError: deprecated() got an unexpected keyword argument 'name'
 ```
 
-Solution:
+Cause: the installed pyOpenSSL does not match the installed cryptography, typically after installing the `det` wheel pulled in a newer cryptography while an old pyOpenSSL was pinned. Fix: upgrade pyOpenSSL, so that pip picks a version matching the installed cryptography, and check `det` again:
 
 ```bash
-sudo rm -rf /usr/local/lib/python3.8/dist-packages/OpenSSL
-sudo rm -rf /usr/local/lib/python3.8/dist-packages/pyOpenSSL-22.1.0.dist-info/
-sudo pip install pyOpenSSL==20.0.1 cryptography==36.0.2
+sudo pip install -U pyOpenSSL      # add --proxy http://192.168.233.8:59889 if the node cannot reach PyPI directly
+det --version
 ```
 
-Reference:
-> https://stackoverflow.com/questions/74041308/pip-throws-typeerror-deprecated-error/74046535#74046535
+Do not pin old versions (an earlier workaround installed `pyOpenSSL==20.0.1 cryptography==36.0.2`): the next wheel upgrade brings a newer cryptography and breaks `det` again.
 
+Reference:
 > https://askubuntu.com/questions/1428181/module-lib-has-no-attribute-x509-v-flag-cb-issuer-check/1435520#1435520
 
 ### Disable i386
