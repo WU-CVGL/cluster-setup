@@ -213,6 +213,14 @@ docker compose up -d --force-recreate --remove-orphans
 
 to collect data from every machine. The `cadvisor` image comes from `harbor.cvgl.lab`, so the node must trust the Harbor certificate first ([docs/04](../docs/04_Setup_Supplementary_Services.md#post-installation)). On VMs without a GPU, start only `docker compose up -d node-exporter` (Prometheus scrapes cAdvisor and DCGM-Exporter only on the GPU nodes).
 
+Every service in the file has `restart: unless-stopped`, so the exporters come back after a reboot. Check it on each node:
+
+```bash
+docker inspect -f '{{.Name}} {{.HostConfig.RestartPolicy.Name}}' $(docker compose ps -aq)
+```
+
+A service without a policy (`no`), e.g. in an older copy of the file on a node, stays stopped after every reboot and Prometheus loses its metrics: copy this folder again and run the `up` command above.
+
 Update `static_configs[targets]` in `prometheus/prometheus.yml` if any new nodes are added to the cluster.
 
 ##### 7.3. Prometheus authentication for Determined AI (Bearer token)
