@@ -71,9 +71,11 @@ Select the time range before choosing completed tasks or historical allocations.
 CPU is measured in logical cores, memory in bytes, and GPU panels show **allocated
 device** observations, not exclusive per-process attribution. Allocation labels
 remain distinct across pause/resume. Parent task usage excludes child tasks.
-On the observed cAdvisor targets, RSS currently reports zero for every sample
-while working set is nonzero. That does not establish that task RSS is truly
-zero; validate the exporter and cgroup support before interpreting the RSS panel.
+Whether RSS is meaningful depends on the cAdvisor version and the host's cgroup
+version: older cAdvisor releases (such as v0.38.6) report an RSS of zero for every
+container on cgroup v2 hosts while the working set is nonzero. A zero RSS panel
+therefore does not show that a task's RSS is zero; check the deployed cAdvisor
+version and cgroup support before interpreting it.
 
 The mapping rules normalize positive relationship values to one and exclude
 ambiguous ownership before joining. Conflict/missing-data panels explain gaps.
