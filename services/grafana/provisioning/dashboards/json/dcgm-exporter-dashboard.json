@@ -700,16 +700,19 @@
     "prometheus",
     "system",
     "GPU"
-    ],
+  ],
   "templating": {
     "list": [
       {
         "allValue": null,
         "current": {},
-        "datasource": "Prometheus",
+        "datasource": {
+          "type": "prometheus",
+          "uid": "PBFA97CFB590B2093"
+        },
         "definition": "label_values(DCGM_FI_DEV_GPU_TEMP, instance)",
         "hide": 0,
-        "includeAll": false,
+        "includeAll": true,
         "label": null,
         "multi": true,
         "name": "instance",
@@ -728,7 +731,10 @@
       {
         "allValue": null,
         "current": {},
-        "datasource": "Prometheus",
+        "datasource": {
+          "type": "prometheus",
+          "uid": "PBFA97CFB590B2093"
+        },
         "definition": "label_values(gpu)",
         "hide": 0,
         "includeAll": true,
