@@ -19,7 +19,7 @@
 //   --mib N     allocation size in MiB, rounded up to the granularity (default 64)
 // The data mixes constant tiles (compressible) and random tiles (not compressible).
 // Each read prints bad words and a checksum (sum of the words read vs expected).
-// Build: nvcc -O2 -arch=sm_89 -o compress compress.cu -lcuda
+// Build: nvcc -O2 -arch=sm_<cc> -o compress compress.cu -lcuda   (sm_86 on the RTX 3090, sm_89 on the RTX 4090)
 // Per pair one of: MAPPED (A's peer mapping works: reads and writes verified), REFUSED (cuMemSetAccess for A
 // returns CUDA_ERROR_NOT_SUPPORTED: the RM fix refuses a static-BAR1 peer mapping of compressible memory that the
 // static BAR1 does not map with the allocation's kind), SKIP (no compression, VMM or peer access, or the

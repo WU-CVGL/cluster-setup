@@ -8,7 +8,7 @@
 //   A: waits for e2, kernel reads the new data
 // usage: stale [--pair a,b] [--iters N] [--mib N]
 //   --pair a,b  reader A, owner B (default: every ordered pair); --iters per pair and variant (default 200)
-// Build: nvcc -O2 -arch=sm_89 -o stale stale.cu
+// Build: nvcc -O2 -arch=sm_<cc> -o stale stale.cu   (sm_86 on the RTX 3090, sm_89 on the RTX 4090)
 // Output ends with "RESULT: PASS" (exit 0) or "RESULT: FAIL" (exit 1). CUDA errors exit 2, usage errors 3.
 #include <cstdio>
 #include <cstdlib>

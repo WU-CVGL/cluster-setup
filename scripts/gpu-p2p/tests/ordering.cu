@@ -10,7 +10,7 @@
 // usage: ordering [--gpus a,b[,c]] [--iters N] [--mib N]
 //   --gpus   writer A, data owner B, flag holder C (default 0,1,2; C left out with 2 GPUs)
 //   --iters  iterations per variant (default 200); --mib: buffer size (default 64)
-// Build: nvcc -O2 -arch=sm_89 -o ordering ordering.cu
+// Build: nvcc -O2 -arch=sm_<cc> -o ordering ordering.cu   (sm_86 on the RTX 3090, sm_89 on the RTX 4090)
 // Output ends with "RESULT: PASS" (exit 0) or "RESULT: FAIL" (exit 1: stale words, or a flag that never
 // arrived within 10 s). CUDA errors exit 2, usage errors 3.
 #include <time.h>

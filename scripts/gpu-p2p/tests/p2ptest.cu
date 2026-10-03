@@ -5,7 +5,7 @@
 // Uses the legacy whole-device peer access (cudaDeviceEnablePeerAccess), which maps every allocation of
 // the peer: with dynamic BAR1 P2P (BAR1 smaller than VRAM) the test buffer must fit into BAR1, so cap it
 // with P2PTEST_BUF_GB (e.g. 2). Default: all free memory minus 2 GiB.
-// Build: nvcc -O2 -arch=sm_89 -o p2ptest p2ptest.cu
+// Build: nvcc -O2 -arch=sm_<cc> -o p2ptest p2ptest.cu   (sm_86 on the RTX 3090, sm_89 on the RTX 4090)
 // Output ends with "RESULT: PASS" (exit 0) when every ordered GPU pair has working peer access and all
 // integrity checks are clean, else "RESULT: FAIL ..." (exit 1). CUDA errors exit 2.
 #include <sched.h>

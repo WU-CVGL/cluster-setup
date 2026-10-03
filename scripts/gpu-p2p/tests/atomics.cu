@@ -13,7 +13,7 @@
 //   --owner b   GPU that holds the counter (default 0)
 //   --peers     accessing GPUs (default: the next two GPUs after the owner, one if only two GPUs)
 //   --adds N    atomicAdd per thread per launch (default 64; 64 blocks x 256 threads per GPU)
-// Build: nvcc -O2 -arch=sm_89 -o atomics atomics.cu
+// Build: nvcc -O2 -arch=sm_<cc> -o atomics atomics.cu   (sm_86 on the RTX 3090, sm_89 on the RTX 4090)
 // Output ends with "RESULT: PASS ..." (exit 0) or "RESULT: FAIL ..." (exit 1): the control is wrong, a count
 // is too high, a count is too low although the attribute says native atomics, or a start timed out.
 // CUDA errors exit 2, usage errors 3.

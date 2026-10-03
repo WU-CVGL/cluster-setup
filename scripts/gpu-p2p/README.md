@@ -1,10 +1,10 @@
-# GPU P2P tools (RTX 4090)
+# GPU P2P tools (GeForce)
 
-Scripts to install, verify, test and roll back P2P-patched NVIDIA open kernel modules on a GPU node. The procedure (including building the modules), the background and the measured results are in [docs/05_GPU_P2P_RTX4090.md](../../docs/05_GPU_P2P_RTX4090.md#procedure). Placeholders as in [docs/05](../../docs/05_GPU_P2P_RTX4090.md#introduction): `<K>` kernel, `<N>` driver branch, `<version>` driver version, `<fork>` absolute path of the built fork tree, `<image>` CUDA + PyTorch image; here also `<n>` resident GiB per GPU (VRAM minus a few GiB) and `<label>` log name.
+Scripts to install, verify, test and roll back P2P-patched NVIDIA open kernel modules on a GPU node. The procedure (including building the modules), the background and the measured results are in [docs/05_GPU_P2P_GeForce.md](../../docs/05_GPU_P2P_GeForce.md#procedure). Placeholders as in [docs/05](../../docs/05_GPU_P2P_GeForce.md#introduction): `<K>` kernel, `<N>` driver branch, `<version>` driver version, `<fork>` absolute path of the built fork tree, `<image>` CUDA + PyTorch image; here also `<n>` resident GiB per GPU (VRAM minus a few GiB) and `<label>` log name.
 
 ## Contents
 
-- [GPU P2P tools (RTX 4090)](#gpu-p2p-tools-rtx-4090)
+- [GPU P2P tools (GeForce)](#gpu-p2p-tools-geforce)
   - [Contents](#contents)
   - [Files](#files)
   - [Install and verify](#install-and-verify)
@@ -37,7 +37,7 @@ Scripts to install, verify, test and roll back P2P-patched NVIDIA open kernel mo
 
 ## Install and verify
 
-From this directory, after steps 1-3 of [docs/05](../../docs/05_GPU_P2P_RTX4090.md#procedure) (node disabled and drained in Determined, matching open driver installed, fork built):
+From this directory, after steps 1-3 of [docs/05](../../docs/05_GPU_P2P_GeForce.md#procedure) (node disabled and drained in Determined, matching open driver installed, fork built):
 
 ```bash
 sudo SRC=<fork>/kernel-open ./install-p2p-modules.sh install   # K=<K> V=<version> optional
@@ -46,12 +46,12 @@ nvidia-modprobe -u -c 0     # loads nvidia_uvm (otherwise loaded on first CUDA u
 ./verify.sh                                                     # no root needed
 ```
 
-After the reboot `det agent list` must still show the node as disabled; enable it only after [docs/05 step 6](../../docs/05_GPU_P2P_RTX4090.md#6-run-the-tests) passed (step 7 there). If `verify.sh` reports `nvidia_modeset` or `nvidia_drm` not loaded (a headless node), run `sudo modprobe nvidia_drm` and run it again.
+After the reboot `det agent list` must still show the node as disabled; enable it only after [docs/05 step 6](../../docs/05_GPU_P2P_GeForce.md#6-run-the-tests) passed (step 7 there). If `verify.sh` reports `nvidia_modeset` or `nvidia_drm` not loaded (a headless node), run `sudo modprobe nvidia_drm` and run it again.
 
-- Refusals and the order of changes: [docs/05 step 4](../../docs/05_GPU_P2P_RTX4090.md#4-install-the-modules); all options: `./install-p2p-modules.sh --help`.
+- Refusals and the order of changes: [docs/05 step 4](../../docs/05_GPU_P2P_GeForce.md#4-install-the-modules); all options: `./install-p2p-modules.sh --help`.
 - **State** in `/var/backups/nvidia-p2p/`: the original `/etc/default/grub` (`grub.pre-p2p`, taken once), the GRUB parameters the script added (`grub-added-params.txt`), the packages it held (`held-packages.txt`), package lists and replaced modules. `--restore` uses the two lists.
 - **Per kernel**: the override applies to `<K>` only; after a kernel upgrade the node boots the stock DKMS modules (safe, but without P2P) until the modules are rebuilt and installed with `K=<new kernel>`.
-- `verify.sh` prints BAR1 vs VRAM but cannot tell whether static BAR1 is actually on; use the [hold test](../../docs/05_GPU_P2P_RTX4090.md#static-or-dynamic-how-to-tell) (it also loads `nvidia_uvm`; run it before `verify.sh`). It does not check the UVM gate either: `/sys/module/nvidia_uvm/parameters/uvm_bar1_p2p_managed` must exist and be `0`.
+- `verify.sh` prints BAR1 vs VRAM but cannot tell whether static BAR1 is actually on; use the [hold test](../../docs/05_GPU_P2P_GeForce.md#static-or-dynamic-how-to-tell) (it also loads `nvidia_uvm`; run it before `verify.sh`). It does not check the UVM gate either: `/sys/module/nvidia_uvm/parameters/uvm_bar1_p2p_managed` must exist and be `0`.
 - `verify.sh` ends with `RESULT: PASS` when everything is in place. `WARN` lines do not fail it: a narrow PCIe link (such a GPU caps every transfer and NCCL ring through it), `METHOD3` lines in the kernel log (dynamic BAR1 window errors: investigate before enabling the node), a missing package hold. The kernel-log check needs the `adm` or `systemd-journal` group, otherwise it prints `SKIP`.
 
 ## Test
@@ -67,7 +67,7 @@ ATOMICS=1 STAGES=atomics ./run_host.sh <image> atomics       # diagnostic, not a
 KEEP_GOING=1 NCCL_VARIANTS="default no-p2p" ./run_host.sh <image> baseline   # before installing P2P
 ```
 
-Service validation of a node is the default stages plus `MANAGED=1` with the UVM gate on, and `RESIDENT_GB` a few GiB below VRAM (e.g. 20 on 24 GB cards, 38 on 48 GB cards). `managedtest`, `atomics` and `compress` do not run by default. `atomics` is a diagnostic: any Xid while it runs fails the kernel-log check, so it stays out of service validation. `managedtest` is safe with the gate on both card types; on static-BAR1 cards without the fix it faults all GPUs (next section).
+Service validation of a node is the default stages plus `MANAGED=1` with the UVM gate on, and `RESIDENT_GB` a few GiB below VRAM (e.g. 20 on 24 GB cards, 38 on 48 GB cards). `managedtest`, `atomics` and `compress` do not run by default. `atomics` is a diagnostic: any Xid while it runs fails the kernel-log check, so it stays out of service validation. `managedtest` is safe with the gate on all three card types; on static-BAR1 cards without the fix it faults all GPUs (next section).
 
 The image needs `nvcc` and `torchrun` (for example an NGC PyTorch image). The container runs with `--init --gpus all --ipc=host --ulimit memlock=-1`, the tests directory is mounted read-only and the binaries are built inside the container. After `TIMEOUT` the container is stopped and removed.
 
@@ -75,13 +75,13 @@ GPU numbering follows `nvidia-smi` (`CUDA_DEVICE_ORDER=PCI_BUS_ID`). By default 
 
 ### Managed memory and the UVM BAR1 fix
 
-On static-BAR1 GPUs (BAR1 >= VRAM, 24 GB cards) cross-GPU managed memory faults all GPUs with drivers that lack the UVM BAR1 fix (Xid 31 `FAULT_UNSUPPORTED_APERTURE`, then Xid 154; only a reboot recovers; [why](../../docs/05_GPU_P2P_RTX4090.md#managed-memory-uvm)). The fixed driver has the `nvidia_uvm` module parameter `uvm_bar1_p2p_managed`: `0` (default, the gate) keeps managed memory of BAR1 peers off direct peer access, so managed pages stage through host memory; `1` (opt-in, validated per platform in an opt-in window; results: [docs/05 Appendix A](../../docs/05_GPU_P2P_RTX4090.md#opt-in-uvm_bar1_p2p_managed1)) lets UVM map and copy them over BAR1 with the new page-table and copy-engine encodings. `run_host.sh` logs which mode is active and refuses `MANAGED=1` whenever the parameter is missing (`MANAGED_FORCE=1` overrides): on static-BAR1 cards the test would fault all GPUs, and on dynamic-BAR1 cards duanyll's Method 3 without this fork's dynamic-pair guard would address host RAM. Run `managedtest` first with `MANAGED_ARGS="--quick --pair 0,1"` (2 MiB, one pair, no `oversub`), then in full.
+On static-BAR1 GPUs (BAR1 >= VRAM: the RTX 3090 and RTX 4090 24 GB) cross-GPU managed memory faults all GPUs with drivers that lack the UVM BAR1 fix: observed on the RTX 4090 24 GB (Xid 31 `FAULT_UNSUPPORTED_APERTURE`, then Xid 154; only a reboot recovers), and expected on the RTX 3090, which uses the same pre-Hopper UVM code but was not tested without the fix ([why](../../docs/05_GPU_P2P_GeForce.md#managed-memory-uvm)). The fixed driver has the `nvidia_uvm` module parameter `uvm_bar1_p2p_managed`: `0` (default, the gate) keeps managed memory of BAR1 peers off direct peer access, so managed pages stage through host memory; `1` (opt-in, validated per platform and card type in an opt-in window; results for the RTX 4090 24 GB: [docs/05 Appendix A](../../docs/05_GPU_P2P_GeForce.md#opt-in-uvm_bar1_p2p_managed1)) lets UVM map and copy them over BAR1 with the new page-table and copy-engine encodings. `run_host.sh` logs which mode is active and refuses `MANAGED=1` whenever the parameter is missing (`MANAGED_FORCE=1` overrides): on static-BAR1 cards the test would fault all GPUs, and on dynamic-BAR1 cards duanyll's Method 3 without this fork's dynamic-pair guard would address host RAM. Run `managedtest` first with `MANAGED_ARGS="--quick --pair 0,1"` (2 MiB, one pair, no `oversub`), then in full.
 
 Returning a static-BAR1 node to service needs only the gate (step 1); the opt-in is a separate window (steps 2-4):
 
 1. **Gate validation** (the node stays out of service until it passes):
    1. Install the fixed modules and reboot; do not set `uvm_bar1_p2p_managed` (default `0`). `verify.sh` passes.
-   2. Run the two commands of [docs/05 step 6](../../docs/05_GPU_P2P_RTX4090.md#6-run-the-tests) (quick pair first, then the service run with `MANAGED=1 RESIDENT_GB=<n>`).
+   2. Run the two commands of [docs/05 step 6](../../docs/05_GPU_P2P_GeForce.md#6-run-the-tests) (quick pair first, then the service run with `MANAGED=1 RESIDENT_GB=<n>`).
    3. Both logs end with `OVERALL: PASS` and `KERNEL LOG: PASS` (no Xid, no assert), and the log header says `gate on`. Then the node can be enabled. The header reflects only the value of `uvm_bar1_p2p_managed`. A `managedtest` PASS shows that managed memory works without an Xid; it cannot show whether pages staged through host memory or went over a direct BAR1 peer mapping, since both give correct data. That the gate keeps static pre-Hopper pairs off direct peer access rests on review of the driver predicate `uvm_parent_gpus_bar1_managed_unsupported()`.
 2. **Opt-in window** (node disabled in the scheduler, a reboot is acceptable): set the option in a file of its own, `echo 'options nvidia-uvm uvm_bar1_p2p_managed=1' | sudo tee /etc/modprobe.d/nvidia-uvm-bar1-optin.conf` (do not edit `nvidia-uvm-hmm.conf`: the installer rewrites it and `--restore` deletes it), preferably with the UVM debug build (`make modules ... UVM_BUILD_TYPE=debug`, installed like the release build), reboot, and run in this order. Instead of a reboot, `nvidia-uvm` alone can be swapped and reloaded (copy its `nvidia-uvm.ko` into `updates/p2p`, `depmod -a`, `modprobe -r nvidia_uvm && modprobe nvidia_uvm`) when no process holds `/dev/nvidia-uvm` (stop GPU jobs, the scheduler agent and DCGM first) and the loaded `nvidia.ko` comes from the same tree (same `srcversion`). The debug and release `nvidia-uvm.ko` have the same `srcversion`: tell them apart by file hash.
    1. `MANAGED=1 MANAGED_ARGS="--quick --pair 0,1 --modes accessedby" STAGES=managedtest ./run_host.sh <image> optin-pte`. This tests the page-table encoding alone (peer remote mappings through `SetAccessedBy`, no peer copy-engine copies). It is not a lower-risk run: a wrong peer address can reach host memory.
@@ -160,7 +160,7 @@ OVERALL: PASS
 
 The `ordering`, `stale`, `atomics` and `managedtest` lines show the output format, not measured results.
 
-The RTX 4090 has no native P2P atomics (`NativeAtomicSupported` = 0 in the `atomics` matrix): an `atomicAdd` from one GPU on another GPU's memory is not atomic with respect to other GPUs, so concurrent adds lose increments. This is expected and only `INFO`; jobs must not rely on cross-GPU atomics on peer memory. A count above the expected value, a lossy control, or a loss with `NativeAtomicSupported` = 1 fail.
+The RTX 4090 has no native P2P atomics (`NativeAtomicSupported` = 0 in the `atomics` matrix; not measured on the RTX 3090): an `atomicAdd` from one GPU on another GPU's memory is not atomic with respect to other GPUs, so concurrent adds lose increments. This is expected and only `INFO`; jobs must not rely on cross-GPU atomics on peer memory. A count above the expected value, a lossy control, or a loss with `NativeAtomicSupported` = 1 fail.
 
 Failure signatures:
 
@@ -198,7 +198,7 @@ Environment variables of `run_host.sh` (passed into the container) and `run_test
 | `NCCL_VARIANTS` | `default p2p-sys` | Any of `default`, `p2p-sys`, `no-p2p` (`NCCL_P2P_DISABLE=1`). |
 | `RESIDENT_GB` | `0` | GiB per GPU held with a known pattern during the NCCL runs and checked afterwards. |
 | `SIZES_MB`, `ITERS` | `64,256,1024`, `10` | All-reduce sizes and timed iterations. |
-| `CUDA_ARCH` | GPU0's compute capability | `nvcc -arch`, e.g. `sm_89` (RTX 4090) or `sm_86` (RTX 3090); read with `nvidia-smi --query-gpu=compute_cap`. |
+| `CUDA_ARCH` | GPU0's compute capability | `nvcc -arch`, e.g. `sm_89` (RTX 4090) or `sm_86` (RTX 3090); read with `nvidia-smi --query-gpu=compute_cap`. If that fails, `run_tests.sh` uses `sm_89`, which does not run on the RTX 3090: set `CUDA_ARCH=sm_86` there. |
 | `BUILD_DIR` | `/tmp/gpu-p2p-build` | `run_tests.sh` only (`run_host.sh` does not pass it): build directory of the test binaries inside the container. |
 | `TIMEOUT_NCCL` | `600` | Seconds per `torchrun`. |
 | `OUT_DIR`, `TIMEOUT`, `FORCE` | `.`, `10800`, `0` | `run_host.sh` only: log directory, container timeout in seconds, skip the idle check. |
@@ -210,7 +210,7 @@ Environment variables of `run_host.sh` (passed into the container) and `run_test
 Inside any container or host with the CUDA toolkit (the GPU numbering then follows CUDA's default unless `CUDA_DEVICE_ORDER=PCI_BUS_ID` is set):
 
 ```bash
-arch=sm_$(nvidia-smi -i 0 --query-gpu=compute_cap --format=csv,noheader | tr -d .)   # sm_89 on the RTX 4090
+arch=sm_$(nvidia-smi -i 0 --query-gpu=compute_cap --format=csv,noheader | tr -d .)   # sm_89 on the RTX 4090, sm_86 on the RTX 3090
 for t in p2ptest ordering stale atomics managedtest; do nvcc -O2 -arch=$arch -o $t $t.cu; done
 nvcc -O2 -arch=$arch -o compress compress.cu -lcuda
 nvcc -O2 -o hostnuma hostnuma.cu -lcuda
@@ -227,7 +227,7 @@ Every program ends with a `RESULT: PASS|FAIL` line (`compress` also `SKIP`, exit
 
 ## ACS
 
-When and why: [docs/05 ACS redirect](../../docs/05_GPU_P2P_RTX4090.md#acs-redirect).
+When and why: [docs/05 ACS redirect](../../docs/05_GPU_P2P_GeForce.md#acs-redirect).
 
 ```bash
 sudo ./acs-redir.sh status     # also prints the persistent pci=disable_acs_redir=pci:<vendor>:<device>
@@ -239,13 +239,13 @@ sudo ./acs-redir.sh restore
 
 ## Roll back
 
-Procedure: [docs/05 Rollback](../../docs/05_GPU_P2P_RTX4090.md#rollback).
+Procedure: [docs/05 Rollback](../../docs/05_GPU_P2P_GeForce.md#rollback).
 
 ```bash
 sudo ./install-p2p-modules.sh --restore       # K=<K> for another kernel than the running one
 sudo systemctl reboot
 ```
 
-This removes `updates/p2p` of the kernel and its depmod override. While other kernels still have P2P modules, the global settings stay. Otherwise it also removes the GRUB parameters listed in `grub-added-params.txt` and unholds the packages in `held-packages.txt`. It removes the HMM setting only when `iommu=pt` is no longer on the GRUB command line: keep `/etc/modprobe.d/nvidia-uvm-hmm.conf` as long as `iommu=pt` stays ([why](../../docs/05_GPU_P2P_RTX4090.md#hmm-breaks-host-cumem-allocations-under-iommu-passthrough)). It does not remove a `pci=disable_acs_redir=...` parameter or `/etc/modprobe.d/nvidia-uvm-bar1-optin.conf`.
+This removes `updates/p2p` of the kernel and its depmod override. While other kernels still have P2P modules, the global settings stay. Otherwise it also removes the GRUB parameters listed in `grub-added-params.txt` and unholds the packages in `held-packages.txt`. It removes the HMM setting only when `iommu=pt` is no longer on the GRUB command line: keep `/etc/modprobe.d/nvidia-uvm-hmm.conf` as long as `iommu=pt` stays ([why](../../docs/05_GPU_P2P_GeForce.md#hmm-breaks-host-cumem-allocations-under-iommu-passthrough)). It does not remove a `pci=disable_acs_redir=...` parameter or `/etc/modprobe.d/nvidia-uvm-bar1-optin.conf`.
 
 Without `grub-added-params.txt` (a node set up by hand, or by an older version of this script) `--restore` leaves GRUB unchanged and says so; without `held-packages.txt` it leaves the package holds unchanged. Remove the parameters from `/etc/default/grub` by hand if wanted, run `update-grub`, then remove the HMM setting; release holds with `apt-mark unhold`.

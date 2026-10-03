@@ -1,8 +1,8 @@
-# GPU P2P on RTX 4090
+# GPU P2P on GeForce
 
 ## Contents
 
-- [GPU P2P on RTX 4090](#gpu-p2p-on-rtx-4090)
+- [GPU P2P on GeForce](#gpu-p2p-on-geforce)
   - [Contents](#contents)
   - [Introduction](#introduction)
   - [Results summary](#results-summary)
@@ -28,15 +28,17 @@
 
 ## Introduction
 
-GeForce drivers disable PCIe peer-to-peer (P2P) between GPUs, so CUDA peer copies and NCCL collectives are staged through host memory. A patched build of the kernel modules of NVIDIA's **open** driver re-enables P2P on the RTX 4090: `cudaDeviceCanAccessPeer` returns true and NCCL uses its P2P transport. Userspace (libcuda, NCCL, PyTorch) stays unchanged. This is an **unofficial community patch** (tinygrad, then aikitoria's branches per driver version, then duanyll's "Method 3" for 48 GB cards; links in [Appendix B](#appendix-b-references)), not supported by NVIDIA.
+GeForce drivers disable PCIe peer-to-peer (P2P) between GPUs, so CUDA peer copies and NCCL collectives are staged through host memory. A patched build of the kernel modules of NVIDIA's **open** driver re-enables P2P on the RTX 3090 (Ampere) and RTX 4090 (Ada, including the modded 48 GB card): `cudaDeviceCanAccessPeer` returns true and NCCL uses its P2P transport. Userspace (libcuda, NCCL, PyTorch) stays unchanged. This is an **unofficial community patch** (tinygrad, then aikitoria's branches per driver version, then duanyll's "Method 3" for 48 GB cards; links in [Appendix B](#appendix-b-references)), not supported by NVIDIA.
 
-We deploy one branch of our fork on every node: [`610.57.04-p2p-48g`](https://github.com/LingzheZhao/open-gpu-kernel-modules/tree/610.57.04-p2p-48g). It works for both card types; the 48 GB code stays dormant on 24 GB cards.
+This guide covers P2P over PCIe BAR1 on the three card types of this cluster listed below; other GeForce models were not tested. "24 GB cards" means the RTX 3090 and the RTX 4090 24 GB, "48 GB cards" the modded RTX 4090 48 GB.
 
-| Card | VRAM | Max BAR1 | P2P path |
-| :--- | :--- | :--- | :--- |
-| RTX 4090 | 24 GB | 32 GiB | static BAR1: all of VRAM is mapped once |
-| RTX 4090 48 GB (modded) | 48 GiB | 32 GiB | dynamic BAR1: each shared allocation is mapped on demand |
-| RTX 3090 | 24 GB | 32 GiB | static BAR1, as on the RTX 4090 (same branch; the tests build for the GPU's compute capability) |
+We deploy one branch of our fork on every node: [`610.57.04-p2p-48g`](https://github.com/LingzheZhao/open-gpu-kernel-modules/tree/610.57.04-p2p-48g). It works for all three card types; the Method 3 code stays dormant where VRAM fits into BAR1.
+
+| Card | Architecture | VRAM | Max BAR1 | P2P path | Nodes |
+| :--- | :--- | :--- | :--- | :--- | :--- |
+| RTX 3090 | Ampere (`sm_86`) | 24 GB | 32 GiB | static BAR1: all of VRAM is mapped once | 1, 3, 4 |
+| RTX 4090 24 GB | Ada (`sm_89`) | 24 GB | 32 GiB | static BAR1: all of VRAM is mapped once | 2, 5, 6 |
+| RTX 4090 48 GB (modded) | Ada (`sm_89`) | 48 GiB | 32 GiB | dynamic BAR1: each shared allocation is mapped on demand | 7 |
 
 Placeholders: `<agent>` Determined agent ID, `<K>` kernel release (`uname -r`), `<N>` driver branch (e.g. `610`), `<version>` full driver version (e.g. `610.57.04`), `<revision>` Ubuntu package revision, `<gcc>` major version of the compiler the kernel was built with, `<fork>` absolute path of the built fork tree, `<image>` CUDA + PyTorch image.
 
@@ -44,21 +46,21 @@ Placeholders: `<agent>` Determined agent ID, `<K>` kernel release (`uname -r`), 
 
 NCCL all-reduce bus bandwidth (GB/s, 1024 MiB, one process per GPU) without and with P2P. Details per node: [Appendix A](#appendix-a-measurements).
 
-| Platform | 8 GPUs | 4 GPUs, one socket | Pair, cross socket | P2P copy per pair |
+| Platform and card | 8 GPUs | 4 GPUs, one socket | Pair, cross socket | P2P copy per pair |
 | :--- | :--- | :--- | :--- | :--- |
-| EPYC 7402 (Rome), 24 GB, all GPUs at x16 | 1.3 -> 20.6 | 3.9 -> 25.1-25.2 | 1.2-1.3 -> 19.2-19.4 | 26.4; cross socket 21.8-22.7 |
+| EPYC 7402 (Rome), RTX 4090 24 GB, all GPUs at x16 | 1.3 -> 20.6 | 3.9 -> 25.1-25.2 | 1.2-1.3 -> 19.2-19.4 | 26.4; cross socket 21.8-22.7 |
 | EPYC 7402 (Rome), RTX 3090, all GPUs at x16 | 1.6 -> 20.1 | 4.0 -> 24.6-24.7 | 1.4-1.6 -> 18.3-18.4 | 26.4; cross socket 21.5-22.7 |
 | EPYC 7302 (Rome), RTX 3090, 7 GPUs, 2 at x8 | 1.5-1.6 -> 12.6 (x8 GPU) | 3.3-3.6 -> 12.7 (x8 GPU) | 1.3-1.6 -> 11.9-12.0 (x8 GPU) | 26.4; cross socket 22.7; with an x8 GPU 13.2 |
-| EPYC 7543 (Milan), 24 GB | 0.8 -> 12.9 (x8 GPU) | 4.4-4.7 -> 12.9 (x8 GPU) | 0.8 -> 19.2 | 26.3; cross socket 10-22 (asymmetric) |
-| EPYC 9554 (Genoa), 24 GB and 48 GB, all GPUs at x16 (combined, see note) | about 16 -> about 24-25 (estimated) | 20.4-21.1 -> 25.6-25.7 | 15.9-16.4 -> 23.4-23.6 | 26.4 in both directions |
+| EPYC 7543 (Milan), RTX 4090 24 GB | 0.8 -> 12.9 (x8 GPU) | 4.4-4.7 -> 12.9 (x8 GPU) | 0.8 -> 19.2 | 26.3; cross socket 10-22 (asymmetric) |
+| EPYC 9554 (Genoa), RTX 4090 24 GB and 48 GB, all GPUs at x16 (combined, see note) | about 16 -> about 24-25 (estimated) | 20.4-21.1 -> 25.6-25.7 | 15.9-16.4 -> 23.4-23.6 | 26.4 in both directions |
 
-- **Host staging speed decides the gain.** Rome and Milan stage through host memory slowly, so P2P gives about 6-16x on Rome (all x16, RTX 4090 and RTX 3090 alike) and 3-24x on Milan. Genoa stages fast, so P2P gives 1.2-1.5x.
-- **A GPU at PCIe x8 caps every ring that contains it at about 13 GB/s**, with or without P2P. Nodes 1, 5, 6 and 7 each have one or two such GPUs ([PCIe link width](#pcie-link-width)).
-- **The Genoa row combines two nodes with the same platform.** node06 (24 GB) and node07 (48 GB) gave the same results wherever neither had an x8 GPU in the set: per-pair copies 26.4 vs 26.4 GB/s, one-socket 4-GPU all-reduce 25.6 vs 25.7, cross-socket pairs 23.5-23.6 vs 23.4-23.6. Their x8 GPUs sit on different sockets, so between them every 4-GPU and 2-GPU set was measured at x16. An 8-GPU set was not: on both nodes it contains an x8 GPU (13.0 measured). The 8-GPU ring crosses the sockets, so its result follows the cross-socket pair: on Rome, all at x16, 8 GPUs reached 20.6 with P2P against 19.2-19.4 for the cross-socket pairs and 25.1 for four GPUs on one socket, and 1.3 without P2P against 1.2-1.3. The same relation on Genoa gives about 24-25 GB/s with P2P (cross-socket pairs 23.4-23.6, one socket 25.6-25.7) and about 16 without (cross-socket pairs at x16 measured 15.9-16.4 over host memory). These two values are estimates.
+- **Host staging speed decides the gain.** Rome and Milan stage through host memory slowly, so P2P gives about 6-16x on Rome (all x16, RTX 3090 and RTX 4090 alike) and 3-24x on Milan. Genoa stages fast, so P2P gives 1.2-1.5x. Milan and Genoa were measured with the RTX 4090 only.
+- **A GPU at PCIe x8 caps every ring that contains it at about 13 GB/s**, with or without P2P (the RTX 3090 and RTX 4090 are both PCIe Gen4). Nodes 1, 5, 6 and 7 each have one or two such GPUs ([PCIe link width](#pcie-link-width)).
+- **The Genoa row combines two nodes with the same platform.** Node 6 (RTX 4090 24 GB) and Node 7 (RTX 4090 48 GB) gave the same results wherever neither had an x8 GPU in the set: per-pair copies 26.4 vs 26.4 GB/s, one-socket 4-GPU all-reduce 25.6 vs 25.7, cross-socket pairs 23.5-23.6 vs 23.4-23.6. Their x8 GPUs sit on different sockets, so between them every 4-GPU and 2-GPU set was measured at x16. An 8-GPU set was not: on both nodes it contains an x8 GPU (13.0 measured). The 8-GPU ring crosses the sockets, so its result follows the cross-socket pair: on Rome (Node 2, RTX 4090 24 GB, all at x16), 8 GPUs reached 20.6 with P2P against 19.2-19.4 for the cross-socket pairs and 25.1 for four GPUs on one socket, and 1.3 without P2P against 1.2-1.3; the RTX 3090 row on the same CPU shows the same relation. The same relation on Genoa gives about 24-25 GB/s with P2P (cross-socket pairs 23.4-23.6, one socket 25.6-25.7) and about 16 without (cross-socket pairs at x16 measured 15.9-16.4 over host memory). These two values are estimates.
 
 ## How it works
 
-**Static BAR1** (24 GB cards). BAR1 is the GPU's PCIe window into its VRAM. With Resizable BAR the patched driver resizes BAR1 at load time to 32 GiB (the stock driver leaves it at 256 MiB), identity-maps all of VRAM into it, and lets a peer GPU address the memory as `BAR1 bus address + offset`. The peer's DMA goes straight over PCIe through the IOMMU, hence `iommu=pt`. The driver turns this on by itself when VRAM fits into BAR1.
+**Static BAR1** (24 GB cards). BAR1 is the GPU's PCIe window into its VRAM. With Resizable BAR the patched driver resizes BAR1 at load time to the largest size the card advertises (32 GiB on the RTX 3090 and RTX 4090; the stock driver leaves it at 256 MiB on our nodes), identity-maps all of VRAM into it, and lets a peer GPU address the memory as `BAR1 bus address + offset`. The peer's DMA goes straight over PCIe through the IOMMU, hence `iommu=pt`. The driver turns this on by itself when VRAM fits into BAR1.
 
 **Dynamic BAR1** (48 GB cards, duanyll's Method 3). The modded cards' BAR1 is at most 32 GiB, smaller than their VRAM, so a static map is impossible. Method 3 maps each allocation that is shared with a peer into a BAR1 window on demand. Allocations anywhere in the 48 GiB work; only the allocations shared at the same time must fit into 32 GiB. NCCL shares only its own buffers (about 180 MB per GPU on 8 GPUs).
 
@@ -78,7 +80,7 @@ sleep 60; nvidia-smi -i 0 -q -d MEMORY | grep -A 3 BAR1; docker stop bar1-hold
 
 [LingzheZhao/open-gpu-kernel-modules](https://github.com/LingzheZhao/open-gpu-kernel-modules) has two branches on top of aikitoria's `610.57.04-p2p-v3`: `610.57.04-p2p-fixes` (the general fixes below, a candidate for upstream) and `610.57.04-p2p-48g` (those fixes plus Method 3, deployed everywhere). Compared with aikitoria v3 and duanyll's port:
 
-- **No false P2P.** When BAR1 P2P is not possible for a pair, the driver now reports no P2P instead of advertising it and failing at the first peer mapping (NCCL crashed).
+- **No false P2P.** When BAR1 P2P is not possible for a pair, the driver reports no P2P instead of advertising it and failing at the first peer mapping (NCCL crashed on the 48 GB cards).
 - **Managed memory is safe.** Cross-GPU `cudaMallocManaged` no longer faults the GPUs or corrupts memory ([below](#managed-memory-uvm)).
 - **Compressible allocations** shared with a peer are mapped uncompressed. Before, the peer's accesses landed in host RAM at 1 TiB + offset.
 - **Stale cache lines** of peer mappings are invalidated on unmap.
@@ -88,32 +90,32 @@ Each commit message has the details.
 
 ### Managed memory (UVM)
 
-Since driver 590.44.01 UVM uses PCIe BAR1 peers automatically. On the RTX 4090 it addresses them with an aperture its pre-Hopper code cannot encode. With plain aikitoria v3 on 24 GB cards, cross-GPU migration of managed memory raised Xid 31 `FAULT_UNSUPPORTED_APERTURE`, then Xid 154 on all GPUs, and only a reboot recovered. Remote mappings (`cudaMemAdviseSetAccessedBy`) would silently point into the wrong GPU's memory. NCCL, CUDA IPC, cuMem, `cudaMemcpyPeer` and kernel peer access are not affected.
+Since driver 590.44.01 UVM uses PCIe BAR1 peers automatically, and its pre-Hopper code (RTX 3090 and RTX 4090) addresses them with an aperture it cannot encode. With plain aikitoria v3 on the RTX 4090 24 GB (Node 5), cross-GPU migration of managed memory raised Xid 31 `FAULT_UNSUPPORTED_APERTURE`, then Xid 154 on all GPUs, and only a reboot recovered. The RTX 3090 uses the same pre-Hopper UVM code, so the same fault is expected; it was tested only with the fixed driver. Remote mappings (`cudaMemAdviseSetAccessedBy`) would silently point into the wrong GPU's memory. NCCL, CUDA IPC, cuMem, `cudaMemcpyPeer` and kernel peer access are not affected.
 
 Our fork adds the `nvidia_uvm` module parameter `uvm_bar1_p2p_managed` (set in `/etc/modprobe.d/`, takes effect after a reboot or a reload of `nvidia_uvm`):
 
 | Value | Behaviour |
 | :--- | :--- |
 | `0` (default) | Managed memory moves between GPUs through host memory. Everything else keeps P2P. |
-| `1` (opt-in) | Managed memory also uses P2P. Validated on 24 GB cards on Milan ([Appendix A](#opt-in-uvm_bar1_p2p_managed1)). Run the [opt-in window](../scripts/gpu-p2p/README.md#managed-memory-and-the-uvm-bar1-fix) on each new platform first. 48 GB cards always use host memory. |
+| `1` (opt-in) | Managed memory also uses P2P. Validated with the RTX 4090 24 GB on Milan (Node 5, [Appendix A](#opt-in-uvm_bar1_p2p_managed1)), not with the RTX 3090. Run the [opt-in window](../scripts/gpu-p2p/README.md#managed-memory-and-the-uvm-bar1-fix) on each new combination of platform and card type first. 48 GB cards always use host memory. |
 
 ### Other caveats
 
 | Caveat | What to do |
 | :--- | :--- |
-| Peer atomics are not atomic across GPUs (`cudaDevP2PAttrNativeAtomicSupported` = 0): concurrent `atomicAdd` from two GPUs on the same peer memory can lose updates. | Do not rely on cross-GPU atomics. |
-| The patch skips the driver's check that the chipset supports peer reads. | On a new platform check `p2ptest` integrity before service. Fine on EPYC Milan and Genoa. |
+| On the RTX 4090, peer atomics are not atomic across GPUs (`cudaDevP2PAttrNativeAtomicSupported` = 0 in the `atomics` matrix): concurrent `atomicAdd` from two GPUs on the same peer memory can lose updates. Not measured on the RTX 3090. | Do not rely on cross-GPU atomics. The `ATOMICS=1` diagnostic shows the attribute per pair. |
+| The patch skips the driver's check that the chipset supports peer reads. | On a new platform check `p2ptest` integrity before service. Fine on EPYC Rome with the RTX 3090 and RTX 4090, and on Milan and Genoa with the RTX 4090. |
 | The GPU DMA mask is 47 bits: every BAR1 must end below 2^47. | On a new platform check Region 1 in `lspci -vv -d 10de:`. |
 | Ordering of data written to one GPU and a flag written elsewhere (host memory or a third GPU) depends on the platform. | The `ordering` test checks it; run it on every new platform. |
 
 ## Prerequisites
 
-- [ ] **BIOS**: Above 4G Decoding and Resizable BAR on; the host bridge windows must fit a 32 GiB BAR1 per GPU.
+- [ ] **BIOS**: Above 4G Decoding and Resizable BAR on; the host bridge windows must fit a 32 GiB BAR1 per GPU (the maximum on all three card types).
 - [ ] **Secure Boot** off (or sign the modules yourself).
 - [ ] **`unattended-upgrades` purged** ([docs/01](01_First-time_Setup_of_Cluster_Nodes.md#disable-unattended-updates)): it installs new kernels, which then boot without the P2P modules, and driver updates that break the version match. The install script refuses and `verify.sh` fails while it is installed.
 - [ ] **Driver**: Ubuntu's `nvidia-driver-<N>-open` at **exactly** the version of the fork branch (`610.57.04`). The closed driver cannot be patched.
 - [ ] **Build tools**: `linux-headers-<K>`, and the C and C++ compilers of the version the kernel was built with (`cat /proc/version`), e.g. `gcc-12` and `g++-12`: part of the driver is C++.
-- [ ] **One card type per node**: do not mix 24 GB and 48 GB cards.
+- [ ] **One card type per node** (RTX 3090, RTX 4090 24 GB or RTX 4090 48 GB): do not mix. The tests build for GPU0's compute capability only, and P2P between an RTX 3090 and an RTX 4090 was not tested.
 - [ ] **PCIe links**: every GPU at full width under load (`nvidia-smi --query-gpu=index,pcie.link.width.current,pcie.link.width.max --format=csv -lms 500` while a job runs).
 - [ ] **Maintenance window**: the node reboots; its tasks must finish or be stopped.
 
@@ -176,7 +178,7 @@ It backs up what it changes in `/var/backups/nvidia-p2p/` and never reboots. Opt
 
 1. The [hold test](#static-or-dynamic-how-to-tell): static BAR1 on for 24 GB cards, off for 48 GB cards.
 2. `scripts/gpu-p2p/verify.sh` must end with `RESULT: PASS`. It checks the loaded modules, BAR1 size, `iommu=pt`, HMM off, `topo -p2p` `OK` for all pairs, link widths and the kernel log. A narrow link is only a `WARN`.
-3. `cat /sys/module/nvidia_uvm/parameters/uvm_bar1_p2p_managed` must print `0`, or `1` only after a passed opt-in window on this platform. If the file is missing, the modules lack the managed-memory fix: rebuild from the `-p2p-48g` branch.
+3. `cat /sys/module/nvidia_uvm/parameters/uvm_bar1_p2p_managed` must print `0`, or `1` only after a passed opt-in window on this platform and card type. If the file is missing, the modules lack the managed-memory fix: rebuild from the `-p2p-48g` branch.
 
 ### 6. Run the tests
 
@@ -235,7 +237,7 @@ PCIe ACS redirect forces peer traffic through the root complex. With `iommu=pt` 
 
 ### PCIe link width
 
-A GPU trained at x8 gets about 13 instead of 26 GB/s to the host and to peers, and caps every NCCL ring through it. The width can change between boots; `run_host.sh` records it. Fix it in hardware (seating, riser, slot).
+A GPU trained at x8 gets about 13 instead of 26 GB/s (PCIe Gen4) to the host and to peers, and caps every NCCL ring through it. The width can change between boots; `run_host.sh` records it. Fix it in hardware (seating, riser, slot).
 
 ### Kernel and driver upgrades
 
@@ -253,23 +255,7 @@ A GPU trained at x8 gets about 13 instead of 26 GB/s to the host and to peers, a
 
 ## Appendix A: Measurements
 
-All runs used the branch `610.57.04-p2p-48g`, `iommu=pt`, HMM off and `uvm_bar1_p2p_managed=0` unless noted, and `run_host.sh` with `MANAGED=1` on the idle node. Every service run ended with `OVERALL: PASS` and a clean kernel log: peer access and integrity on 56/56 pairs, `ordering`, `stale` and `hostnuma` passed, every all-reduce was `correct=True`, and managed memory passed in all modes on all pairs including oversubscription. NCCL is PyTorch 2.3 / NCCL 2.20.5 (`P2P/IPC`) unless noted, busbw at 1024 MiB.
-
-### GPU Node 2: 24 GB, EPYC 7402 (Rome)
-
-8x RTX 4090 24 GB, 512 GB, Ubuntu 24.04, kernel 6.8.0-146-generic (modules built for it from the same branch). All GPUs at x16. Baseline: stock open driver 610.57.04, default IOMMU mode. Static BAR1 on (8 GiB held raised "BAR1 Used" to 8587 MiB).
-
-| | Stock | P2P |
-| :--- | ---: | ---: |
-| Host<->GPU (GB/s, H2D / D2H) | 24.5-26.0 / 21.2-22.7 | 25.8-26.1 / 25.3-26.1 |
-| Copy, same socket (GB/s) | 12.0-22.3 (staged) | 26.3-26.4 (bidirectional 51.0-51.3) |
-| Copy, cross socket | 12.7-22.6 (staged) | 21.8-22.7 (bidirectional 40.9-42.2) |
-| NCCL 8 GPUs | 1.3 | 20.6 |
-| NCCL GPU0-3 / GPU4-7 | 3.9 / 3.9 | 25.1 / 25.2 |
-| NCCL pairs 0,1 / 4,5 | 3.4 / 3.4 | 24.5-24.8 / 24.8-24.9 |
-| NCCL cross-socket pairs 0,4 / 3,7 | 1.2 / 1.3 | 19.2-19.4 / 19.3-19.4 |
-
-Rome's cross-socket P2P is symmetric (unlike Milan), but slower than within a socket.
+All runs used the branch `610.57.04-p2p-48g`, `iommu=pt`, HMM off and `uvm_bar1_p2p_managed=0` unless noted, and `run_host.sh` with `MANAGED=1` on the idle node. Every service run ended with `OVERALL: PASS` and a clean kernel log: peer access and integrity on all ordered pairs (56; 42 on the 7 GPUs of Node 1), `ordering`, `stale` and `hostnuma` passed, every all-reduce was `correct=True`, and managed memory passed in all modes on all pairs including oversubscription. NCCL is PyTorch 2.3 / NCCL 2.20.5 (`P2P/IPC`) unless noted, busbw at 1024 MiB.
 
 ### GPU Node 1: RTX 3090, EPYC 7302 (Rome)
 
@@ -289,6 +275,22 @@ Rome's cross-socket P2P is symmetric (unlike Milan), but slower than within a so
 
 Every set except pair 0,1 contains an x8 GPU and stops at about 12.6 GB/s; the x16 pair matches Node 4 (same CPU family and GPU). Without P2P, cross-socket all-reduce runs at 1.3-1.6 GB/s, about the speed of 10 GbE.
 
+### GPU Node 2: RTX 4090 24 GB, EPYC 7402 (Rome)
+
+8x RTX 4090 24 GB, 512 GB, Ubuntu 24.04, kernel 6.8.0-146-generic (modules built for it from the same branch). All GPUs at x16. Baseline: stock open driver 610.57.04, default IOMMU mode. Static BAR1 on (8 GiB held raised "BAR1 Used" to 8587 MiB).
+
+| | Stock | P2P |
+| :--- | ---: | ---: |
+| Host<->GPU (GB/s, H2D / D2H) | 24.5-26.0 / 21.2-22.7 | 25.8-26.1 / 25.3-26.1 |
+| Copy, same socket (GB/s) | 12.0-22.3 (staged) | 26.3-26.4 (bidirectional 51.0-51.3) |
+| Copy, cross socket | 12.7-22.6 (staged) | 21.8-22.7 (bidirectional 40.9-42.2) |
+| NCCL 8 GPUs | 1.3 | 20.6 |
+| NCCL GPU0-3 / GPU4-7 | 3.9 / 3.9 | 25.1 / 25.2 |
+| NCCL pairs 0,1 / 4,5 | 3.4 / 3.4 | 24.5-24.8 / 24.8-24.9 |
+| NCCL cross-socket pairs 0,4 / 3,7 | 1.2 / 1.3 | 19.2-19.4 / 19.3-19.4 |
+
+Rome's cross-socket P2P is symmetric (unlike Milan), but slower than within a socket.
+
 ### GPU Node 3: RTX 3090, EPYC 7402 (Rome)
 
 8x RTX 3090 24 GB, 512 GB, kernel 6.8.0-107-generic. All GPUs at x16. Baseline: stock closed driver 590.48.01. Static BAR1 on (8 GiB held raised "BAR1 Used" to 8457 MiB). Service run: `OVERALL: PASS`, kernel log clean.
@@ -303,7 +305,7 @@ Every set except pair 0,1 contains an x8 GPU and stops at about 12.6 GB/s; the x
 | NCCL pairs 0,1 / 4,5 | 3.6 / 3.6 | 24.0-24.1 / 24.0-24.3 |
 | NCCL cross-socket pairs 0,4 / 3,7 | 1.4 / 1.6 | 18.3 / 18.3 |
 
-Gains: 12.6x for 8 GPUs, about 6x within a socket, 11-13x across sockets. The same as Node 4 (same hardware) within 0.2 GB/s.
+Gains: 12.6x for 8 GPUs, about 6x within a socket, 11-13x across sockets. NCCL matches Node 4 (same hardware) within 0.2 GB/s.
 
 ### GPU Node 4: RTX 3090, EPYC 7402 (Rome)
 
@@ -321,7 +323,7 @@ Gains: 12.6x for 8 GPUs, about 6x within a socket, 11-13x across sockets. The sa
 
 Within 0.5-1 GB/s of the RTX 4090 on the same platform (Node 2). Stock baseline on the same hardware: Node 3.
 
-### GPU Node 5: 24 GB, EPYC 7543 (Milan)
+### GPU Node 5: RTX 4090 24 GB, EPYC 7543 (Milan)
 
 8x RTX 4090 24 GB, 512 GB, kernel 6.5.0-25. GPU1 and GPU4 at x8. Baseline: stock open driver 610.57.04. Static BAR1 on (8 GiB held raised "BAR1 Used" from 1 to 8653 MiB).
 
@@ -343,7 +345,7 @@ Same node, in an [opt-in window](../scripts/gpu-p2p/README.md#managed-memory-and
 
 A run with plain aikitoria v3 hit Xid 31 `FAULT_UNSUPPORTED_APERTURE` during managed-page migration, then Xid 154 on all GPUs; it needed a reboot.
 
-### GPU Node 6: 24 GB, EPYC 9554 (Genoa)
+### GPU Node 6: RTX 4090 24 GB, EPYC 9554 (Genoa)
 
 8x RTX 4090 24 GB, 1.5 TiB, kernel 6.5.0-25. GPU6 at x8. No stock baseline; the host-staged copies are the same run with peer access off. Static BAR1 on.
 
@@ -356,7 +358,7 @@ A run with plain aikitoria v3 hit Xid 31 `FAULT_UNSUPPORTED_APERTURE` during man
 | NCCL pairs 0,1 / 4,5 | | 25.2 / 25.1 |
 | NCCL cross-socket pairs 0,4 / 3,7 | | 23.5 / 23.6 |
 
-### GPU Node 7: 48 GB, EPYC 9554 (Genoa)
+### GPU Node 7: RTX 4090 48 GB, EPYC 9554 (Genoa)
 
 8x RTX 4090 48 GB (modded, VBIOS 95.02.3C.00.02, BAR1 32 GiB), ASUS ESC8000A-E12, 1.5 TiB, kernel 6.5.0-25, one GPU per root port. GPU1 at x8. Baseline: stock closed driver 590.48.01. Dynamic BAR1 (Method 3). Service run with 38 GiB resident per GPU; managed memory stages through host memory on dynamic pairs.
 
@@ -375,14 +377,14 @@ A run with plain aikitoria v3 hit Xid 31 `FAULT_UNSUPPORTED_APERTURE` during man
 
 ### Comparison with duanyll's blog
 
-| | Blog, Xeon 4416+ | Blog, EPYC 7302 (Rome) | Ours, EPYC 7402 (Rome) | Ours, Genoa, all x16 |
+| | Blog, Xeon 4416+ | Blog, EPYC 7302 (Rome) | Ours, EPYC 7402 (Rome), Node 2 | Ours, EPYC 9554 (Genoa), Nodes 6 and 7, all x16 |
 | :--- | :--- | :--- | :--- | :--- |
-| Cards | 8x 48 GB | 4x 48 GB | 8x 24 GB | 24 GB and 48 GB |
+| Cards | 8x RTX 4090 48 GB | 4x RTX 4090 48 GB | 8x RTX 4090 24 GB | RTX 4090 24 GB and 48 GB |
 | P2P copy per pair | 22.7 | 26.3 | 26.4 (cross socket 22.4) | 26.4 |
 | NCCL 4 GPUs, without -> with P2P | 16.8 -> 20.4 | 4.1 -> 25.15 | 3.9 -> 25.1-25.2 | 20.4-21.1 -> 25.6-25.7 |
 | NCCL 8 GPUs, without -> with P2P | 14.2 -> 20.46 | - | 1.3 -> 20.6 | about 16 -> about 24-25 (estimated) |
 
-The tools differ (blog: `cudaMemcpyPeer` and nccl-tests; ours: `p2ptest.cu` and `torchrun`), so compare trends, not decimals. Our Rome node reproduces the blog's Rome result for four GPUs. Every AMD platform reaches the Gen4 x16 line rate per pair within a socket.
+The tools differ (blog: `cudaMemcpyPeer` and nccl-tests; ours: `p2ptest.cu` and `torchrun`), so compare trends, not decimals. Node 2 reproduces the blog's Rome result for four GPUs. Every AMD platform reaches the Gen4 x16 line rate per pair within a socket.
 
 ## Appendix B: References
 

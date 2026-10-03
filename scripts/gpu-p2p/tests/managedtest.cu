@@ -1,8 +1,9 @@
 // Managed memory (cudaMallocManaged) across GPU pairs. CRASH-RISKY on drivers without the UVM BAR1 fix:
-// on static-BAR1 GPUs (24 GB RTX 4090) UVM migrates or maps managed pages peer-to-peer with an aperture
-// the pre-Hopper HALs cannot encode (Xid 31, then Xid 154 on every GPU; reboot). Run it only through the
-// opt-in stage of run_tests.sh (MANAGED=1), and first with --quick --pair a,b (in the opt-in window of
-// uvm_bar1_p2p_managed=1: first --quick --pair a,b --modes accessedby, see below).
+// on static-BAR1 GPUs (seen on the RTX 4090 24 GB; the RTX 3090 uses the same pre-Hopper UVM code) UVM
+// migrates or maps managed pages peer-to-peer with an aperture the pre-Hopper HALs cannot encode (Xid 31,
+// then Xid 154 on every GPU; reboot). Run it only through the opt-in stage of run_tests.sh (MANAGED=1), and
+// first with --quick --pair a,b (in the opt-in window of uvm_bar1_p2p_managed=1: first --quick --pair a,b
+// --modes accessedby, see below).
 // With the fixed driver and uvm_bar1_p2p_managed=0 (default), managed pages of BAR1 peers stage through
 // host memory; with =1 UVM uses direct BAR1 peer mappings and copies (experimental).
 //
@@ -27,7 +28,7 @@
 //   --mib N     MiB per transfer (default 256)
 //   --modes     subset of the modes above, run in the order above
 // Every read prints the number of bad words and a checksum (sum of the words read vs expected).
-// Build: nvcc -O2 -arch=sm_89 -o managedtest managedtest.cu
+// Build: nvcc -O2 -arch=sm_<cc> -o managedtest managedtest.cu   (sm_86 on the RTX 3090, sm_89 on the RTX 4090)
 // Output ends with "RESULT: PASS" (exit 0) or "RESULT: FAIL" (exit 1). CUDA errors exit 2, usage errors 3.
 #include <cstdio>
 #include <cstdlib>
