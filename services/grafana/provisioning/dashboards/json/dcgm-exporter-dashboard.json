@@ -22,6 +22,930 @@
   "links": [],
   "panels": [
     {
+      "collapsed": false,
+      "gridPos": {
+        "h": 1,
+        "w": 24,
+        "x": 0,
+        "y": 0
+      },
+      "id": 100,
+      "panels": [],
+      "title": "GPU health",
+      "type": "row"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "PBFA97CFB590B2093"
+      },
+      "description": "Distinct GPUs (gpu_uuid) per node with a current DCGM_FI_DEV_GPU_TEMP sample. Every GPU node has 8 GPUs; fewer means a GPU dropped out of DCGM (often after XID 79). Always all GPU nodes, whatever the instance selection. Alert: 'GPUs missing from DCGM' (folder GPU health).",
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "thresholds"
+          },
+          "mappings": [],
+          "noValue": "no GPU reports (exporter down?)",
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "red",
+                "value": null
+              },
+              {
+                "color": "green",
+                "value": 8
+              }
+            ]
+          },
+          "unit": "none",
+          "decimals": 0
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 6,
+        "w": 6,
+        "x": 0,
+        "y": 1
+      },
+      "id": 101,
+      "options": {
+        "colorMode": "background",
+        "graphMode": "none",
+        "justifyMode": "auto",
+        "orientation": "auto",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "showPercentChange": false,
+        "textMode": "value_and_name",
+        "wideLayout": true
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "PBFA97CFB590B2093"
+          },
+          "editorMode": "code",
+          "expr": "count by (node) (count by (node, gpu_uuid) (DCGM_FI_DEV_GPU_TEMP{job=\"dcgm\"})) or on (node) (max by (node) (up{job=\"dcgm\"} == 1) * 0)",
+          "legendFormat": "{{node}}",
+          "range": true,
+          "instant": false,
+          "refId": "A"
+        }
+      ],
+      "title": "GPUs reporting (expected 8)",
+      "type": "stat"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "PBFA97CFB590B2093"
+      },
+      "description": "Prometheus scrape status of DCGM-Exporter (job dcgm, port 9400). DOWN means no GPU metrics from that node: no XID alerts and no idle-shell detection there. Always all GPU nodes, whatever the instance selection (a node whose exporter is down drops out of the instance list). Alert: 'DCGM-Exporter down'.",
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "thresholds"
+          },
+          "mappings": [
+            {
+              "type": "value",
+              "options": {
+                "0": {
+                  "color": "red",
+                  "index": 0,
+                  "text": "DOWN"
+                },
+                "1": {
+                  "color": "green",
+                  "index": 1,
+                  "text": "UP"
+                }
+              }
+            }
+          ],
+          "noValue": "not scraped",
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "red",
+                "value": null
+              },
+              {
+                "color": "green",
+                "value": 1
+              }
+            ]
+          },
+          "unit": "none"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 6,
+        "w": 5,
+        "x": 6,
+        "y": 1
+      },
+      "id": 102,
+      "options": {
+        "colorMode": "background",
+        "graphMode": "none",
+        "justifyMode": "auto",
+        "orientation": "auto",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "showPercentChange": false,
+        "textMode": "value_and_name",
+        "wideLayout": true
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "PBFA97CFB590B2093"
+          },
+          "editorMode": "code",
+          "expr": "max by (node) (up{job=\"dcgm\"})",
+          "legendFormat": "{{node}}",
+          "range": true,
+          "instant": false,
+          "refId": "A"
+        }
+      ],
+      "title": "DCGM-Exporter up",
+      "type": "stat"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "PBFA97CFB590B2093"
+      },
+      "description": "Highest GPU core temperature per node. GeForce cards slow down from about 83 C; 90 C and above is too hot.",
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "thresholds"
+          },
+          "mappings": [],
+          "noValue": "no data",
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "orange",
+                "value": 83
+              },
+              {
+                "color": "red",
+                "value": 90
+              }
+            ]
+          },
+          "unit": "celsius",
+          "decimals": 0
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 6,
+        "w": 6,
+        "x": 11,
+        "y": 1
+      },
+      "id": 103,
+      "options": {
+        "colorMode": "background",
+        "graphMode": "none",
+        "justifyMode": "auto",
+        "orientation": "auto",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "showPercentChange": false,
+        "textMode": "value_and_name",
+        "wideLayout": true
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "PBFA97CFB590B2093"
+          },
+          "editorMode": "code",
+          "expr": "max by (node) (DCGM_FI_DEV_GPU_TEMP{job=\"dcgm\", instance=~\"$instance\"})",
+          "legendFormat": "{{node}}",
+          "range": true,
+          "instant": false,
+          "refId": "A"
+        }
+      ],
+      "title": "Hottest GPU per node",
+      "type": "stat"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "PBFA97CFB590B2093"
+      },
+      "description": "Memory row remapping, worst GPU per node: 'failed' = remapping failed (replace the GPU), 'pending' = a remap waits for a GPU reset, 'uncorr. rows' = rows remapped after uncorrectable errors. Not reported by the RTX 3090 (those nodes are missing here). Per GPU: Explore with the same metrics by (node, gpu).",
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "thresholds"
+          },
+          "mappings": [],
+          "noValue": "n/a (not reported by the RTX 3090)",
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "red",
+                "value": 1
+              }
+            ]
+          },
+          "unit": "none",
+          "decimals": 0
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 6,
+        "w": 7,
+        "x": 17,
+        "y": 1
+      },
+      "id": 104,
+      "options": {
+        "colorMode": "background",
+        "graphMode": "none",
+        "justifyMode": "auto",
+        "orientation": "auto",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "showPercentChange": false,
+        "textMode": "value_and_name",
+        "wideLayout": true
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "PBFA97CFB590B2093"
+          },
+          "editorMode": "code",
+          "expr": "max by (node) (DCGM_FI_DEV_ROW_REMAP_FAILURE{job=\"dcgm\", instance=~\"$instance\"})",
+          "legendFormat": "{{node}} failed",
+          "range": true,
+          "instant": false,
+          "refId": "A"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "PBFA97CFB590B2093"
+          },
+          "editorMode": "code",
+          "expr": "max by (node) (DCGM_FI_DEV_ROW_REMAP_PENDING{job=\"dcgm\", instance=~\"$instance\"})",
+          "legendFormat": "{{node}} pending",
+          "range": true,
+          "instant": false,
+          "refId": "B"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "PBFA97CFB590B2093"
+          },
+          "editorMode": "code",
+          "expr": "max by (node) (DCGM_FI_DEV_UNCORRECTABLE_REMAPPED_ROWS{job=\"dcgm\", instance=~\"$instance\"})",
+          "legendFormat": "{{node}} uncorr. rows",
+          "range": true,
+          "instant": false,
+          "refId": "C"
+        }
+      ],
+      "title": "Row remapping (worst GPU per node)",
+      "type": "stat"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "PBFA97CFB590B2093"
+      },
+      "description": "One row per GPU and XID code. 'peak per 5 min' = the most XID events of that code in one 5-minute window during the selected time range (DCGM_EXP_XID_ERRORS_COUNT). 'since exporter start' = all events of that code counted since DCGM-Exporter last started (DCGM_EXP_XID_ERRORS_TOTAL). 'last XID message' = the meaning of the most recent XID code on that GPU since the exporter started (DCGM_FI_DEV_XID_ERRORS, kept until another code arrives or the exporter restarts). Codes 13, 31, 43 and 45 are usually caused by the application; every other code is treated as hardware or driver. Catalog: https://docs.nvidia.com/deploy/xid-errors/",
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "thresholds"
+          },
+          "custom": {
+            "align": "auto",
+            "cellOptions": {
+              "type": "auto"
+            },
+            "filterable": false
+          },
+          "mappings": [],
+          "noValue": "no XID",
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "text",
+                "value": null
+              }
+            ]
+          },
+          "unit": "none"
+        },
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "node"
+            },
+            "properties": [
+              {
+                "id": "custom.width",
+                "value": 130
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "gpu"
+            },
+            "properties": [
+              {
+                "id": "custom.width",
+                "value": 50
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "xid"
+            },
+            "properties": [
+              {
+                "id": "custom.width",
+                "value": 50
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "peak per 5 min"
+            },
+            "properties": [
+              {
+                "id": "custom.width",
+                "value": 120
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "since exporter start"
+            },
+            "properties": [
+              {
+                "id": "custom.width",
+                "value": 145
+              }
+            ]
+          }
+        ]
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 0,
+        "y": 7
+      },
+      "id": 105,
+      "options": {
+        "cellHeight": "sm",
+        "footer": {
+          "countRows": false,
+          "fields": "",
+          "reducer": [
+            "sum"
+          ],
+          "show": false
+        },
+        "showHeader": true,
+        "sortBy": [
+          {
+            "desc": false,
+            "displayName": "node"
+          }
+        ]
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "PBFA97CFB590B2093"
+          },
+          "editorMode": "code",
+          "expr": "max by (node, gpu, xid) (max_over_time(DCGM_EXP_XID_ERRORS_COUNT{job=\"dcgm\", instance=~\"$instance\", xid!=\"\", xid!=\"0\"}[$__range]))",
+          "legendFormat": "",
+          "range": false,
+          "instant": true,
+          "refId": "A",
+          "format": "table"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "PBFA97CFB590B2093"
+          },
+          "editorMode": "code",
+          "expr": "max by (node, gpu, xid) (max_over_time(DCGM_EXP_XID_ERRORS_TOTAL{job=\"dcgm\", instance=~\"$instance\"}[$__range]))",
+          "legendFormat": "",
+          "range": false,
+          "instant": true,
+          "refId": "B",
+          "format": "table"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "PBFA97CFB590B2093"
+          },
+          "editorMode": "code",
+          "expr": "max by (node, gpu, xid, err_msg) (label_replace(DCGM_FI_DEV_XID_ERRORS{job=\"dcgm\", instance=~\"$instance\"}, \"xid\", \"$1\", \"err_code\", \"(.*)\"))",
+          "legendFormat": "",
+          "range": false,
+          "instant": true,
+          "refId": "C",
+          "format": "table"
+        }
+      ],
+      "title": "XIDs in range",
+      "transformations": [
+        {
+          "id": "merge",
+          "options": {}
+        },
+        {
+          "id": "organize",
+          "options": {
+            "excludeByName": {
+              "Time": true,
+              "Value #C": true
+            },
+            "indexByName": {
+              "node": 0,
+              "gpu": 1,
+              "xid": 2,
+              "Value #A": 3,
+              "Value #B": 4,
+              "err_msg": 5
+            },
+            "renameByName": {
+              "Value #A": "peak per 5 min",
+              "Value #B": "since exporter start",
+              "err_msg": "last XID message"
+            }
+          }
+        }
+      ],
+      "type": "table"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "PBFA97CFB590B2093"
+      },
+      "description": "XID events per GPU and code in DCGM-Exporter's sliding 5-minute window (DCGM_EXP_XID_ERRORS_COUNT). Codes 13, 31, 43 and 45 go to the low-priority Slack channel, all others to the critical one (alert rules in folder GPU health).",
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "axisPlacement": "auto",
+            "drawStyle": "bars",
+            "fillOpacity": 60,
+            "lineWidth": 1,
+            "pointSize": 4,
+            "showPoints": "never",
+            "spanNulls": false,
+            "stacking": {
+              "group": "A",
+              "mode": "none"
+            }
+          },
+          "min": 0,
+          "noValue": "no XID",
+          "unit": "none"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 12,
+        "y": 7
+      },
+      "id": 106,
+      "options": {
+        "legend": {
+          "calcs": [
+            "max"
+          ],
+          "displayMode": "table",
+          "placement": "right",
+          "showLegend": true,
+          "sortBy": "Max",
+          "sortDesc": true
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "PBFA97CFB590B2093"
+          },
+          "editorMode": "code",
+          "expr": "max by (node, gpu, xid) (DCGM_EXP_XID_ERRORS_COUNT{job=\"dcgm\", instance=~\"$instance\", gpu=~\"$gpu\", xid!=\"\", xid!=\"0\"})",
+          "legendFormat": "{{node}} GPU{{gpu}} XID {{xid}}",
+          "range": true,
+          "instant": false,
+          "refId": "A"
+        }
+      ],
+      "title": "XID events (5-minute window)",
+      "type": "timeseries"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "PBFA97CFB590B2093"
+      },
+      "description": "Share of time each GPU was slowed down for these reasons (violation counters, in ns, as rate / 1e9). Thermal is the health signal (cooling, fans, airflow). The counters update every 30 s, hence the 1m minimum interval.",
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "axisPlacement": "auto",
+            "drawStyle": "line",
+            "fillOpacity": 10,
+            "lineWidth": 1,
+            "pointSize": 4,
+            "showPoints": "never",
+            "spanNulls": false,
+            "stacking": {
+              "group": "A",
+              "mode": "none"
+            }
+          },
+          "min": 0,
+          "noValue": "no data",
+          "unit": "percentunit",
+          "max": 1
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 0,
+        "y": 15
+      },
+      "id": 107,
+      "options": {
+        "legend": {
+          "calcs": [
+            "max"
+          ],
+          "displayMode": "table",
+          "placement": "right",
+          "showLegend": true,
+          "sortBy": "Max",
+          "sortDesc": true
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "PBFA97CFB590B2093"
+          },
+          "editorMode": "code",
+          "expr": "max by (node, gpu) (rate(DCGM_FI_DEV_THERMAL_VIOLATION{job=\"dcgm\", instance=~\"$instance\", gpu=~\"$gpu\"}[$__rate_interval])) / 1e9",
+          "legendFormat": "{{node}} GPU{{gpu}} thermal",
+          "range": true,
+          "instant": false,
+          "refId": "A"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "PBFA97CFB590B2093"
+          },
+          "editorMode": "code",
+          "expr": "max by (node, gpu) (rate(DCGM_FI_DEV_BOARD_LIMIT_VIOLATION{job=\"dcgm\", instance=~\"$instance\", gpu=~\"$gpu\"}[$__rate_interval])) / 1e9",
+          "legendFormat": "{{node}} GPU{{gpu}} board limit",
+          "range": true,
+          "instant": false,
+          "refId": "B"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "PBFA97CFB590B2093"
+          },
+          "editorMode": "code",
+          "expr": "max by (node, gpu) (rate(DCGM_FI_DEV_RELIABILITY_VIOLATION{job=\"dcgm\", instance=~\"$instance\", gpu=~\"$gpu\"}[$__rate_interval])) / 1e9",
+          "legendFormat": "{{node}} GPU{{gpu}} reliability",
+          "range": true,
+          "instant": false,
+          "refId": "C"
+        }
+      ],
+      "title": "Throttled time: thermal / board limit / reliability",
+      "type": "timeseries",
+      "interval": "1m"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "PBFA97CFB590B2093"
+      },
+      "description": "Share of time each GPU ran at its power limit (DCGM_FI_DEV_POWER_VIOLATION, ns, as rate / 1e9). Close to 100% under full load is normal for GeForce cards; it is not a fault.",
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "axisPlacement": "auto",
+            "drawStyle": "line",
+            "fillOpacity": 10,
+            "lineWidth": 1,
+            "pointSize": 4,
+            "showPoints": "never",
+            "spanNulls": false,
+            "stacking": {
+              "group": "A",
+              "mode": "none"
+            }
+          },
+          "min": 0,
+          "noValue": "no data",
+          "unit": "percentunit",
+          "max": 1
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 12,
+        "y": 15
+      },
+      "id": 108,
+      "options": {
+        "legend": {
+          "calcs": [
+            "max"
+          ],
+          "displayMode": "table",
+          "placement": "right",
+          "showLegend": true,
+          "sortBy": "Max",
+          "sortDesc": true
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "PBFA97CFB590B2093"
+          },
+          "editorMode": "code",
+          "expr": "max by (node, gpu) (rate(DCGM_FI_DEV_POWER_VIOLATION{job=\"dcgm\", instance=~\"$instance\", gpu=~\"$gpu\"}[$__rate_interval])) / 1e9",
+          "legendFormat": "{{node}} GPU{{gpu}}",
+          "range": true,
+          "instant": false,
+          "refId": "A"
+        }
+      ],
+      "title": "Power-cap throttling (expected under load on GeForce)",
+      "type": "timeseries",
+      "interval": "1m"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "PBFA97CFB590B2093"
+      },
+      "description": "PCIe link-level replays per GPU over the past hour (DCGM_FI_DEV_PCIE_REPLAY_COUNTER). A few are harmless; a steady rise points at a riser, cable or slot. DCGM's own health check flags a Gen4 x16 link at more than 16 per minute (960 per hour).",
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "axisPlacement": "auto",
+            "drawStyle": "line",
+            "fillOpacity": 10,
+            "lineWidth": 1,
+            "pointSize": 4,
+            "showPoints": "never",
+            "spanNulls": false,
+            "stacking": {
+              "group": "A",
+              "mode": "none"
+            }
+          },
+          "min": 0,
+          "noValue": "no data",
+          "unit": "none"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 0,
+        "y": 23
+      },
+      "id": 109,
+      "options": {
+        "legend": {
+          "calcs": [
+            "max"
+          ],
+          "displayMode": "table",
+          "placement": "right",
+          "showLegend": true,
+          "sortBy": "Max",
+          "sortDesc": true
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "PBFA97CFB590B2093"
+          },
+          "editorMode": "code",
+          "expr": "max by (node, gpu) (increase(DCGM_FI_DEV_PCIE_REPLAY_COUNTER{job=\"dcgm\", instance=~\"$instance\", gpu=~\"$gpu\"}[1h]))",
+          "legendFormat": "{{node}} GPU{{gpu}}",
+          "range": true,
+          "instant": false,
+          "refId": "A"
+        }
+      ],
+      "title": "PCIe replays per hour",
+      "type": "timeseries",
+      "interval": "1m"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "PBFA97CFB590B2093"
+      },
+      "description": "How often per hour a GPU entered one of these clock-slowdown states (DCGM_EXP_CLOCK_EVENTS_TOTAL, edge-counted every 30 s): hw_slowdown, hw_thermal, sw_thermal, hw_power_brake. Power capping and idle clocks are left out (normal).",
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "axisPlacement": "auto",
+            "drawStyle": "line",
+            "fillOpacity": 10,
+            "lineWidth": 1,
+            "pointSize": 4,
+            "showPoints": "never",
+            "spanNulls": false,
+            "stacking": {
+              "group": "A",
+              "mode": "none"
+            }
+          },
+          "min": 0,
+          "noValue": "no throttle onsets",
+          "unit": "none"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 12,
+        "y": 23
+      },
+      "id": 110,
+      "options": {
+        "legend": {
+          "calcs": [
+            "max"
+          ],
+          "displayMode": "table",
+          "placement": "right",
+          "showLegend": true,
+          "sortBy": "Max",
+          "sortDesc": true
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "PBFA97CFB590B2093"
+          },
+          "editorMode": "code",
+          "expr": "sum by (node, gpu, clock_event) (increase(DCGM_EXP_CLOCK_EVENTS_TOTAL{job=\"dcgm\", instance=~\"$instance\", gpu=~\"$gpu\", clock_event=~\"hw_slowdown|hw_thermal|sw_thermal|hw_power_brake\"}[1h]))",
+          "legendFormat": "{{node}} GPU{{gpu}} {{clock_event}}",
+          "range": true,
+          "instant": false,
+          "refId": "A"
+        }
+      ],
+      "title": "Hardware throttle onsets per hour",
+      "type": "timeseries",
+      "interval": "1m"
+    },
+    {
+      "collapsed": false,
+      "gridPos": {
+        "h": 1,
+        "w": 24,
+        "x": 0,
+        "y": 31
+      },
+      "id": 111,
+      "panels": [],
+      "title": "GPU usage",
+      "type": "row"
+    },
+    {
       "aliasColors": {},
       "bars": false,
       "dashLength": 10,
@@ -33,7 +957,7 @@
         "h": 8,
         "w": 18,
         "x": 0,
-        "y": 0
+        "y": 32
       },
       "hiddenSeries": false,
       "id": 12,
@@ -118,7 +1042,7 @@
         "h": 8,
         "w": 6,
         "x": 18,
-        "y": 0
+        "y": 32
       },
       "id": 14,
       "options": {
@@ -185,7 +1109,7 @@
         "h": 8,
         "w": 18,
         "x": 0,
-        "y": 8
+        "y": 40
       },
       "hiddenSeries": false,
       "id": 10,
@@ -271,7 +1195,7 @@
         "h": 8,
         "w": 6,
         "x": 18,
-        "y": 8
+        "y": 40
       },
       "id": 16,
       "links": [],
@@ -340,7 +1264,7 @@
         "h": 8,
         "w": 12,
         "x": 0,
-        "y": 16
+        "y": 48
       },
       "hiddenSeries": false,
       "id": 2,
@@ -435,7 +1359,7 @@
         "h": 8,
         "w": 12,
         "x": 0,
-        "y": 24
+        "y": 56
       },
       "hiddenSeries": false,
       "id": 6,
@@ -525,7 +1449,7 @@
         "h": 8,
         "w": 12,
         "x": 0,
-        "y": 32
+        "y": 64
       },
       "hiddenSeries": false,
       "id": 18,
@@ -614,7 +1538,7 @@
         "h": 8,
         "w": 12,
         "x": 0,
-        "y": 24
+        "y": 56
       },
       "hiddenSeries": false,
       "id": 4,
@@ -700,16 +1624,19 @@
     "prometheus",
     "system",
     "GPU"
-    ],
+  ],
   "templating": {
     "list": [
       {
         "allValue": null,
         "current": {},
-        "datasource": "Prometheus",
+        "datasource": {
+          "type": "prometheus",
+          "uid": "PBFA97CFB590B2093"
+        },
         "definition": "label_values(DCGM_FI_DEV_GPU_TEMP, instance)",
         "hide": 0,
-        "includeAll": false,
+        "includeAll": true,
         "label": null,
         "multi": true,
         "name": "instance",
@@ -728,7 +1655,10 @@
       {
         "allValue": null,
         "current": {},
-        "datasource": "Prometheus",
+        "datasource": {
+          "type": "prometheus",
+          "uid": "PBFA97CFB590B2093"
+        },
         "definition": "label_values(gpu)",
         "hide": 0,
         "includeAll": true,

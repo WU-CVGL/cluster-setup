@@ -22,6 +22,7 @@ These are container-based supplementary services.
         - [7.3. Prometheus authentication for Determined AI (Bearer token)](#73-prometheus-authentication-for-determined-ai-bearer-token)
           - [Update from the hand-deployed state of 2026-09-28](#update-from-the-hand-deployed-state-of-2026-09-28)
           - [Rollback](#rollback)
+        - [7.4. GPU health alerts (Grafana)](#74-gpu-health-alerts-grafana)
   - [Notes](#notes)
   - [Acknowledgments](#acknowledgments)
 
@@ -160,17 +161,18 @@ Secrets and host-specific paths are not in git. `docker-compose.yml` reads them 
 
 | File | Used by | How to create |
 | :--- | :--- | :--- |
-| `.env` (in `services/`) | Docker Compose itself, to fill in `${...}` in `docker-compose.yml`: `PROMETHEUS_TSDB_DIR` (required) and `DET_METRICS_SECRETS_DIR`. It holds host paths, no secrets, and is not passed into any container | copy [`.env.example`](.env.example), which holds the live paths, and check them (owner uid 1000, TSDB on a local disk) |
+| `.env` (in `services/`) | Docker Compose itself, to fill in `${...}` in `docker-compose.yml`: `PROMETHEUS_TSDB_DIR` (required), `DET_METRICS_SECRETS_DIR` and, optionally, the Slack webhooks of the GPU health alerts, which only `grafana` receives (see [7.4](#74-gpu-health-alerts-grafana)). The file itself is not passed into any container | copy [`.env.example`](.env.example), which holds the live paths, and check them (owner uid 1000, TSDB on a local disk); `chmod 600` once it holds the webhooks |
 | `determined-watchdog/.env` | `watchdog` | see [the watchdog README](determined-watchdog/README.md#configuration) |
 | `wandb/.env` | `wandb` | wandb local server settings |
 | `frp/.env` | `frp` (`frps.ini` reads `FRP_TOKEN`, `FRP_DASHBOARD_USER`, `FRP_DASHBOARD_PWD`) | copy [`frp/.env.example`](frp/.env.example) and set all three values |
 | `grafana/.env` | `grafana`, `grafana-renderer` (`GF_RENDERING_RENDERER_TOKEN` and `AUTH_TOKEN`, same value) | copy [`grafana/.env.example`](grafana/.env.example) |
 | `nextcloud/db.env`, `nextcloud/nextcloud.env` | `db`, `nextcloud-app` | see [the Nextcloud README](nextcloud/README.md) |
 
-`.env` sets where Prometheus and the watchdog keep their data on the host:
+`.env` sets where Prometheus and the watchdog keep their data on the host, and where Grafana sends the GPU health alerts:
 
 - `PROMETHEUS_TSDB_DIR`: the Prometheus TSDB, mounted at `/prometheus`. Live: `/home/cvgladmin/.local/share/cluster-setup-monitoring/prometheus` (local xfs). It has no default on purpose: while `.env` is missing, under the server's Compose 2.21 every `docker compose` command run in `services/` (also `ps`, `logs`, `exec`, `stop`, `start`, `restart`, `rm` and `down`) stops with `required variable PROMETHEUS_TSDB_DIR is missing a value: ...`. The TSDB used to be on NFS (`/srv/nfs/var/prometheus`); that directory is kept unchanged only as a rollback copy, and a default must never start Prometheus on it again.
 - `DET_METRICS_SECRETS_DIR`: the directory of the Determined token file, mounted at `/run/determined-metrics` (read-write in `watchdog`, read-only in `prometheus`). Live: `/home/cvgladmin/.local/share/cluster-setup-monitoring/secrets`. Default when unset or empty: `prometheus/secrets/` (gitignored).
+- `SLACK_GPU_CRITICAL_WEBHOOK_URL`, `SLACK_GPU_APP_WEBHOOK_URL`: the Slack incoming webhooks of Grafana's GPU health alerts, passed to the `grafana` service only. Optional: unset or empty, Grafana uses a dead local address and delivers no GPU alert. How to fill them in from `determined-watchdog/.env`: [7.4](#74-gpu-health-alerts-grafana).
 
 Compose reads `.env` only from the project directory, so run `docker compose` in `services/`. A variable exported in your shell overrides `.env`. Compose 2.21 also aborts every command, not only `up`, `build` and `config`, while one of the `env_file`s is missing (newer Compose versions still run `ps`, `stop` and `rm` then). To stop or inspect a service anyway, use `docker stop services-<svc>-1` and `docker logs services-<svc>-1`, or `docker compose -p services stop <svc>` (with `-p` and without `-f`, Compose does not load `docker-compose.yml`).
 
@@ -202,16 +204,22 @@ These tools will run on the cluster agents to be monitored.
 
 ##### 7.2. Run
 
-On every node that needs to be monitored:
-
-Copy the whole [`node-exporter`](./node-exporter/docker-compose.yaml) folder (`docker-compose.yaml` and `default-counters.csv`, which the `dcgm-exporter` service bind-mounts) to every node, then run in that folder
+On every node that needs to be monitored, copy the whole [`node-exporter`](./node-exporter/docker-compose.yaml) folder (`docker-compose.yaml` and `default-counters.csv`, which the `dcgm-exporter` service bind-mounts) to `~/ws/node-exporter`, replacing any older compose file there (an old `docker-compose.yml` next to `docker-compose.yaml` makes Compose warn, and starting the wrong one brings back an old configuration). Then run in that folder
 
 ```bash
 # Using `docker compose` instead of `docker-compose`
 docker compose up -d --force-recreate --remove-orphans
 ```
 
-to collect data from every machine. The `cadvisor` image comes from `harbor.cvgl.lab`, so the node must trust the Harbor certificate first ([docs/04](../docs/04_Setup_Supplementary_Services.md#post-installation)). On VMs without a GPU, start only `docker compose up -d node-exporter` (Prometheus scrapes cAdvisor and DCGM-Exporter only on the GPU nodes).
+On VMs without a GPU, start only `docker compose up -d node-exporter` (Prometheus scrapes cAdvisor and DCGM-Exporter only on the GPU nodes).
+
+- **Images:** all three images come from `harbor.cvgl.lab`, so every machine that runs them, VMs included, must trust the Harbor certificate first ([docs/04](../docs/04_Setup_Supplementary_Services.md#post-installation)). Harbor holds the same images as the upstream registries (`library/prom/node-exporter` is `prom/node-exporter`, `nvidia/k8s/dcgm-exporter` is `nvcr.io/nvidia/k8s/dcgm-exporter`), so no machine needs Docker Hub, `nvcr.io` or the outbound proxy to pull them.
+- **Versions:** images are pinned, never `latest` (a `latest` is whatever a node or Harbor cached when it was pulled, which can be years old): node-exporter `v1.12.1`, cAdvisor `v0.60.6` (from `ghcr.io/google/cadvisor`), DCGM-Exporter `4.6.1-4.8.4` (DCGM 4.6.1; upstream publishes only the distroless image from this release on). To update one, pull the new upstream tag on a node, tag and push it to Harbor under the same pinned tag, run it next to the deployed exporter on a spare port, compare the metrics, then change the tag here and redeploy.
+- **DCGM counters:** `default-counters.csv` is the list of DCGM fields exported. DCGM 4 removed the PCIe throughput fields (`DCGM_FI_DEV_PCIE_TX/RX_THROUGHPUT`), and the exporter refuses to start while the file lists a removed field. Their replacements, the `DCGM_FI_PROF_*` profiling fields, work only on cards with profiling support: the RTX 6000 Ada exports them, the GeForce cards (RTX 3090, RTX 4090) skip them with a warning at startup. `DCGM_FI_DEV_XID_ERRORS` appears only after a GPU reports an XID error, labelled with its code and message, and keeps the last code. The file also enables the exporter's own event counters: `DCGM_EXP_XID_ERRORS_COUNT` (XIDs per GPU in the last 5 minutes, labelled `xid`; a 0-valued series without `xid` when there were none), `DCGM_EXP_XID_ERRORS_TOTAL` and `DCGM_EXP_CLOCK_EVENTS_TOTAL` (both from exporter start). The throttling (`*_VIOLATION`) counters count nanoseconds.
+- **SYS_ADMIN:** `dcgm-exporter` runs with `cap_add: SYS_ADMIN`, which DCGM needs to watch profiling fields. On a card that offers profiling it exits at startup without it.
+- **cAdvisor and cgroup v2:** the nodes use cgroup v2. cAdvisor reports per-container RSS there (`container_memory_rss`, from the cgroup's anonymous memory); older versions such as v0.38 report it as 0.
+- **Restarts:** every service has `restart: unless-stopped`, so the exporters come back after a reboot. A container without a restart policy stays stopped after a reboot, and its metrics stop.
+- **Check** on each GPU node that DCGM-Exporter reports every GPU: `curl -s localhost:9400/metrics | grep -c '^DCGM_FI_DEV_GPU_UTIL'` prints the number of GPUs (`nvidia-smi -L | wc -l`).
 
 Update `static_configs[targets]` in `prometheus/prometheus.yml` if any new nodes are added to the cluster.
 
@@ -598,6 +606,101 @@ docker ps -a --filter name=services- --format '{{.Names}}\t{{.Status}}'   # all 
   If `restored` is missing or a count differs, run no `docker compose` command: `f71d24c`'s own `docker-compose.yml` would start Prometheus on the NFS rollback copy `/srv/nfs/var/prometheus` and give the watchdog the pre-PR #3 setup. A missing or unreadable archive stops the line before the checkout (`HEAD` stays on `main`, nothing changed). While `~/.cache/determined-rollout/refactor-update` exists, `python3 ~/.cache/determined-rollout/refactor-update/check_mounts.py` (in `services/`) must also print `prometheus SAME` and `watchdog SAME`. Only then, in `services/`: `docker compose up -d --force-recreate frp grafana grafana-renderer prometheus watchdog`, the NGINX line above and `docker compose up -d --force-recreate --no-deps nextcloud-nginx`. The old `docker-compose.yml` has the absolute paths and the `metrics-20260928` tag, uses no variable from `.env`, and has the old renderer token and literal frp credentials, so those services match again. To go forward again later: step 7 (it discards the restored files and fast-forwards the detached `HEAD`), `git checkout main`, then steps 8 to 12.
 - The deployer's backup of 2026-09-28, `/home/cvgladmin/.cache/determined-rollout/20260928-monitoring/backup`, holds the configuration and container metadata from before the hand deployment (with credentials).
 - Both directions use the TSDB and the token file in place. The NFS copy `/srv/nfs/var/prometheus` is not touched by this update: never point `PROMETHEUS_TSDB_DIR` (or a compose file) at it without an explicit decision about the samples written since 2026-09-28, and never run two Prometheus processes on one TSDB.
+
+##### 7.4. GPU health alerts (Grafana)
+
+Grafana provisions the GPU health alerts from [`grafana/provisioning/alerting/gpu-health.yaml`](grafana/provisioning/alerting/gpu-health.yaml): the folder **GPU health** with the rule group `gpu-health` (evaluated every minute) and two Slack contact points, `slack-gpu-critical` and `slack-gpu-app`. The **GPU health** row at the top of the "NVIDIA DCGM Exporter Dashboard" (uid `Oxed_c6Wz`) shows the same signals, plus throttling, PCIe replays, row remapping and temperatures. The XID rules and panels need the DCGM-Exporter counters `DCGM_EXP_XID_ERRORS_COUNT`, `DCGM_EXP_XID_ERRORS_TOTAL` and `DCGM_EXP_CLOCK_EVENTS_TOTAL` from [`node-exporter/default-counters.csv`](node-exporter/default-counters.csv) (see [7.2](#72-run)); until a node exports them, its XID rules see no data, which counts as normal.
+
+| Rule (alert name) | Fires when | Pending period | Slack |
+| :--- | :--- | :--- | :--- |
+| GPU XID error (hardware or driver) | a GPU reported an XID other than 13, 31, 43 and 45 in DCGM-Exporter's 5-minute window; unknown codes included | none | `slack-gpu-critical` |
+| GPU XID error (application) | a GPU reported XID 13, 31, 43 or 45 (usually caused by the user's job: illegal memory access, page fault, killed job) | none | `slack-gpu-app` |
+| DCGM-Exporter down | Prometheus cannot scrape DCGM-Exporter on a node | 5 min | `slack-gpu-critical` |
+| GPUs missing from DCGM | fewer than 8 GPUs (distinct `gpu_uuid`) report on a node, or none while its exporter is up | 5 min | `slack-gpu-critical` |
+
+- **Messages:** one Slack message per rule and node. Labels: `node`, `gpu`, `gpu_uuid`, `modelName`, `xid` (where they apply) and `severity` (`critical`, or `info` for application XIDs). Annotations: a summary with a short meaning of the common XID codes, what to check on the node, the NVIDIA XID catalog and a dashboard link with the node preselected. A firing alert is repeated every 4 hours (application XIDs: 12 hours), and a resolved message follows when it clears. An XID alert clears 5 to 10 minutes after the last XID of that code, when it leaves the exporter's window.
+- **XID source:** the rules read `DCGM_EXP_XID_ERRORS_COUNT` (XIDs per GPU and code in the last 5 minutes). `DCGM_FI_DEV_XID_ERRORS` (the last code, kept until another code arrives or the exporter restarts) is shown on the dashboard only: an alert on it would never resolve.
+- **Not covered:** XIDs that happen while DCGM-Exporter is down or restarting are never seen. When Prometheus cannot be queried, the rules keep their last state (`KeepLast`) and send nothing, so a Prometheus outage does not alert here. No data (no XID, or no exporter counters yet) is normal (`OK`).
+- **Expected GPU count:** 8, the GPU count of every GPU node, is the threshold of `GPUs missing from DCGM` in the alerting file. For a node that runs with fewer GPUs on purpose, or a node in maintenance (it also raises `DCGM-Exporter down`), add a silence in Grafana (Alerting > Silences) with the matcher `node=cvgl-nodeXX.lan`.
+- **Watchdog and IdleKillAlert:** the watchdog acts only on the alert named `GRAFANA_ALERT_NAME` (`IdleKillAlert`, kept in Grafana's database, folder `test`), so these alerts never warn or kill anything. The file routes each rule with its own contact point (`notification_settings`) and has no `policies` section, so the default notification policy and IdleKillAlert are left as they are.
+- **Editing:** provisioned rules and contact points are read-only in the UI; change the file. Grafana replaces `$NAME` in the file with environment variables, except in annotations and queries (rules in the file header). Anonymous viewers can read rules and annotations: never put a secret there.
+
+**Slack webhooks.** Compose passes `SLACK_GPU_CRITICAL_WEBHOOK_URL` and `SLACK_GPU_APP_WEBHOOK_URL` from `.env` (see [6.1](#61-secrets-and-env-files)) to the `grafana` service only, not to `grafana-renderer`. Unset or empty, each defaults to a dead local address (`http://127.0.0.1:9/...`): Grafana starts and evaluates the rules, the alerts show in Alerting, and every delivery fails with `Failed to send Slack message ... connection refused` in `docker compose logs grafana`. Never hand Grafana an empty URL by other means (e.g. `docker run -e SLACK_GPU_CRITICAL_WEBHOOK_URL=`): it validates the Slack URL at start and exits, and `restart: unless-stopped` then restarts it in a loop. Grafana stores the URLs as secure settings (shown as `[REDACTED]`), but a failed delivery logs the full URL: do not share Grafana logs. To use the watchdog's channels (critical alerts to `SLACK_WEBHOOK_URL`, application XIDs to `SLACK_WEBHOOK_URL_DEBUG`), copy them without printing them:
+
+```sh
+cd ~/ws/cluster-setup/services
+grep -c '^SLACK_GPU_' .env    # must print 0; otherwise the lines exist already: edit them instead
+c=$(sed -n 's/^SLACK_WEBHOOK_URL=//p' determined-watchdog/.env | tr -d "\"' ")
+a=$(sed -n 's/^SLACK_WEBHOOK_URL_DEBUG=//p' determined-watchdog/.env | tr -d "\"' ")
+printf 'SLACK_GPU_CRITICAL_WEBHOOK_URL=%s\nSLACK_GPU_APP_WEBHOOK_URL=%s\n' "$c" "$a" >> .env; unset c a
+chmod 600 .env
+grep -cE '^SLACK_GPU_(CRITICAL|APP)_WEBHOOK_URL=https://hooks\.slack\.com/' .env   # must print 2
+docker compose config grafana | grep -c 'SLACK_GPU_.*hooks\.slack\.com'           # must print 2
+docker compose config grafana-renderer | grep -c SLACK_GPU                       # must print 0
+```
+
+A new or changed value reaches Grafana only when the container is recreated: `docker compose up -d --no-deps grafana`. A plain `docker compose restart grafana` keeps the old environment.
+
+**Deploy** (on `cvglsuppvm`, in `~/ws/cluster-setup/services`; not during minute 0 of an hour, when the watchdog asks Grafana for alerts):
+
+1. Optional: set the webhooks in `.env` (above). Without them, everything below works and no GPU alert is delivered.
+2. `stat -c '%u %n' grafana/provisioning` must print `1000 grafana/provisioning`: the update creates `grafana/provisioning/alerting/` in it. If it prints `472`, run `sudo chown 1000:1000 grafana/provisioning` (never `grafana/data`; see [4](#4-grafana-prometheus-and-wandb)).
+3. Update the checkout (`git pull`, or `git merge --ff-only` after a `git fetch`). Grafana picks up the dashboard change within about 10 seconds; the alerting file waits for step 4.
+4. Recreate Grafana, which loads the alerting file and the new environment: `docker compose up -d --no-deps grafana`. Grafana is unavailable for about 20 seconds.
+5. Check:
+
+   ```sh
+   sleep 20; docker compose ps grafana                    # Up, not Restarting
+   docker compose logs grafana | grep -E 'provision(ing)? alerting|Failed to provision'   # "finished to provision alerting", no "Failed"
+   curl -s localhost:10080/api/health                      # "database": "ok"
+   ```
+
+   In Grafana, Alerting > Alert rules lists the folder **GPU health** with the 4 rules, and IdleKillAlert is unchanged in folder `test`. To send a test message through a contact point (Grafana admin password; the long name is the contact point name in unpadded base64url, `c2xhY2stZ3B1LWFwcA` for `slack-gpu-app`):
+
+   ```sh
+   curl -s -u admin -X POST -H 'Content-Type: application/json' \
+     localhost:10080/apis/notifications.alerting.grafana.app/v1beta1/namespaces/default/receivers/c2xhY2stZ3B1LWNyaXRpY2Fs/test \
+     -d '{"integration":{"uid":"slack-gpu-critical","type":"slack","version":"v1","settings":{},"secureFields":{"url":true}}}'
+   ```
+
+   `{"status":"success",...}` means Slack accepted it.
+
+Later changes to the alerting file need no restart: after the pull, `curl -s -u admin -X POST localhost:10080/api/admin/provisioning/alerting/reload` (Grafana server admin only). A file that fails to load returns HTTP 500 and Grafana keeps running with the previous rules; the same file at a restart or recreate stops Grafana. Test a changed file on a scratch Grafana first, from `services/` on any Docker host:
+
+```sh
+docker run -d --name grafana-dryrun -p 127.0.0.1:13000:3000 \
+  -e SLACK_GPU_CRITICAL_WEBHOOK_URL=http://127.0.0.1:9/dryrun -e SLACK_GPU_APP_WEBHOOK_URL=http://127.0.0.1:9/dryrun \
+  -v "$PWD/grafana/provisioning:/etc/grafana/provisioning:ro" grafana/grafana:13.0.1-security-01
+sleep 20; docker logs grafana-dryrun 2>&1 | grep -E 'provision(ing)? alerting|Failed to provision'   # "finished to provision alerting"
+curl -s -u admin:admin localhost:13000/api/v1/provisioning/alert-rules | grep -o '"title":"[^"]*"'
+docker rm -f grafana-dryrun
+```
+
+**Rollback:**
+
+- Grafana restarts in a loop after step 4 (`Failed to provision alerting` in its log): take the file out of the provisioning directory (only `.yaml`, `.yml` and `.json` files are read) and recreate: `mv grafana/provisioning/alerting/gpu-health.yaml grafana/provisioning/alerting/gpu-health.yaml.off && docker compose up -d --no-deps grafana`. Fix the cause, move the file back (`git status` must be clean again) and recreate.
+- Removing the file does not remove what it provisioned: the rules and contact points stay in Grafana's database. To delete them, replace the file's content with:
+
+  ```yaml
+  apiVersion: 1
+  deleteRules:
+    - orgId: 1
+      uid: gpu-xid-critical
+    - orgId: 1
+      uid: gpu-xid-app
+    - orgId: 1
+      uid: dcgm-exporter-down
+    - orgId: 1
+      uid: gpu-missing
+  deleteContactPoints:
+    - orgId: 1
+      uid: slack-gpu-critical
+    - orgId: 1
+      uid: slack-gpu-app
+  ```
+
+  and reload or recreate. The empty folder **GPU health** can then be deleted in the UI.
+- Dashboard: check out the previous `grafana/provisioning/dashboards/json/dcgm-exporter-dashboard.json`; Grafana applies it within about 10 seconds.
 
 ## Notes
 

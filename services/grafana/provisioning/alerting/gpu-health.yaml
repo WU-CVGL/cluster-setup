@@ -1,0 +1,373 @@
+# GPU health alerts: XID errors, DCGM-Exporter down, GPUs missing from DCGM.
+# Provisioned by Grafana at start (and by POST /api/admin/provisioning/alerting/reload,
+# server admin only). Rules and contact points from this file are read-only in the UI.
+# Operations, deployment and rollback: services/README.md, 7.4.
+#
+# Rules for editing this file:
+# - Grafana (13.0) replaces `$NAME` and `${NAME}` with environment variables (empty if
+#   unset) in contact point settings, titles, labels and the other plain fields: write a
+#   literal `$` there as `$$`. It keeps annotations and query models (`model`, PromQL) as
+#   written: there `$` stays `$`, e.g. `{{ $labels.node }}`, exactly as in the UI.
+# - A file that fails to load stops Grafana at start (it then restarts in a loop):
+#   test changes on a scratch Grafana first (README.md, 7.4).
+# - The watchdog acts only on the alert named GRAFANA_ALERT_NAME (IdleKillAlert, kept
+#   in Grafana's database, folder `test`). Never reuse that name, folder or group here.
+# - Routing uses each rule's notification_settings (simplified routing). Do not add a
+#   `policies` section: it would replace and lock the whole notification policy tree.
+# - Removing a rule or contact point from this file does not delete it in Grafana:
+#   use `deleteRules` / `deleteContactPoints` for that.
+#
+# Webhooks: SLACK_GPU_CRITICAL_WEBHOOK_URL and SLACK_GPU_APP_WEBHOOK_URL are set on the
+# grafana service in services/docker-compose.yml from services/.env. Unset, they default to
+# a dead local address, so Grafana starts and evaluates the rules but delivers nothing.
+# Never let them be empty: an empty Slack URL fails validation and Grafana does not start.
+#
+# Datasource: PBFA97CFB590B2093 is the uid Grafana derives from the datasource name
+# "Prometheus" (provisioning/datasources/datasource.yaml); it changes if that name changes.
+# Metrics: DCGM-Exporter (Prometheus job "dcgm", labels node, gpu, gpu_uuid, modelName).
+# DCGM_EXP_XID_ERRORS_COUNT counts XIDs per GPU and code (label xid) in a sliding 5-minute
+# window; with no XID in the window each GPU has one 0-valued series WITHOUT an xid label,
+# which `xid!=""` filters out. Never alert on DCGM_FI_DEV_XID_ERRORS: it holds the last code
+# until another code arrives or the exporter restarts, so an alert on it never resolves.
+#
+# Expected GPUs per node: 8 (every GPU node has 8 GPUs, see the hardware tables in the
+# top-level README.md). It is the threshold of rule `gpu-missing` below. For a node that
+# runs with fewer GPUs on purpose, add a Grafana silence for that node (README.md, 7.4).
+
+apiVersion: 1
+
+contactPoints:
+  - orgId: 1
+    name: slack-gpu-critical
+    receivers:
+      - uid: slack-gpu-critical
+        type: slack
+        settings:
+          url: $SLACK_GPU_CRITICAL_WEBHOOK_URL
+        disableResolveMessage: false
+  - orgId: 1
+    name: slack-gpu-app
+    receivers:
+      - uid: slack-gpu-app
+        type: slack
+        settings:
+          url: $SLACK_GPU_APP_WEBHOOK_URL
+        disableResolveMessage: false
+
+groups:
+  - orgId: 1
+    name: gpu-health
+    folder: GPU health
+    interval: 1m
+    rules:
+      # Hardware and driver XIDs: every code except the application class (13, 31, 43, 45),
+      # so new or unknown codes always reach the critical channel.
+      # for: 0s, because the 5-minute window ends a burst after 5 minutes: a pending
+      # period of 5 minutes or more would never fire.
+      - uid: gpu-xid-critical
+        title: GPU XID error (hardware or driver)
+        condition: C
+        data:
+          - refId: A
+            relativeTimeRange:
+              from: 300
+              to: 0
+            datasourceUid: PBFA97CFB590B2093
+            model:
+              refId: A
+              editorMode: code
+              expr: >-
+                max by (node, gpu, gpu_uuid, modelName, xid)
+                (DCGM_EXP_XID_ERRORS_COUNT{job="dcgm", xid!="", xid!="0", xid!~"13|31|43|45"})
+              instant: true
+              range: false
+              intervalMs: 1000
+              maxDataPoints: 43200
+          - refId: B
+            relativeTimeRange:
+              from: 300
+              to: 0
+            datasourceUid: __expr__
+            model:
+              refId: B
+              type: reduce
+              expression: A
+              reducer: last
+              datasource:
+                type: __expr__
+                uid: __expr__
+          - refId: C
+            relativeTimeRange:
+              from: 300
+              to: 0
+            datasourceUid: __expr__
+            model:
+              refId: C
+              type: threshold
+              expression: B
+              conditions:
+                - evaluator:
+                    type: gt
+                    params: [0]
+              datasource:
+                type: __expr__
+                uid: __expr__
+        dashboardUid: Oxed_c6Wz
+        panelId: 106
+        for: 0s
+        noDataState: OK
+        execErrState: KeepLast
+        isPaused: false
+        labels:
+          severity: critical
+        annotations:
+          summary: >-
+            XID {{ $labels.xid }} on {{ $labels.node }} GPU {{ $labels.gpu }}
+            ({{ $labels.modelName }}): {{ if eq $labels.xid "48" }}double-bit ECC error
+            {{- else if eq $labels.xid "61" }}internal micro-controller warning
+            {{- else if eq $labels.xid "62" }}internal micro-controller halt
+            {{- else if eq $labels.xid "63" }}ECC page retirement or row remapping event
+            {{- else if eq $labels.xid "64" }}ECC page retirement or row remapping failure
+            {{- else if eq $labels.xid "74" }}NVLink error
+            {{- else if eq $labels.xid "79" }}GPU has fallen off the bus
+            {{- else if eq $labels.xid "92" }}high single-bit ECC error rate
+            {{- else if eq $labels.xid "94" }}contained ECC error
+            {{- else if eq $labels.xid "95" }}uncontained ECC error
+            {{- else if eq $labels.xid "109" }}context switch timeout
+            {{- else if eq $labels.xid "119" }}GSP RPC timeout
+            {{- else if eq $labels.xid "120" }}GSP error
+            {{- else if eq $labels.xid "140" }}unrecovered ECC error
+            {{- else if eq $labels.xid "154" }}GPU recovery action changed
+            {{- else }}see the NVIDIA XID catalog{{ end }}
+          description: >-
+            {{ printf "%.0f" $values.B.Value }} XID {{ $labels.xid }} event(s) on this GPU in
+            DCGM-Exporter's 5-minute window. Usually a hardware or driver fault: check
+            `sudo dmesg -T | grep -i xid` and `nvidia-smi -q -i {{ $labels.gpu_uuid }}` on the node
+            ({{ if eq $labels.xid "79" }}a GPU that fell off the bus needs a node reboot{{ else if or (eq $labels.xid "95") (eq $labels.xid "154") (eq $labels.xid "119") (eq $labels.xid "120") (eq $labels.xid "62") }}the GPU needs a reset or a node reboot{{ else if or (eq $labels.xid "63") (eq $labels.xid "94") }}reset the GPU when it is idle to apply the row remapping{{ else }}look the code up in the NVIDIA XID catalog{{ end }}).
+            If it repeats, drain the node in Determined before working on it.
+          runbook_url: https://docs.nvidia.com/deploy/xid-errors/
+          dashboard_url: https://grafana.cvgl.lab/d/Oxed_c6Wz/?var-instance={{ $labels.node }}:9400
+        notification_settings:
+          receiver: slack-gpu-critical
+          group_by: [grafana_folder, alertname, node]
+          repeat_interval: 4h
+
+      # Application-class XIDs, usually caused by the user's job, not the hardware:
+      # 13 graphics engine exception, 31 GPU memory page fault, 43 GPU stopped processing
+      # (job killed or faulted), 45 preemptive cleanup after previous errors.
+      - uid: gpu-xid-app
+        title: GPU XID error (application)
+        condition: C
+        data:
+          - refId: A
+            relativeTimeRange:
+              from: 300
+              to: 0
+            datasourceUid: PBFA97CFB590B2093
+            model:
+              refId: A
+              editorMode: code
+              expr: >-
+                max by (node, gpu, gpu_uuid, modelName, xid)
+                (DCGM_EXP_XID_ERRORS_COUNT{job="dcgm", xid=~"13|31|43|45"})
+              instant: true
+              range: false
+              intervalMs: 1000
+              maxDataPoints: 43200
+          - refId: B
+            relativeTimeRange:
+              from: 300
+              to: 0
+            datasourceUid: __expr__
+            model:
+              refId: B
+              type: reduce
+              expression: A
+              reducer: last
+              datasource:
+                type: __expr__
+                uid: __expr__
+          - refId: C
+            relativeTimeRange:
+              from: 300
+              to: 0
+            datasourceUid: __expr__
+            model:
+              refId: C
+              type: threshold
+              expression: B
+              conditions:
+                - evaluator:
+                    type: gt
+                    params: [0]
+              datasource:
+                type: __expr__
+                uid: __expr__
+        dashboardUid: Oxed_c6Wz
+        panelId: 106
+        for: 0s
+        noDataState: OK
+        execErrState: KeepLast
+        isPaused: false
+        labels:
+          severity: info
+        annotations:
+          summary: >-
+            XID {{ $labels.xid }} on {{ $labels.node }} GPU {{ $labels.gpu }}
+            ({{ $labels.modelName }}): {{ if eq $labels.xid "13" }}graphics engine exception
+            {{- else if eq $labels.xid "31" }}GPU memory page fault
+            {{- else if eq $labels.xid "43" }}GPU stopped processing (job killed or faulted)
+            {{- else }}preemptive cleanup after previous errors{{ end }}
+          description: >-
+            {{ printf "%.0f" $values.B.Value }} XID {{ $labels.xid }} event(s) on this GPU in
+            DCGM-Exporter's 5-minute window. This code is usually caused by the application
+            (e.g. an illegal memory access or a killed job). Act only if it repeats on the same GPU
+            across different jobs.
+          runbook_url: https://docs.nvidia.com/deploy/xid-errors/
+          dashboard_url: https://grafana.cvgl.lab/d/Oxed_c6Wz/?var-instance={{ $labels.node }}:9400
+        notification_settings:
+          receiver: slack-gpu-app
+          group_by: [grafana_folder, alertname, node]
+          repeat_interval: 12h
+
+      # The XID rules are blind while DCGM-Exporter is down (e.g. a crash loop at start).
+      - uid: dcgm-exporter-down
+        title: DCGM-Exporter down
+        condition: C
+        data:
+          - refId: A
+            relativeTimeRange:
+              from: 300
+              to: 0
+            datasourceUid: PBFA97CFB590B2093
+            model:
+              refId: A
+              editorMode: code
+              expr: max by (node) (up{job="dcgm"})
+              instant: true
+              range: false
+              intervalMs: 1000
+              maxDataPoints: 43200
+          - refId: B
+            relativeTimeRange:
+              from: 300
+              to: 0
+            datasourceUid: __expr__
+            model:
+              refId: B
+              type: reduce
+              expression: A
+              reducer: last
+              datasource:
+                type: __expr__
+                uid: __expr__
+          - refId: C
+            relativeTimeRange:
+              from: 300
+              to: 0
+            datasourceUid: __expr__
+            model:
+              refId: C
+              type: threshold
+              expression: B
+              conditions:
+                - evaluator:
+                    type: lt
+                    params: [1]
+              datasource:
+                type: __expr__
+                uid: __expr__
+        dashboardUid: Oxed_c6Wz
+        panelId: 102
+        for: 5m
+        noDataState: OK
+        execErrState: KeepLast
+        isPaused: false
+        labels:
+          severity: critical
+        annotations:
+          summary: DCGM-Exporter on {{ $labels.node }} is down
+          description: >-
+            Prometheus has not been able to scrape DCGM-Exporter on {{ $labels.node }} (port 9400)
+            for 5 minutes. Until it is back, this node has no GPU metrics, no XID alerts and no
+            idle-shell detection. On the node, in ~/ws/node-exporter: `docker compose ps` and
+            `docker compose logs --tail 50 dcgm-exporter` (an exporter that exits at start usually
+            rejects a field in default-counters.csv). A node that is down or in maintenance also
+            raises this alert: silence it by node.
+          dashboard_url: https://grafana.cvgl.lab/d/Oxed_c6Wz/?var-instance={{ $labels.node }}:9400
+        notification_settings:
+          receiver: slack-gpu-critical
+          group_by: [grafana_folder, alertname, node]
+          repeat_interval: 4h
+
+      # Fewer than 8 GPUs with a current sample (distinct gpu_uuid, so a recreated exporter
+      # cannot count a GPU twice), or none at all while the exporter is up.
+      - uid: gpu-missing
+        title: GPUs missing from DCGM
+        condition: C
+        data:
+          - refId: A
+            relativeTimeRange:
+              from: 300
+              to: 0
+            datasourceUid: PBFA97CFB590B2093
+            model:
+              refId: A
+              editorMode: code
+              expr: >-
+                count by (node) (count by (node, gpu_uuid) (DCGM_FI_DEV_GPU_TEMP{job="dcgm"}))
+                or on (node)
+                (max by (node) (up{job="dcgm"} == 1) * 0)
+              instant: true
+              range: false
+              intervalMs: 1000
+              maxDataPoints: 43200
+          - refId: B
+            relativeTimeRange:
+              from: 300
+              to: 0
+            datasourceUid: __expr__
+            model:
+              refId: B
+              type: reduce
+              expression: A
+              reducer: last
+              datasource:
+                type: __expr__
+                uid: __expr__
+          - refId: C
+            relativeTimeRange:
+              from: 300
+              to: 0
+            datasourceUid: __expr__
+            model:
+              refId: C
+              type: threshold
+              expression: B
+              conditions:
+                - evaluator:
+                    type: lt
+                    params: [8]
+              datasource:
+                type: __expr__
+                uid: __expr__
+        dashboardUid: Oxed_c6Wz
+        panelId: 101
+        for: 5m
+        noDataState: OK
+        execErrState: KeepLast
+        isPaused: false
+        labels:
+          severity: critical
+        annotations:
+          summary: Only {{ printf "%.0f" $values.B.Value }} of 8 GPUs report on {{ $labels.node }}
+          description: >-
+            DCGM-Exporter on {{ $labels.node }} reports {{ printf "%.0f" $values.B.Value }} GPUs
+            instead of 8 for 5 minutes. A GPU that fell off the bus (XID 79) or failed to initialise
+            disappears from DCGM. Check `nvidia-smi -L` and `sudo dmesg -T | grep -i -e xid -e nvrm`
+            on the node. If the node runs with fewer GPUs on purpose, silence this alert for it.
+          dashboard_url: https://grafana.cvgl.lab/d/Oxed_c6Wz/?var-instance={{ $labels.node }}:9400
+        notification_settings:
+          receiver: slack-gpu-critical
+          group_by: [grafana_folder, alertname, node]
+          repeat_interval: 4h
