@@ -202,16 +202,19 @@ These tools will run on the cluster agents to be monitored.
 
 ##### 7.2. Run
 
-On every node that needs to be monitored:
-
-Copy the whole [`node-exporter`](./node-exporter/docker-compose.yaml) folder (`docker-compose.yaml` and `default-counters.csv`, which the `dcgm-exporter` service bind-mounts) to every node, then run in that folder
+On every node that needs to be monitored, copy the whole [`node-exporter`](./node-exporter/docker-compose.yaml) folder (`docker-compose.yaml` and `default-counters.csv`, which the `dcgm-exporter` service bind-mounts) to `~/ws/node-exporter`, replacing any older compose file there (an old `docker-compose.yml` next to `docker-compose.yaml` makes Compose warn, and starting the wrong one brings back an old configuration). Then run in that folder
 
 ```bash
 # Using `docker compose` instead of `docker-compose`
 docker compose up -d --force-recreate --remove-orphans
 ```
 
-to collect data from every machine. The `cadvisor` image comes from `harbor.cvgl.lab`, so the node must trust the Harbor certificate first ([docs/04](../docs/04_Setup_Supplementary_Services.md#post-installation)). On VMs without a GPU, start only `docker compose up -d node-exporter` (Prometheus scrapes cAdvisor and DCGM-Exporter only on the GPU nodes).
+On VMs without a GPU, start only `docker compose up -d node-exporter` (Prometheus scrapes cAdvisor and DCGM-Exporter only on the GPU nodes).
+
+- **Images:** all three images come from `harbor.cvgl.lab`, so every machine that runs them, VMs included, must trust the Harbor certificate first ([docs/04](../docs/04_Setup_Supplementary_Services.md#post-installation)). Harbor holds the same images as the upstream registries (`library/prom/node-exporter` is `prom/node-exporter`, `nvidia/k8s/dcgm-exporter` is `nvcr.io/nvidia/k8s/dcgm-exporter`), so no machine needs Docker Hub, `nvcr.io` or the outbound proxy to pull them.
+- **DCGM-Exporter version:** pinned to `3.1.3-3.1.2-ubuntu20.04`, which works with the cluster's RTX 3090, RTX 4090 and RTX 6000 Ada GPUs, and `default-counters.csv` is written for it. Do not use `latest`: it is whatever image a node cached when it was first pulled, which can be older than the pinned one. Check `default-counters.csv` when changing the version.
+- **Restarts:** every service has `restart: unless-stopped`, so the exporters come back after a reboot. A container without a restart policy stays stopped after a reboot, and its metrics stop.
+- **Check** on each GPU node that DCGM-Exporter reports every GPU: `curl -s localhost:9400/metrics | grep -c '^DCGM_FI_DEV_GPU_UTIL'` prints the number of GPUs (`nvidia-smi -L | wc -l`).
 
 Update `static_configs[targets]` in `prometheus/prometheus.yml` if any new nodes are added to the cluster.
 
