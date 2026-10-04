@@ -68,7 +68,17 @@ The PromQL in A is:
 max by(container_id)((DCGM_FI_DEV_GPU_UTIL * on(gpu_uuid) group_left(container_id) det_gpu_uuid_container_id))
 ```
 
-The rule lives only in Grafana's database (it is not in this repo).
+The rule lives only in Grafana's database (it is not in this repo): folder `test`, rule group
+`test1`, evaluated every minute. A is an instant query over the last 30 minutes, B reduces A to
+its last value, and C, the condition, is `B IS BELOW 10` (GPU utilization in %). Pending period
+15 minutes; no data gives `NoData`, an error gives `Error` (Grafana's own `DatasourceNoData` and
+`DatasourceError` alerts, which the watchdog ignores). The screenshot above shows older values
+(30 minutes, below 5). Export the current definition with
+`GET /api/v1/provisioning/alert-rules/export?format=yaml` before changing it.
+
+The watchdog ignores every other alert, including the GPU health alerts provisioned from
+`grafana/provisioning/alerting/` ([services README, 7.4](../README.md#74-gpu-health-alerts-grafana)):
+never give another rule the name `IdleKillAlert`.
 
 ## Configuration
 

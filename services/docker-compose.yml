@@ -403,6 +403,13 @@ services:
       - TZ=Asia/Shanghai
       - GF_RENDERING_SERVER_URL=http://grafana-renderer:8081/render
       - GF_RENDERING_CALLBACK_URL=http://grafana:3000/
+      # Slack webhooks of the GPU health alerts (grafana/provisioning/alerting/gpu-health.yaml),
+      # from services/.env, for this service only (grafana/.env is shared with grafana-renderer).
+      # The default is a dead local address, never empty: an empty Slack URL fails the alerting
+      # provisioning and Grafana does not start. Unset, the alerts are evaluated but not delivered.
+      # A changed value needs a recreate (`up -d --no-deps grafana`), not a restart. README.md, 7.4.
+      - SLACK_GPU_CRITICAL_WEBHOOK_URL=${SLACK_GPU_CRITICAL_WEBHOOK_URL:-http://127.0.0.1:9/slack-gpu-critical-webhook-not-set}
+      - SLACK_GPU_APP_WEBHOOK_URL=${SLACK_GPU_APP_WEBHOOK_URL:-http://127.0.0.1:9/slack-gpu-app-webhook-not-set}
     env_file:
       - ./grafana/.env
     volumes:
