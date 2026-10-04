@@ -51,7 +51,9 @@ NAS_HOST = "nas.cvgl.lab"
 HOME_DATASET_PARENT = "Peter/Workspace"
 HOME_QUOTA = 8 * 1024**4  # 8TB
 NFS_NETWORKS = ["192.168.233.0/24", "10.0.1.64/27"]
-NFS_MOUNT_OPTIONS = "defaults,vers=3,async,noatime,soft,rsize=32768,wsize=32768,_netdev"
+# Same options as scripts/nfs-remount.sh (docs/03, NFS client mount options). nconnect applies per NFS
+# server: the mounts of one server share the connections of the first one mounted.
+NFS_MOUNT_OPTIONS = "defaults,vers=3,noatime,hard,nconnect=16,rsize=1048576,wsize=1048576,_netdev"
 
 # Harbor: project 1 is "library"; role 2 is "Developer"
 HARBOR_PROJECT_ID = 1
