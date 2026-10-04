@@ -32,7 +32,7 @@ GeForce drivers disable PCIe peer-to-peer (P2P) between GPUs, so CUDA peer copie
 
 This guide covers P2P over PCIe BAR1 on the three card types of this cluster listed below; other GeForce models were not tested. "24 GB cards" means the RTX 3090 and the RTX 4090 24 GB, "48 GB cards" the modded RTX 4090 48 GB.
 
-We deploy one branch of our fork on every node: [`610.57.04-p2p-48g`](https://github.com/LingzheZhao/open-gpu-kernel-modules/tree/610.57.04-p2p-48g). It works for all three card types; the Method 3 code stays dormant where VRAM fits into BAR1.
+We deploy one branch of our fork on every node with these cards: [`610.57.04-p2p-48g`](https://github.com/LingzheZhao/open-gpu-kernel-modules/tree/610.57.04-p2p-48g). It works for all three card types; the Method 3 code stays dormant where VRAM fits into BAR1.
 
 | Card | Architecture | VRAM | Max BAR1 | P2P path | Nodes |
 | :--- | :--- | :--- | :--- | :--- | :--- |
