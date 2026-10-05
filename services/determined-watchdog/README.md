@@ -32,9 +32,12 @@ and to admins, so nobody else can check or reclaim an idle notebook by hand. A C
 notebook has no GPU metrics, so the alert never fires for it and it is never warned or killed.
 If the alert is not firing, or no idle container belongs to a shell or notebook, it only logs.
 Errors (Grafana/Determined/Slack unreachable, bad responses) are logged and the next hour tries
-again; Slack delivery is best-effort and never stops the watchdog. If one of the three Determined
-listings (shells, notebooks, tasks) fails, the check posts `det api miss` and neither warns nor
-kills.
+again; Slack delivery is best-effort and never stops the watchdog. The shell and notebook listings
+fail independently: if one of them fails, the check posts `det api miss` naming it and polices
+the other kind as usual. Tasks of the failed kind are neither warned nor killed in that check; the
+ones warned before and still idle stay tracked, so the next check that lists them kills them if
+they are still idle, without a second warning. If the task listing fails, or both the shell and
+the notebook listings, the check posts `det api miss` and neither warns nor kills.
 The warning state (`data/file_info.json` + `data/localData/`) survives restarts. A warning older
 than 90 minutes (after downtime, or after an hour in which no shell or notebook was idle) is
 ignored and that shell or notebook is warned again.
@@ -56,7 +59,8 @@ check.
 | `Automatic update success ~` | hourly check that renewed the Determined token; a renewal after HTTP 401 |
 | `Automatic update FAILED ~ (<reason>)` | hourly check whose renewal failed (repeated every hour until it works); a failed renewal after HTTP 401 |
 | `Failed to fetch Grafana alert! Reason: empty response.` | hourly check: Grafana unreachable or bad answer |
-| `det api miss` / `need update api!` | hourly check: the Determined shell, notebook or task query failed |
+| `det api miss` / `need update api! (GET shells failed)` or `(GET notebooks failed)` | hourly check: that Determined listing failed; the other kind was still policed |
+| `det api miss` / `need update api!` | hourly check: the Determined task listing failed, or both the shell and the notebook listings |
 
 The start-up token check posts none of these, whatever its outcome. A token check that keeps the
 token posts nothing either, nor does a renewal whose new token has an expiry the watchdog cannot
@@ -239,7 +243,8 @@ used to be tracked in `prometheus.yml`; it stays in Git history). In short:
 - `file_info.json`: points to the last saved warning list; kept across restarts, re-created only if
   missing or invalid.
 - `localData/YYYY-MM/YYYY-MM-DD/localData_<timestamp>.json`: the shells and notebooks warned at
-  each check (plus those whose kill failed), keyed by task id; each entry records its `kind`
+  each check (plus those whose kill failed, and the still idle ones warned before whose listing
+  failed in that check), keyed by task id; each entry records its `kind`
   (`shell` or `notebook`). Warnings are matched by task id only, and the kill goes to the endpoint
   of the kind under which Determined lists the task, so records written by versions that policed
   only shells (entries without `kind`) still work: a shell warned before an upgrade is killed at

@@ -108,7 +108,9 @@ class DeterminedDataTest(APITestCase):
         notebooks = {"notebooks": [
             {"id": "n1", "username": "bob", "description": "JupyterLab (y)", "startTime": "t1",
              "serviceAddress": "/proxy/n1/?token=PLACEHOLDER-jupyter-token"},
-            {"id": "n2", "username": "carol"},  # CPU-only or still queued: no container yet
+            # Still queued or starting: no container yet. (A running CPU-only notebook has a
+            # container; it is left alone because the GPU alert never fires for it.)
+            {"id": "n2", "username": "carol"},
             {"id": "n3", "username": "dave"},  # no task summary
         ]}
         tasks = {"allocationIdToSummary": {
@@ -131,6 +133,10 @@ class DeterminedDataTest(APITestCase):
         )  # the serviceAddress (Jupyter token) is not copied
         # Without notebook data (older callers), only the shells.
         self.assertEqual(sorted(self.quiet(self.api.parse_api_data, shells, tasks)), ["s1"])
+        # A listing that failed (None): only the other kind.
+        parse = self.api.parse_api_data
+        self.assertEqual(sorted(self.quiet(parse, shells, tasks, None)), ["s1"])
+        self.assertEqual(sorted(self.quiet(parse, None, tasks, notebooks)), ["n1"])
 
     def test_empty_responses(self):
         self.assertEqual(self.api.parse_api_data({}, {}), {})

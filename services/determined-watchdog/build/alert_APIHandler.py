@@ -122,13 +122,14 @@ class APIHandler:
     def parse_api_data(self, shell_api_data, task_api_data, notebook_api_data=None):
         """Return {task_id: info} for the shells and notebooks that have a container.
 
-        info["kind"] is "shell" or "notebook". A notebook's serviceAddress carries its Jupyter
-        token: it is not copied (info is logged and saved).
+        info["kind"] is "shell" or "notebook". shell_api_data or notebook_api_data may be None
+        (that listing failed). A notebook's serviceAddress carries its Jupyter token: it is not
+        copied (info is logged and saved).
         """
         result = {}
         summaries = task_api_data.get("allocationIdToSummary") or {}
         for kind, tasks in (
-            (TASK_KIND_SHELL, shell_api_data.get("shells")),
+            (TASK_KIND_SHELL, (shell_api_data or {}).get("shells")),
             (TASK_KIND_NOTEBOOK, (notebook_api_data or {}).get("notebooks")),
         ):
             for task in tasks or []:

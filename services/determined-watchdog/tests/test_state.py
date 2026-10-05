@@ -386,15 +386,24 @@ class StateMachineTest(unittest.TestCase):
     def test_det_api_error_warns_and_kills_nothing(self):
         self.shells = {"shell-a": ("c-a", "alice")}
         self.set_idle("shell-a")
+        self.stub.routes[kill_route("shell-a")] = (200, {})
         app = self.start_app()
         self.check(app)  # warned
+        shells_route = self.stub.routes[SHELLS]
         for route in [(403, {"code": 7, "message": "forbidden"}), (502, "<html>"), (200, "nope")]:
             with self.subTest(route=route):
                 self.stub.routes[SHELLS] = route
                 self.check(app)
                 self.assertEqual(self.kills(), [])
                 self.assertEqual(self.slack(), [("Warning", ["det api miss"])])
+                self.assertEqual(
+                    self.slack_titles(), [("Warning", ["need update api! (GET shells failed)\n"])]
+                )
                 self.assertEqual(self.stub.requests_to(*LOGIN), [])  # only HTTP 401 renews
+        self.stub.routes[SHELLS] = shells_route
+        self.check(app)  # the warning saved before the errors still counts
+        self.assertEqual(self.kills(), ["/api/v1/shells/shell-a/kill"])
+        self.assertEqual(self.slack(), [("Terminated", ["<@U0ALICE>"])])
 
     def reject_old_token(self, *accepted_tokens, routes=(SHELLS, NOTEBOOKS, TASKS)):
         """Determined rejects every token but accepted_tokens on these GETs (revoked session)."""
@@ -746,23 +755,198 @@ class StateMachineTest(unittest.TestCase):
         self.assertEqual(self.slack_titles(), [("Terminated", ["[JupyterLab] JupyterLab (nb-a)\n"])])
         self.assertEqual(self.slack(), [("Terminated", ["alice"])])
 
-    def test_notebook_api_error_warns_and_kills_nothing(self):
-        # All or nothing: a check without the notebook list would forget the warned notebooks.
+    # The shell and notebook listings fail independently: the other kind is still policed, and
+    # the failed kind's warned tasks stay tracked (neither killed nor warned again).
+
+    def test_failing_notebook_list_still_polices_shells(self):
+        notebooks_route = self.stub.routes[NOTEBOOKS]
+        for i, route in enumerate([(500, "boom"), (200, {"notebooks": "nope"})]):
+            with self.subTest(route=route):
+                shell, nb = "shell-%d" % i, "nb-%d" % i
+                self.shells = {shell: ("c-s%d" % i, "alice")}
+                self.notebooks = {nb: ("c-n%d" % i, "bob")}
+                self.set_idle(shell, nb)
+                self.stub.routes[kill_route(shell)] = (200, {})
+                self.stub.routes[notebook_kill_route(nb)] = (200, {})
+                self.stub.routes[NOTEBOOKS] = notebooks_route
+                app = self.start_app()
+                self.check(app)
+                self.assertEqual(self.slack(), [("Warning", ["<@U0ALICE>", "bob"])])
+
+                self.stub.routes[NOTEBOOKS] = route
+                out = self.check(app)
+                self.assertEqual(self.kills(), ["/api/v1/shells/%s/kill" % shell])
+                self.assertEqual(self.slack_titles(), [
+                    ("Warning", ["need update api! (GET notebooks failed)\n"]),
+                    ("Terminated", ["[Shell] Shell (%s)\n" % shell]),
+                ])
+                self.assertEqual(self.slack(), [
+                    ("Warning", ["det api miss"]), ("Terminated", ["<@U0ALICE>"]),
+                ])
+                self.assertIn("no notebook is warned or killed in this check", out)
+                record = self.saved_record()
+                self.assertEqual(list(record), [nb])
+                self.assertEqual(record[nb]["kind"], "notebook")
+
+                del self.shells[shell]  # killed
+                self.stub.routes[NOTEBOOKS] = notebooks_route
+                self.check(app)  # recovered: killed, not warned again
+                self.assertEqual(self.kills(), ["/api/v1/notebooks/%s/kill" % nb])
+                self.assertEqual(
+                    self.slack_titles(), [("Terminated", ["[JupyterLab] JupyterLab (%s)\n" % nb])]
+                )
+
+    def test_failing_shell_list_still_polices_notebooks(self):
         self.shells = {"shell-a": ("c-a", "alice")}
+        self.notebooks = {"nb-b": ("c-nb", "bob"), "nb-c": ("c-nc", "carol")}
+        self.set_idle("shell-a", "nb-b")
+        self.stub.routes[kill_route("shell-a")] = (200, {})
+        self.stub.routes[notebook_kill_route("nb-b")] = (200, {})
+        app = self.start_app()
+        self.check(app)
+        self.assertEqual(self.slack(), [("Warning", ["<@U0ALICE>", "bob"])])
+
+        shells_route = self.stub.routes[SHELLS]
+        self.stub.routes[SHELLS] = (500, "boom")
+        self.set_idle("shell-a", "nb-b", "nb-c")
+        self.check(app)
+        self.assertEqual(self.kills(), ["/api/v1/notebooks/nb-b/kill"])
+        self.assertEqual(self.slack_titles(), [
+            ("Warning", ["need update api! (GET shells failed)\n"]),
+            ("Warning", ["[JupyterLab] JupyterLab (nb-c)\n"]),
+            ("Terminated", ["[JupyterLab] JupyterLab (nb-b)\n"]),
+        ])
+        record = self.saved_record()
+        self.assertEqual(
+            {k: v["kind"] for k, v in record.items()}, {"shell-a": "shell", "nb-c": "notebook"}
+        )
+
+        self.stub.routes[SHELLS] = shells_route
+        self.set_idle("shell-a")
+        self.check(app)  # recovered: the shell warned before the failure is killed
+        self.assertEqual(self.kills(), ["/api/v1/shells/shell-a/kill"])
+        self.assertEqual(self.slack(), [("Terminated", ["<@U0ALICE>"])])
+
+    def test_unchecked_warnings_are_saved_when_nothing_else_is_idle(self):
+        # Real timing: without a new record, the next check would find the warning 2 h old,
+        # too old to count, and warn the notebook again instead of killing it.
+        self.config.warning_min_age_minutes = 30
+        self.notebooks = {"nb-a": ("c-na", "alice")}
+        self.set_idle("nb-a")
+        self.stub.routes[notebook_kill_route("nb-a")] = (200, {})
+        hour = datetime(2026, 9, 28, 10, 0, 5)
+        app = self.start_app()
+        app.now = lambda: hour
+        self.check(app)
+        self.assertEqual(self.slack(), [("Warning", ["<@U0ALICE>"])])
+
+        notebooks_route = self.stub.routes[NOTEBOOKS]
+        self.stub.routes[NOTEBOOKS] = (500, "boom")
+        app.now = lambda: hour + timedelta(hours=1)
+        self.check(app)
+        self.assertEqual(self.kills(), [])
+        self.assertEqual(self.slack(), [("Warning", ["det api miss"])])
+        item = json.loads(Path(self.config.file_info_path).read_text())["alert_local_item"][0]
+        self.assertEqual(item["created_at"], "2026-09-28 11:00:05")
+        self.assertEqual(list(self.saved_record()), ["nb-a"])
+
+        self.stub.routes[NOTEBOOKS] = notebooks_route
+        app.now = lambda: hour + timedelta(hours=2)
+        self.check(app)
+        self.assertEqual(self.kills(), ["/api/v1/notebooks/nb-a/kill"])
+        self.assertEqual(self.slack(), [("Terminated", ["<@U0ALICE>"])])
+
+    def test_unchecked_warning_of_a_task_no_longer_idle_is_dropped(self):
+        # As on the normal path: active at the next check, so it is warned again, not killed.
+        self.shells = {"shell-a": ("c-a", "alice")}
+        self.notebooks = {"nb-b": ("c-nb", "bob")}
         self.set_idle("shell-a")
         self.stub.routes[kill_route("shell-a")] = (200, {})
+        self.stub.routes[notebook_kill_route("nb-b")] = (200, {})
         app = self.start_app()
-        self.check(app)  # warned
-        notebooks_route = self.stub.routes[NOTEBOOKS]
-        for route in [(500, "boom"), (200, {"notebooks": "nope"})]:
-            with self.subTest(route=route):
-                self.stub.routes[NOTEBOOKS] = route
-                self.check(app)
-                self.assertEqual(self.kills(), [])
-                self.assertEqual(self.slack(), [("Warning", ["det api miss"])])
-        self.stub.routes[NOTEBOOKS] = notebooks_route
-        self.check(app)  # the warning saved before the errors still counts
-        self.assertEqual(self.kills(), ["/api/v1/shells/shell-a/kill"])
+        self.check(app)
+        self.assertEqual(self.slack(), [("Warning", ["<@U0ALICE>"])])
+
+        shells_route = self.stub.routes[SHELLS]
+        self.stub.routes[SHELLS] = (500, "boom")
+        self.set_idle("nb-b")  # shell-a is in use again
+        self.check(app)
+        self.assertEqual(list(self.saved_record()), ["nb-b"])
+
+        self.stub.routes[SHELLS] = shells_route
+        self.set_idle("shell-a", "nb-b")
+        self.check(app)
+        self.assertEqual(self.kills(), ["/api/v1/notebooks/nb-b/kill"])
+        self.assertEqual(self.slack_titles(), [
+            ("Warning", ["[Shell] Shell (shell-a)\n"]),
+            ("Terminated", ["[JupyterLab] JupyterLab (nb-b)\n"]),
+        ])
+
+    def test_both_lists_failing_warns_and_kills_nothing(self):
+        self.shells = {"shell-a": ("c-a", "alice")}
+        self.notebooks = {"nb-b": ("c-nb", "bob")}
+        self.set_idle("shell-a", "nb-b")
+        self.stub.routes[kill_route("shell-a")] = (200, {})
+        self.stub.routes[notebook_kill_route("nb-b")] = (200, {})
+        app = self.start_app()
+        self.check(app)
+        file_info = Path(self.config.file_info_path).read_text()
+
+        routes = {route: self.stub.routes[route] for route in (SHELLS, NOTEBOOKS)}
+        self.stub.routes[SHELLS] = (500, "boom")
+        self.stub.routes[NOTEBOOKS] = (502, "<html>")
+        out = self.check(app)
+        self.assertEqual(self.kills(), [])
+        self.assertEqual(self.slack_titles(), [("Warning", ["need update api!\n"])])
+        self.assertEqual(self.stub.requests_to(*TASKS), [])
+        self.assertIn("GET shells: HTTP 500; GET notebooks: HTTP 502", out)
+        self.assertEqual(Path(self.config.file_info_path).read_text(), file_info)  # nothing saved
+
+        self.stub.routes.update(routes)
+        self.check(app)  # the warnings saved before the errors still count
+        self.assertEqual(
+            sorted(self.kills()), ["/api/v1/notebooks/nb-b/kill", "/api/v1/shells/shell-a/kill"]
+        )
+
+    def test_failing_task_list_warns_and_kills_nothing(self):
+        # Both kinds need the task list for the container mapping.
+        self.shells = {"shell-a": ("c-a", "alice")}
+        self.notebooks = {"nb-b": ("c-nb", "bob")}
+        self.set_idle("shell-a", "nb-b")
+        app = self.start_app()
+        self.check(app)
+        self.stub.routes[TASKS] = (500, "boom")
+        self.check(app)
+        self.assertEqual(self.kills(), [])
+        self.assertEqual(self.slack_titles(), [("Warning", ["need update api!\n"])])
+
+    def test_shell_only_record_is_kept_while_the_shell_list_fails(self):
+        # A warning saved before the upgrade (no "kind") is a shell's.
+        self.shells = {"shell-a": ("c-a", "alice")}
+        self.notebooks = {"nb-b": ("c-nb", "bob")}
+        old_entry = {"container_id": "c-a", "description": "Shell (shell-a)", "username": "alice",
+                     "startTime": "2026-09-28T00:00:00Z", "device_count": 2,
+                     "devices": [{"id": 0}, {"id": 1}]}
+        self.write_shell_only_state({"shell-a": old_entry}, self.stamp(-timedelta(minutes=60)))
+        self.set_idle("shell-a", "nb-b")
+        self.stub.routes[kill_route("shell-a")] = (200, {})
+        self.stub.routes[notebook_kill_route("nb-b")] = (200, {})
+        shells_route = self.stub.routes[SHELLS]
+        self.stub.routes[SHELLS] = (500, "boom")
+        app = self.start_app()
+
+        self.check(app)
+        self.assertEqual(self.kills(), [])
+        self.assertEqual(self.slack(), [("Warning", ["det api miss"]), ("Warning", ["bob"])])
+        record = self.saved_record()
+        self.assertEqual(record["shell-a"], old_entry)  # carried over unchanged
+        self.assertEqual(record["nb-b"]["kind"], "notebook")
+
+        self.stub.routes[SHELLS] = shells_route
+        self.check(app)
+        self.assertEqual(
+            sorted(self.kills()), ["/api/v1/notebooks/nb-b/kill", "/api/v1/shells/shell-a/kill"]
+        )
 
     def test_rejected_token_on_notebooks_is_renewed(self):
         old_token = self.file_token()
@@ -788,6 +972,35 @@ class StateMachineTest(unittest.TestCase):
         self.check(app)
         self.check(app)
         self.assertEqual((self.kills(), self.slack()), ([], []))
+
+
+class UncheckedAlertsTest(unittest.TestCase):
+    def setUp(self):
+        self.tmp = tempfile.TemporaryDirectory()
+        self.config = make_config(self.tmp.name)
+
+    def tearDown(self):
+        self.tmp.cleanup()
+
+    def test_find_unchecked_alerts(self):
+        from alert_DataProcessor import DataProcessor
+
+        old_data = {
+            "s1": {"kind": "shell", "container_id": "c1"},
+            "s2": {"container_id": "c2"},  # saved before notebooks were policed: a shell
+            "s3": {"kind": "shell", "container_id": "c3"},  # no longer idle
+            "n1": {"kind": "notebook", "container_id": "c4"},
+            "x1": "not a dict",
+            "x2": {"kind": "shell", "container_id": ["c1"]},
+            "x3": {"kind": "shell"},
+        }
+        idle = {"c1", "c2", "c4"}
+        find = DataProcessor(self.config).find_unchecked_alerts
+        self.assertEqual(sorted(find(old_data, ["shell"], idle)), ["s1", "s2"])
+        self.assertEqual(sorted(find(old_data, ["notebook"], idle)), ["n1"])
+        self.assertEqual(find(old_data, [], idle), {})
+        self.assertEqual(find({}, ["shell"], idle), {})
+        self.assertEqual(find(None, ["shell"], idle), {})
 
 
 class FileInfoInitTest(unittest.TestCase):
