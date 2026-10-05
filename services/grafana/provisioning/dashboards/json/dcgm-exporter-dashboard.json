@@ -110,7 +110,7 @@
         "type": "prometheus",
         "uid": "PBFA97CFB590B2093"
       },
-      "description": "Prometheus scrape status of DCGM-Exporter (job dcgm, port 9400). DOWN means no GPU metrics from that node: no XID alerts and no idle-shell detection there. Always all GPU nodes, whatever the instance selection (a node whose exporter is down drops out of the instance list). Alert: 'DCGM-Exporter down'.",
+      "description": "Prometheus scrape status of DCGM-Exporter (job dcgm, port 9400). DOWN means no GPU metrics from that node: no XID alerts and no idle shell or notebook detection there. Always all GPU nodes, whatever the instance selection (a node whose exporter is down drops out of the instance list). Alert: 'DCGM-Exporter down'.",
       "fieldConfig": {
         "defaults": {
           "color": {

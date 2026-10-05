@@ -95,11 +95,11 @@ class DataProcessor:
         return info
 
     def filter_container_by_id(self, container_ids, container_data):
-        """Keep the shells (keyed by shell id) whose container id is in container_ids."""
+        """Keep the shells and notebooks (keyed by task id) whose container is in container_ids."""
         filtered_data = {}
-        for shell_id, data in container_data.items():
+        for task_id, data in container_data.items():
             if data["container_id"] in container_ids:
-                filtered_data[shell_id] = data
+                filtered_data[task_id] = data
         return filtered_data
 
     def read_user_info(self, user_file_path):
@@ -157,15 +157,15 @@ class DataProcessor:
                 reason = "in the future"
             else:
                 return True
-        log(f"Ignoring warning record from {created_at}: {reason}; those shells are warned again.")
+        log(f"Ignoring warning record from {created_at}: {reason}; those tasks are warned again.")
         return False
 
     def load_last_output(self, alert_type, file_info_path, now=None):
-        """Shells warned in the previous check ({} if there is no usable record).
+        """Shells and notebooks warned in the previous check ({} if there is no usable record).
 
         A record older than config.warning_max_age_minutes (after downtime, or after an hour
-        in which no shell was idle and nothing was saved), dated in the future, or without a
-        readable created_at does not count: those shells are warned again, not killed.
+        in which no task was idle and nothing was saved), dated in the future, or without a
+        readable created_at does not count: those tasks are warned again, not killed.
         """
         last_output = self.get_alert_local(alert_type, file_info_path)
         if not last_output or not last_output.get("file_name"):

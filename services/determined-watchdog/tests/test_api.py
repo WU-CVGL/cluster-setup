@@ -101,10 +101,44 @@ class DeterminedDataTest(APITestCase):
         self.assertEqual(result["s1"]["username"], "alice")
         self.assertEqual(result["s2"]["device_count"], 0)
         self.assertEqual(result["s2"]["devices"], [])
+        self.assertEqual({info["kind"] for info in result.values()}, {"shell"})
+
+    def test_parse_shells_and_notebooks(self):
+        shells = {"shells": [{"id": "s1", "username": "alice", "description": "Shell (x)"}]}
+        notebooks = {"notebooks": [
+            {"id": "n1", "username": "bob", "description": "JupyterLab (y)", "startTime": "t1",
+             "serviceAddress": "/proxy/n1/?token=PLACEHOLDER-jupyter-token"},
+            {"id": "n2", "username": "carol"},  # CPU-only or still queued: no container yet
+            {"id": "n3", "username": "dave"},  # no task summary
+        ]}
+        tasks = {"allocationIdToSummary": {
+            "s1.1": {"resources": [{"containerId": "c1", "agentDevices": None}]},
+            # A notebook's single allocation is "<notebook id>.1", as for shells.
+            "n1.1": {"resources": [{"containerId": "c2", "agentDevices": {
+                "node07": {"devices": [{"id": 4}]},
+            }}]},
+            "n2.1": {"resources": [{"containerId": None, "agentDevices": {}}]},
+            # Commands and TensorBoards also have "<id>.1" allocations: never policed.
+            "cmd1.1": {"resources": [{"containerId": "c3", "agentDevices": None}]},
+        }}
+        result = self.quiet(self.api.parse_api_data, shells, tasks, notebooks)
+        self.assertEqual(sorted(result), ["n1", "s1"])
+        self.assertEqual(result["s1"]["kind"], "shell")
+        self.assertEqual(
+            result["n1"],
+            {"kind": "notebook", "container_id": "c2", "description": "JupyterLab (y)",
+             "username": "bob", "startTime": "t1", "device_count": 1, "devices": [{"id": 4}]},
+        )  # the serviceAddress (Jupyter token) is not copied
+        # Without notebook data (older callers), only the shells.
+        self.assertEqual(sorted(self.quiet(self.api.parse_api_data, shells, tasks)), ["s1"])
 
     def test_empty_responses(self):
         self.assertEqual(self.api.parse_api_data({}, {}), {})
         self.assertEqual(self.api.parse_api_data({"shells": None}, {"allocationIdToSummary": None}), {})
+        self.assertEqual(self.api.parse_api_data({}, {}, {}), {})
+        self.assertEqual(
+            self.api.parse_api_data({}, {"allocationIdToSummary": {}}, {"notebooks": None}), {}
+        )
 
     def test_fetch_errors_raise_det_api_error(self):
         headers = {"Authorization": "Bearer x"}
@@ -124,6 +158,21 @@ class DeterminedDataTest(APITestCase):
         self.assertEqual(self.api.get_shell_api_data(headers), {"shells": []})
         self.assertEqual(self.stub.requests_to("GET", "/api/v1/shells/")[-1]["headers"]["Authorization"],
                          "Bearer x")
+
+    def test_notebook_fetch(self):
+        headers = {"Authorization": "Bearer x"}
+        for route in [(401, {"code": 16}), (500, "boom"), (200, "not json"), (200, {"error": {"x": 1}}),
+                      (200, {"notebooks": "nope"})]:
+            with self.subTest(route=route):
+                self.stub.routes[("GET", "/api/v1/notebooks/")] = route
+                with self.assertRaises(DetAPIError) as ctx:
+                    self.api.get_notebook_api_data(headers)
+                self.assertEqual(ctx.exception.status_code, route[0] if route[0] >= 300 else None)
+        body = {"notebooks": [{"id": "n1"}], "pagination": {}}
+        self.stub.routes[("GET", "/api/v1/notebooks/")] = (200, body)
+        self.assertEqual(self.api.get_notebook_api_data(headers), body)
+        (req,) = self.stub.requests_to("GET", "/api/v1/notebooks/")[-1:]
+        self.assertEqual(req["headers"]["Authorization"], "Bearer x")
 
 
 class KillReportingTest(APITestCase):
@@ -154,6 +203,42 @@ class KillReportingTest(APITestCase):
         killed, failed = self.quiet(self.api.kill_containers, {"ok": {}, "err": {}}, True, {})
         self.assertEqual((sorted(killed), sorted(failed)), (["ok"], ["err"]))
         self.assertEqual([r for r in self.stub.requests if r["method"] == "POST"], [])
+
+    def test_kill_endpoint_follows_the_kind(self):
+        for path in ("/api/v1/notebooks/nb/kill", "/api/v1/shells/sh/kill", "/api/v1/shells/old/kill"):
+            self.stub.routes[("POST", path)] = (200, {})
+        tasks = {
+            "nb": {"kind": "notebook", "username": "alice"},
+            "sh": {"kind": "shell", "username": "bob"},
+            "old": {"username": "carol"},  # saved before notebooks were policed: a shell
+        }
+        killed, failed = self.quiet(self.api.kill_containers, tasks, False, {})
+        self.assertEqual((sorted(killed), failed), (["nb", "old", "sh"], {}))
+        self.assertEqual(
+            sorted(r["path"] for r in self.stub.requests),
+            ["/api/v1/notebooks/nb/kill", "/api/v1/shells/old/kill", "/api/v1/shells/sh/kill"],
+        )
+        self.assertEqual(killed["nb"], {"kind": "notebook", "username": "alice"})
+
+    def test_failed_notebook_kill(self):
+        self.stub.routes[("POST", "/api/v1/notebooks/err/kill")] = (500, {"error": "x"})
+        out = io.StringIO()
+        with redirect_stdout(out):
+            killed, failed = self.api.kill_containers({"err": {"kind": "notebook"}}, False, {})
+        self.assertEqual((killed, sorted(failed)), ({}, ["err"]))
+        self.assertIn("Failed to kill notebook err", out.getvalue())
+
+    def test_debug_mode_only_gets_the_notebook(self):
+        self.stub.routes[("GET", "/api/v1/notebooks/nb")] = (200, {"notebook": {}, "config": {}})
+        killed, failed = self.quiet(self.api.kill_containers, {"nb": {"kind": "notebook"}}, True, {})
+        self.assertEqual((sorted(killed), failed), (["nb"], {}))
+        self.assertEqual([(r["method"], r["path"]) for r in self.stub.requests],
+                         [("GET", "/api/v1/notebooks/nb")])
+
+    def test_unknown_kind_is_a_failed_kill_without_a_request(self):
+        killed, failed = self.quiet(self.api.kill_containers, {"x": {"kind": "tensorboard"}}, False, {})
+        self.assertEqual((killed, sorted(failed)), ({}, ["x"]))
+        self.assertEqual(self.stub.requests, [])
 
 
 if __name__ == "__main__":

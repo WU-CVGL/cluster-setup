@@ -7,7 +7,14 @@ from datetime import datetime, timedelta
 
 import requests
 
-from alert_config import Config, ConfigError, log, obsolete_env_names, redact
+from alert_config import (
+    TASK_KIND_DEFAULT,
+    Config,
+    ConfigError,
+    log,
+    obsolete_env_names,
+    redact,
+)
 from alert_MessageNotifier import MessageNotifier
 from alert_APIHandler import APIHandler, DetAPIError
 from alert_DataProcessor import DataProcessor
@@ -114,7 +121,7 @@ class MainApplication:
         )
 
     def fetch_det_data(self):
-        """Return (shell_api_data, task_api_data, det_headers).
+        """Return (shell_api_data, notebook_api_data, task_api_data, det_headers).
 
         If Determined rejects the token in use with HTTP 401 (e.g. the session was
         revoked before its expiry), log in again once and, if that yields a different
@@ -123,11 +130,7 @@ class MainApplication:
         """
         det_headers = self.token_manager.det_headers()
         try:
-            return (
-                self.api_handler.get_shell_api_data(det_headers),
-                self.api_handler.get_task_api_data(det_headers),
-                det_headers,
-            )
+            return self._get_det_data(det_headers)
         except DetAPIError as e:
             if e.status_code != 401 or not self.token_manager.token:
                 raise
@@ -138,14 +141,19 @@ class MainApplication:
         if not self.token_manager.token or self.token_manager.token == before:
             raise rejected  # the login failed: no new session to retry with
         det_headers = self.token_manager.det_headers()
+        return self._get_det_data(det_headers)
+
+    def _get_det_data(self, det_headers):
+        # All or nothing: a check that saw only the shells would forget the warned notebooks.
         return (
             self.api_handler.get_shell_api_data(det_headers),
+            self.api_handler.get_notebook_api_data(det_headers),
             self.api_handler.get_task_api_data(det_headers),
             det_headers,
         )
 
     def handle_alert_data_v3(self, alert_container_ids):
-        """Warn about newly idle shells; kill the ones already warned in the previous check."""
+        """Warn about newly idle shells and notebooks; kill the ones warned in the previous check."""
         if not alert_container_ids:
             log("no alert_container_ids.")
             return
@@ -172,7 +180,7 @@ class MainApplication:
             return
 
         try:
-            shell_api_data, task_api_data, det_headers = self.fetch_det_data()
+            shell_api_data, notebook_api_data, task_api_data, det_headers = self.fetch_det_data()
         except DetAPIError as e:
             log(f"Determined API error: {e}")
             self.message_notifier.send_slack_warning(
@@ -182,10 +190,12 @@ class MainApplication:
             )
             return
 
-        det_container_ids = self.api_handler.parse_api_data(shell_api_data, task_api_data)
+        det_container_ids = self.api_handler.parse_api_data(
+            shell_api_data, task_api_data, notebook_api_data
+        )
         idle_container_ids = alert_container_ids[self.config.alert_name]
 
-        # 解析API数据: {shell_id: info} of the idle shells
+        # 解析API数据: {task_id: info} of the idle shells and notebooks
         new_data = self.DataProcessor.filter_container_by_id(
             idle_container_ids, det_container_ids
         )
@@ -196,8 +206,10 @@ class MainApplication:
         user_file_path = f"{self.config.base_path}/User.json"
         user_data = self.DataProcessor.read_user_info(user_file_path)
 
-        # 获取上次保存的last_output: shells warned in the previous check
-        # (at most config.warning_max_age_minutes ago)
+        # 获取上次保存的last_output: tasks warned in the previous check
+        # (at most config.warning_max_age_minutes ago). Matched by task id only: the kind
+        # used for a kill comes from new_data, so records without "kind" (written before
+        # notebooks were policed, shells only) still work.
         old_data = self.DataProcessor.load_last_output(
             self.config.alert_name, self.config.file_info_path, self.now()
         )
@@ -213,10 +225,10 @@ class MainApplication:
             self.config.is_debug,
             det_headers,
         )
-        for shell_id, info in failed.items():
+        for task_id, info in failed.items():
             log(
-                f"Kill FAILED for shell {shell_id} (user {info.get('username')}); "
-                "keeping it tracked, retrying at the next check."
+                f"Kill FAILED for {info.get('kind', TASK_KIND_DEFAULT)} {task_id} "
+                f"(user {info.get('username')}); keeping it tracked, retrying at the next check."
             )
 
         self.message_notifier.send_slack_notification(

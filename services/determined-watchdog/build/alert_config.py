@@ -40,6 +40,14 @@ DEFAULT_DETERMINED_METRICS_TOKEN_FILE = "/run/determined-metrics/token"
 # (connect, read) timeout in seconds, used for every HTTP request.
 HTTP_TIMEOUT = (10, 60)
 
+# Kinds of Determined task that the watchdog polices, with their Slack labels. The kind is
+# saved as "kind" in the warning records; records written before notebooks were policed have
+# no "kind" and only hold shells (TASK_KIND_DEFAULT).
+TASK_KIND_SHELL = "shell"
+TASK_KIND_NOTEBOOK = "notebook"
+TASK_KIND_DEFAULT = TASK_KIND_SHELL
+TASK_KIND_LABELS = {TASK_KIND_SHELL: "Shell", TASK_KIND_NOTEBOOK: "JupyterLab"}
+
 REDACTED = "<redacted>"
 _SECRET = {"secret": True}
 
@@ -93,7 +101,7 @@ class Config:
 
     alert_min: int = 0  # the hourly check runs at this minute of every hour
     # A warning older than this (one hourly interval plus margin) no longer counts as the
-    # previous check; the shell is warned again.
+    # previous check; the shell or notebook is warned again.
     warning_max_age_minutes: int = 90
     # A check that runs sooner than this after the previous saved one (a restart during minute
     # alert_min) is skipped, so that the warnings it just sent still get a full interval.
