@@ -16,6 +16,8 @@ This is a manual for system admin.
 
 [5. GPU P2P on GeForce](docs/05_GPU_P2P_GeForce.md)
 
+[6. GPU Topology](docs/06_GPU_Topology.md)
+
 [Notes on Supplementary Services](services/README.md)
 
 ## Cluster Information

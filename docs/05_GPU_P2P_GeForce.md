@@ -205,6 +205,8 @@ Check that the monitoring containers came back after the reboot (`docker ps`: `n
 
 ## Using P2P in jobs
 
+Which GPUs share a socket on each node, and which sets to prefer for a job, is in [GPU Topology](06_GPU_Topology.md).
+
 | Setting | When | Why |
 | :--- | :--- | :--- |
 | `NCCL_P2P_LEVEL=SYS` | Newer NCCL (2.27 in PyTorch 2.9) | Otherwise NCCL uses P2P only for pairs and host staging for larger groups on our multi-socket nodes. NCCL 2.20 uses P2P by default. |
