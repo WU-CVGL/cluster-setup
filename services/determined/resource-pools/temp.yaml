@@ -1,0 +1,9 @@
+# Dynamic resource pool. It was a master.yaml entry, adopted as is with
+#   det resource-pool adopt temp temp.yaml
+# and then removed from master.yaml. The master's database holds the live spec
+# (det resource-pool list-dynamic --json). Change it with
+#   det resource-pool update temp temp.yaml
+# (replaces the whole spec; effective at the next master restart). Never add it to master.yaml.
+pool_name: temp
+description: "pool for temporary use"
+agent_reconnect_wait: 10m

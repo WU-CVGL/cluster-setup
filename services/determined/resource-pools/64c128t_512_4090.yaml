@@ -1,0 +1,9 @@
+# Dynamic resource pool. It was a master.yaml entry, adopted as is with
+#   det resource-pool adopt 64c128t_512_4090 64c128t_512_4090.yaml
+# and then removed from master.yaml. The master's database holds the live spec
+# (det resource-pool list-dynamic --json). Change it with
+#   det resource-pool update 64c128t_512_4090 64c128t_512_4090.yaml
+# (replaces the whole spec; effective at the next master restart). Never add it to master.yaml.
+pool_name: 64c128t_512_4090
+description: "2x AMD Epyc 7543 32c64t 2.8-3.7GHz CPU; 512GB RAM; NVIDIA RTX 4090 24G GPU."
+agent_reconnect_wait: 10m

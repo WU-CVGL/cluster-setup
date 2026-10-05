@@ -1,9 +1,10 @@
-# Dynamic resource pool (WU-CVGL/determined >= 0.40.1), created with
+# Dynamic resource pool. Created with
 #   det resource-pool create 128c256t_1536_4090_48.yaml --idempotency-key create-128c256t_1536_4090_48-20260930
-# (the same request as POST /api/v1/resource-pools/dynamic). It lives in the master's database:
-# never add it to master.yaml (the master refuses to start on a name collision). It cannot be
-# renamed, updated or deleted; this file records what was submitted. Scheduler and task container
-# defaults were copied from the master at creation and do not follow later master.yaml changes.
+# by a 0.40.1 master, which saved it without a spec, and given this file as its spec with
+#   det resource-pool update 128c256t_1536_4090_48 128c256t_1536_4090_48.yaml
+# so that it inherits the master's defaults like the other pools. The master's database holds
+# the live spec (det resource-pool list-dynamic --json). An update replaces the whole spec and
+# takes effect at the next master restart. Never add it to master.yaml.
 pool_name: 128c256t_1536_4090_48
 description: "2x AMD Epyc 9554 64c128t 3.1-3.75GHz CPU; 1536GB RAM; NVIDIA RTX 4090 48G GPU."
 max_aux_containers_per_agent: 100
