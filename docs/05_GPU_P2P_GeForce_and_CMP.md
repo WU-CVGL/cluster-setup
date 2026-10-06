@@ -438,7 +438,7 @@ echo NCCL_P2P_LEVEL=SYS | sudo tee /etc/nccl.conf
 sudo /usr/local/sbin/acs-redir.sh status        # RR=0 CR=0 on every bridge
 ```
 
-`acs-redir.sh status` shows the same after every later boot.
+After the next boot, check that `sudo /usr/local/sbin/acs-redir.sh status` still shows RR=0 CR=0 on every bridge.
 
 ### 8. Run the P2P tests
 

@@ -253,7 +253,7 @@ sudo install -m 755 acs-redir.sh /usr/local/sbin/
 sudo install -m 644 gpu-acs-redir-off.service /etc/systemd/system/
 sudo systemctl daemon-reload
 sudo systemctl enable --now gpu-acs-redir-off.service
-sudo /usr/local/sbin/acs-redir.sh status      # RR=0 CR=0 on every bridge, also after the next boot
+sudo /usr/local/sbin/acs-redir.sh status      # RR=0 CR=0 on every bridge; check again after the next boot
 ```
 
 Undo: `sudo systemctl disable --now gpu-acs-redir-off.service` (stopping the unit restores the saved values), then `sudo rm /etc/systemd/system/gpu-acs-redir-off.service /usr/local/sbin/acs-redir.sh` and `sudo systemctl daemon-reload`. On a node where NCCL should use P2P across root ports, `/etc/nccl.conf` with `NCCL_P2P_LEVEL=SYS` goes with the unit ([docs/05](../../docs/05_GPU_P2P_GeForce_and_CMP.md#cmp-170hx-using-p2p-in-jobs)); remove it together with the unit.
