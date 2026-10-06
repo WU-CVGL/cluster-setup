@@ -25,9 +25,9 @@ Scripts to install, verify, test and roll back P2P-patched NVIDIA open kernel mo
 | --- | --- | --- |
 | `install-p2p-modules.sh` | root | Disables UVM HMM, sets `iommu=pt` in GRUB, holds the driver packages, then installs the patched modules into `/lib/modules/<K>/updates/p2p` next to the Ubuntu DKMS build and adds the depmod override. `--restore` undoes it. Never reboots. |
 | `verify.sh` | user | Checks after the reboot: open module and version, loaded modules are the P2P build, BAR1 resized, `iommu=pt` and identity IOMMU domains, HMM off, `nvidia-smi topo -p2p r` all `OK`, PCIe link width, no Xid in the kernel log, package hold, `unattended-upgrades` purged. `PASS`/`FAIL`/`WARN`/`SKIP` per line, exit 1 on any `FAIL`. |
-| `acs-redir.sh` | root | `status`, `off`, `restore` of the PCIe ACS redirect bits on the bridges above the GPUs at runtime; `status` prints the equivalent kernel parameter. |
-| `gpu-acs-redir-off.service` | systemd | Oneshot unit that runs `/usr/local/sbin/acs-redir.sh off` at every boot (after the kernel modules load, before docker) and `restore` when stopped ([at every boot](#at-every-boot)). |
-| `cmp/verify-boot.sh` | user | CMP 170HX: checks after the cold power cycle into a cmpunlocker build: GPUs and 64 GB BAR1 enumerated, the module and its sha256, unlock and static-BAR1 log lines, `topo -p2p r`, memory, BAR1, link, ECC mode, HMM off. `PASS`/`FAIL`/`HARD-STOP` per line; exit 2 on a `HARD-STOP` (roll back). |
+| `acs-redir.sh` | root | `status`, `off`, `restore` of the PCIe ACS redirect bits on the bridges above the GPUs at runtime; `status` prints the equivalent kernel parameter when the bridges share one ID. |
+| `gpu-acs-redir-off.service` | systemd | Oneshot unit that runs `/usr/local/sbin/acs-redir.sh off` early at every boot, before docker starts, and `restore` when stopped ([at every boot](#at-every-boot)). |
+| `cmp/verify-boot.sh` | user | CMP 170HX: checks after the cold power cycle into a cmpunlocker build: GPUs and 64 GB BAR1 enumerated, the module and its sha256, unlock and static-BAR1 log lines, `topo -p2p r`, memory, BAR1, link, ECC mode, HMM off, and the ACS unit when `/etc/nccl.conf` sets `NCCL_P2P_LEVEL=SYS`. `PASS`/`FAIL`/`HARD-STOP` per line; exit 2 on a `HARD-STOP` (roll back). |
 | `cmp/trees.sh` | root | CMP 170HX: `save <label>` copies the live cmpunlocker module tree with the initramfs and the boot configuration to `/root/cmpunlocker-trees/<label>`; `activate <label>` makes a saved tree live (rsync, depmod, initramfs); `show` lists the trees by the sha256 of `nvidia.ko`. |
 | `cmp/gpu-baseline.sh` | user (docker) | SM count, memory (total/free) and device-to-device copy bandwidth per GPU, to compare two builds. |
 | `cmp/p2p-copy-check.sh` | user (docker) | Peer access on every ordered pair, a 256 MiB random block copied to every peer and back, then nearly all free memory of each GPU filled from a peer and read back (the top of the memory a truncated static BAR1 misses). Ends with `RESULT ok`. |
@@ -237,7 +237,7 @@ Every program ends with a `RESULT: PASS|FAIL` line (`compress` also `SKIP`, exit
 When and why: [docs/05 ACS redirect](../../docs/05_GPU_P2P_GeForce_and_CMP.md#acs-redirect); behind PCIe switches: [ACS redirect behind PCIe switches](../../docs/05_GPU_P2P_GeForce_and_CMP.md#acs-redirect-behind-pcie-switches).
 
 ```bash
-sudo ./acs-redir.sh status     # also prints the persistent pci=disable_acs_redir=pci:<vendor>:<device>
+sudo ./acs-redir.sh status     # with one bridge ID also the persistent pci=disable_acs_redir=pci:<vendor>:<device>
 sudo ./acs-redir.sh off        # saves the old values in /root/acs-redir-saved.txt
 sudo ./acs-redir.sh restore
 ```
@@ -256,7 +256,7 @@ sudo systemctl enable --now gpu-acs-redir-off.service
 sudo /usr/local/sbin/acs-redir.sh status      # RR=0 CR=0 on every bridge; check again after the next boot
 ```
 
-Undo: `sudo systemctl disable --now gpu-acs-redir-off.service` (stopping the unit restores the saved values), then `sudo rm /etc/systemd/system/gpu-acs-redir-off.service /usr/local/sbin/acs-redir.sh` and `sudo systemctl daemon-reload`. On a node where NCCL should use P2P across root ports, `/etc/nccl.conf` with `NCCL_P2P_LEVEL=SYS` goes with the unit ([docs/05](../../docs/05_GPU_P2P_GeForce_and_CMP.md#cmp-170hx-using-p2p-in-jobs)); remove it together with the unit.
+Undo: `sudo systemctl disable --now gpu-acs-redir-off.service` (stopping the unit restores the saved values), then `sudo rm /etc/systemd/system/gpu-acs-redir-off.service /usr/local/sbin/acs-redir.sh` and `sudo systemctl daemon-reload`. On a node where NCCL should use P2P across root ports, `/etc/nccl.conf` with `NCCL_P2P_LEVEL=SYS` goes with the unit ([docs/05](../../docs/05_GPU_P2P_GeForce_and_CMP.md#cmp-170hx-using-p2p-in-jobs)); remove it together with the unit. If the unit is not active, fix it or remove `/etc/nccl.conf`: with redirect on, `NCCL_P2P_LEVEL=SYS` slows rings through both GPUs of a switch (0.47 GB/s on all 8 GPUs of g292). `cmp/verify-boot.sh` checks this.
 
 ## CMP 170HX
 
@@ -272,8 +272,8 @@ cmp/verify-boot.sh <gpus> <sha256>                   # after the cold power cycl
 cmp/p2p-copy-check.sh <image> copy-check.txt         # idle node only
 ```
 
-- `trees.sh` works on `/lib/modules/<K>/updates/cmpunlocker` with `<K>` from `uname -r`; set `K=<K>` when running it from another kernel (the GRUB fallback). `STORE=<dir>` replaces `/root/cmpunlocker-trees`. `activate` restores the module tree only; the saved `/etc/modprobe.d`, `/etc/default/grub` and units in `<store>/<label>/etc` are for comparing and restoring by hand. A new tree takes effect at the next cold power cycle.
-- `verify-boot.sh` expects the CMP 170HX with cmpunlocker's 64 GiB unlock: `DEV=20c2`, `MEM_MIB=65536`, `BAR1_MIB=65536`, `LINK_GEN=2`, `LINK_WIDTH=16` (environment overrides), ECC `[N/A]` (`ECC=1` for a build with the ECC patches). Without `<sha256>` it prints the hash instead of checking it. It reads `uvm_disable_hmm` only once `nvidia_uvm` is loaded (`nvidia-modprobe -u -c 0`).
+- `trees.sh` works on `/lib/modules/<K>/updates/cmpunlocker` with `<K>` from `uname -r`; set `K=<K>` when running it from another kernel (the GRUB fallback). `STORE=<dir>` replaces `/root/cmpunlocker-trees`. `activate` restores the module tree only; the saved `/etc/modprobe.d`, `/etc/default/grub` and units in `<store>/<label>/etc` are for comparing and restoring by hand. Restore those before `activate`, which then rebuilds the initramfs from the restored `/etc/modprobe.d`, and run `sudo update-grub` after restoring `/etc/default/grub`. A new tree takes effect at the next cold power cycle.
+- `verify-boot.sh` expects the CMP 170HX with cmpunlocker's 64 GiB unlock: `DEV=20c2`, `MEM_MIB=65536`, `BAR1_MIB=65536`, `LINK_GEN=2`, `LINK_WIDTH=16` (environment overrides), ECC `[N/A]` (`ECC=1` for a build with the ECC patches). Without `<sha256>` it prints the hash instead of checking it. It reads `uvm_disable_hmm` only once `nvidia_uvm` is loaded (`nvidia-modprobe -u -c 0`). When `/etc/nccl.conf` (`NCCL_CONF=<file>` replaces it) sets `NCCL_P2P_LEVEL=SYS`, `gpu-acs-redir-off.service` must be active: with redirect on, that setting slows the 8-GPU ring below host staging.
 - `gpu-baseline.sh` and `p2p-copy-check.sh` refuse while any GPU has a compute process; `<image>` is a CUDA + PyTorch image.
 
 ## Roll back

@@ -8,6 +8,7 @@
 # ECC=1 for a build with the ECC patches (nvidia-smi then reports ECC Enabled); default 0 (install.sh --no-ecc).
 # What every GPU must show: DEV (PCI device ID, default 20c2), MEM_MIB and BAR1_MIB (default 65536),
 # LINK_GEN (default 2) and LINK_WIDTH (default 16).
+# When NCCL_CONF (default /etc/nccl.conf) sets NCCL_P2P_LEVEL=SYS, gpu-acs-redir-off.service must be active.
 # Prints PASS / FAIL / HARD-STOP / INFO lines and "RESULT rc=<n>".
 # Exit 0: all pass; 1: a FAIL (investigate, keep workloads off); 2: a HARD-STOP (roll back).
 set -u
@@ -19,6 +20,7 @@ MEM_MIB=${MEM_MIB:-65536}
 BAR1_MIB=${BAR1_MIB:-65536}
 LINK_GEN=${LINK_GEN:-2}
 LINK_WIDTH=${LINK_WIDTH:-16}
+NCCL_CONF=${NCCL_CONF:-/etc/nccl.conf}
 rc=0
 pass() { echo "PASS: $*"; }
 fail() { echo "FAIL: $*"; if [ "$rc" -lt 1 ]; then rc=1; fi; }
@@ -112,5 +114,18 @@ Y) pass "uvm_disable_hmm=Y" ;;
 not-loaded) echo "INFO: nvidia_uvm not loaded yet; run again after the first CUDA use (or nvidia-modprobe -u -c 0)" ;;
 *) fail "uvm_disable_hmm=$hmm" ;;
 esac
+
+# NCCL_P2P_LEVEL=SYS needs ACS redirect off: with redirect on, rings through both GPUs of a PCIe switch
+# collapse (8 GPUs on g292: 0.47 GB/s, below host staging). The ACS bits need root to read, so check
+# that the unit which clears them at boot is active.
+if grep -q -E '^[[:space:]]*NCCL_P2P_LEVEL[[:space:]]*=[[:space:]]*SYS[[:space:]]*$' "$NCCL_CONF" 2>/dev/null; then
+    if systemctl is-active --quiet gpu-acs-redir-off.service; then
+        pass "$NCCL_CONF sets NCCL_P2P_LEVEL=SYS and gpu-acs-redir-off.service is active"
+    else
+        fail "$NCCL_CONF sets NCCL_P2P_LEVEL=SYS but gpu-acs-redir-off.service is not active: fix the unit or remove $NCCL_CONF"
+    fi
+else
+    echo "INFO: $NCCL_CONF does not set NCCL_P2P_LEVEL=SYS; ACS unit not checked"
+fi
 echo "RESULT rc=$rc"
 exit $rc
