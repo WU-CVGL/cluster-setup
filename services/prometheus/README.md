@@ -190,6 +190,15 @@ Missing mappings and unavailable device metrics are gaps, never zeros, and recor
 backfill periods when the association was unavailable. The conflict and missing-link panels
 explain gaps cluster-wide.
 
+Fork 0.41.0 and later export a task's mappings (`det_allocation_id_task_id_task_actor`,
+`det_container_id_allocation_id`, `det_container_id_runtime_container_id`,
+`det_gpu_uuid_container_id`) only after its allocation has run for
+`observability.task_mapping_delay` (master config, default `5m`, counted from the allocation's
+first Pulling or Running; `0s` exports from the start), and delete them when it stops. An
+allocation that ends sooner is never attributed, and the first minutes of a longer one are never
+attributed either: its charts start that late, and nothing is backfilled. cAdvisor still scrapes
+and stores every container, short tasks included.
+
 Grafana lets anonymous users in as Viewers ([`custom.ini`](../grafana/custom.ini)), so everyone
 who reaches Grafana can read every task's dashboard and query the datasource. Dashboard variables
 are filters, **not authorization**. Per-task access control is the master's: its Resources pages

@@ -344,6 +344,8 @@ Prometheus joins the exporters' samples to Determined tasks and allocations with
 
 Determined-AI's [det-state-metrics](https://gpu.cvgl.lab/prom/det-state-metrics) (to view it in your browser you need to log in to https://gpu.cvgl.lab first) relates tasks to containers and GPUs, but the [official document](https://docs.determined.ai/latest/integrations/prometheus/prometheus.html) and [repo](https://github.com/determined-ai/works-with-determined) do not join it with `cAdvisor` and `dcgm-exporter`. Our [recording rules](prometheus/rules/determined-task-resources.yml) do, for the master's native Resources pages and the Grafana dashboard `det-task-resources` (see [7.5](#75-determined-task-resources)).
 
+From fork 0.41.0 a task's allocation, container, runtime container and GPU mappings appear there `observability.task_mapping_delay` (default 5 minutes) after its allocation starts and are removed when it stops; shorter allocations never appear. See [Determined task resources](prometheus/README.md#task-dashboard-and-permissions).
+
 They follow this chain. In `https://gpu.cvgl.lab/prom/det-state-metrics`, each job will have an `allocation_id`. With this `allocation_id`, you can get the corresponding `container_id` in `det_container_id_allocation_id`.
 
 With this `container_id`, you can:

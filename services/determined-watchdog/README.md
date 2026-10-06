@@ -81,6 +81,10 @@ The PromQL in A is:
 max by(container_id)((DCGM_FI_DEV_GPU_UTIL * on(gpu_uuid) group_left(container_id) det_gpu_uuid_container_id))
 ```
 
+With fork 0.41.0 and later, `det_gpu_uuid_container_id` appears only
+`observability.task_mapping_delay` (default 5 minutes) after a shell or notebook starts, so with the
+15-minute pending period the alert fires no earlier than about 20 minutes after start.
+
 The rule lives only in Grafana's database (it is not in this repo): folder `test`, rule group
 `test1`, evaluated every minute. A is an instant query over the last 30 minutes, B reduces A to
 its last value, and C, the condition, is `B IS BELOW 10` (GPU utilization in %). Pending period
