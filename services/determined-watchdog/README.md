@@ -268,12 +268,9 @@ Put a `User.json` into `data/debug/` first (the check fails without it).
 
 ## Deploy / update
 
-The one-time update of `cvglsuppvm` from the hand-deployed state of 2026-09-28 (PR #4's image
-`determined-watchdog:metrics-20260928`, checkout at `f71d24c` with local changes) is
-[step by step in `../README.md`](../README.md#update-from-the-hand-deployed-state-of-2026-09-28);
-its step 9 is the watchdog part. For later updates of the watchdog, from `services/` (it needs
-`.env`, see [6.1](../README.md#61-secrets-and-env-files); if the same update changes other
-services, apply those too, see [6](../README.md#6-all-in-one-services-except-harbor-and-node-exporter)):
+To update the watchdog, from `services/` (it needs `.env`, see
+[6.1](../README.md#61-secrets-and-env-files); if the same update changes other services, apply
+those too, see [6](../README.md#6-all-in-one-services-except-harbor-and-node-exporter)):
 
 ```sh
 cd ~/ws/cluster-setup/services
@@ -310,15 +307,11 @@ The check runs with the service's own mounts. It needs `--user 1000:1000` (also 
 user): the image's default user cannot enter the 0700 token directory, so "permission denied"
 there is not a configuration error (never loosen the directory mode). It fails with "no such
 file or directory" until the watchdog has written the token. Then recreate Prometheus
-(`docker compose up -d --force-recreate prometheus`) and check that the `det-master` target is UP,
-as in step 10 of [the update](../README.md#update-from-the-hand-deployed-state-of-2026-09-28).
+(`docker compose up -d --force-recreate prometheus`) and check that the `det-master` target is UP
+(check 1 of [Checking the chain end to end](../prometheus/README.md#checking-the-chain-end-to-end)).
 
 Older versions treated only `WATCHDOG_DEBUG=1` as debug mode; `true`, `yes` and `on` now enable it
 too (no kills, debug webhook). Set any value other than `0` or `1` to `0` before `up -d watchdog`.
-
-The `PORTAINER_*` and `PROMETHEUS_*` lines in `determined-watchdog/.env` are ignored. Delete them
-only when a rollback to `determined-watchdog:metrics-20260928` (PR #4) is no longer wanted: that
-image exits at start without `PORTAINER_WEB_URL` and `PORTAINER_API_TOKEN`.
 
 ## Tests
 

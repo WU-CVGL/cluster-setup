@@ -110,6 +110,12 @@ The `det-master` job sends a bearer token read with
 - A token placed by hand must be written the same way (owner uid 1000, mode `0600`, replaced
   atomically); the watchdog keeps it while its expiry can be decoded and is more than 48 hours
   away. Never put a token in `prometheus.yml` or any other tracked file.
+- A token that reached a tracked file stays in the public git history (older versions of the
+  watchdog wrote it into the last line of `prometheus.yml`): revoke it. Determined's logout ends
+  the session of the token it receives; with the token in `t`,
+  `curl -s -o /dev/null -w '%{http_code}\n' -X POST -H "Authorization: Bearer $t" <master URL>/api/v1/auth/logout`
+  prints `200` (ended) or `401` (already expired or revoked); anything else did not reach the
+  endpoint.
 
 ## Connecting the Determined master
 
