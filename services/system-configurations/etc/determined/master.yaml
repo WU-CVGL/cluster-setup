@@ -49,6 +49,9 @@ db:
 
 observability:
   enable_prometheus: true
+  ## How long an allocation runs before its metrics are attributed to its task (fork 0.41.0;
+  ## default 5m; 0s attributes from the start).
+  # task_mapping_delay: 5m
 
 ## A user friendly name to identify this cluster by.
 cluster_name: CVGL
