@@ -99,7 +99,8 @@ if [ "$1" = status ] && [ ${#acs_bridges[@]} -gt 0 ]; then
     else
         echo "The bridges with ACS above the GPUs have different IDs: $(printf '%s\n' "$ids" | tr '\n' ' ')"
         echo "  a persistent setting needs a ';'-separated pci=disable_acs_redir= list, which GRUB would split"
-        echo "  at the ';' unless it is quoted; use 'off' after every boot instead, or quote it carefully."
+        echo "  at the ';' unless it is quoted; run 'off' at every boot instead (gpu-acs-redir-off.service),"
+        echo "  or quote it carefully."
     fi
 fi
 exit 0
