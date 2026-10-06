@@ -106,7 +106,7 @@ docker run -d --name det-agent-<hostname> --hostname <hostname> --network host -
     ghcr.io/wu-cvgl/determined-agent:<version> run
 ```
 
-`--gpus 'all,"capabilities=gpu,utility"'` passes all GPUs; for a GPU list see [Leaving out a faulty GPU](#leaving-out-a-faulty-gpu). Docker rejects `--gpus '"all,capabilities=gpu,utility"'` (`unexpected key 'all,capabilities'`), and `--gpus '"capabilities=gpu,utility"'` (no `all`, no `device=`) gives the container only one GPU. Check the slots with `det agent list` or `docker logs det-agent-<hostname>` ("detected compute devices").
+`--gpus 'all,"capabilities=gpu,utility"'` passes all GPUs; to leave one out of the slots see [Leaving out a faulty GPU](#leaving-out-a-faulty-gpu). Docker rejects `--gpus '"all,capabilities=gpu,utility"'` (`unexpected key 'all,capabilities'`), and `--gpus '"capabilities=gpu,utility"'` (no `all`, no `device=`) gives the container only one GPU. Check the slots with `det agent list` or `docker logs det-agent-<hostname>` ("detected compute devices").
 
 `det deploy local agent-up <master ip> --agent-resource-pool=<pool>`, with the CLI of the same version, starts the same container with all GPUs; it cannot take a GPU list.
 
@@ -118,7 +118,7 @@ docker update --restart=no det-agent-<hostname>
 docker rename det-agent-<hostname> det-agent-<hostname>-<old version>   # kept for a rollback
 ```
 
-Start the new container with the same settings (`docker run` above) and check that `det agent list` shows the agent with the same slot count. With the same GPUs and pool, the new agent reattaches the running task containers (see [Restarting or replacing an agent](#restarting-or-replacing-an-agent)). Remove the old container once the new version has proven itself.
+Start the new container with the same settings (`docker run` above, with the old container's arguments after the image, e.g. `run --exclude-gpus <UUID>`: `docker inspect -f '{{json .Args}}' det-agent-<hostname>-<old version>` shows them) and check that `det agent list` shows the agent with the same slot count. With the same GPUs and pool, the new agent reattaches the running task containers (see [Restarting or replacing an agent](#restarting-or-replacing-an-agent)). Remove the old container once the new version has proven itself.
 
 `<pool>` is one of these pools:
 
@@ -144,32 +144,42 @@ Pick the pool that matches the node's hardware (see the hardware tables in the [
 The master keeps a disconnected agent for `agent_reconnect_wait` (10 minutes on all named pools) so that it can reconnect without losing its tasks. Within that window the master treats a new agent with the same ID (the node's hostname) as the old one coming back:
 
 - Same GPUs and pool: the agent is restored and its running task containers are reattached. Restarting the agent container (`docker restart`) is safe this way.
-- Different GPU count or resource pool: the master stops the agent and fails every task that ran on it, also on GPUs that did not change; the restarted agent kills task containers it is not told to reattach. This is by design: the master tracks slots by device index, not by UUID.
+- Different slots (another GPU count, GPU list or exclude list) or resource pool: the master stops the agent and fails every task that ran on it, also on GPUs that did not change; the restarted agent kills task containers it is not told to reattach. This is by design: the master accepts a reconnect only when every slot ID still has the same GPU.
 
 Rules:
 
-1. Never change an agent's GPU set or pool while tasks run on it: `det agent disable --drain <agent>` and wait until nothing runs on it first.
-2. After stopping or removing an agent container, wait until `det agent list` no longer lists the agent (up to `agent_reconnect_wait`) before starting one with a different GPU set or pool. Masters without the fork fix [WU-CVGL/determined#24](https://github.com/WU-CVGL/determined/pull/24) otherwise drop the new agent one `agent_reconnect_wait` later: it stays connected, but `det agent list` no longer shows it and the API answers `agent '<agent>' not found`. There is no API or CLI command to remove an agent from the master.
+1. Never change an agent's GPU set, exclude list or pool while tasks run on it: `det agent disable --drain <agent>` and wait until nothing runs on it first.
+2. After stopping or removing an agent container, wait until `det agent list` no longer lists the agent (up to `agent_reconnect_wait`) before starting one with a different GPU set, exclude list or pool. Masters without the fork fix [WU-CVGL/determined#24](https://github.com/WU-CVGL/determined/pull/24) otherwise drop the new agent one `agent_reconnect_wait` later: it stays connected, but `det agent list` no longer shows it and the API answers `agent '<agent>' not found`. There is no API or CLI command to remove an agent from the master.
 
 - `det deploy local agent-down` stops and removes the container named `--agent-name` (default `det-agent-<hostname>`, the name of the nodes' agent containers); `--all` removes every container labelled `ai.determined.type=agent`, including old agent containers kept stopped for a rollback. A container with another name is not found: stop it with `docker rm -f` before `agent-up`.
 - Never run two agent containers with the same agent ID on a node: the master accepts only one connection per ID, and the other one restarts in a loop with `websocket already connected` (`docker ps` shows `Restarting`).
 
 ### Leaving out a faulty GPU
 
-Hide the GPU from the agent: the agent then has one slot less, which survives reboots and reconnects. Select the remaining GPUs by UUID (`nvidia-smi --query-gpu=pci.bus_id,uuid --format=csv,noheader`), so that a changed numbering cannot bring the faulty GPU back, and follow the rules above (the slot count changes):
+Give the agent all GPUs and name the faulty one with `--exclude-gpus` after `run`. The agent reports the GPU, so `det agent describe` and the resource pool page show it as excluded, but never offers it as a slot: no task gets it, and this survives reboots and reconnects. The other slots keep their `nvidia-smi` index, so the slot IDs have a gap. Name the GPU by its UUID (`nvidia-smi --query-gpu=pci.bus_id,uuid --format=csv,noheader`), never by index; an entry that matches no GPU stops the agent. There is no environment variable for it. The slots change, so follow the rules above:
+
+```bash
+docker run -d --name det-agent-<hostname> --hostname <hostname> --network host --restart unless-stopped --init \
+    --gpus 'all,"capabilities=gpu,utility"' --label ai.determined.type=agent \
+    -v /var/run/docker.sock:/var/run/docker.sock \
+    -e DET_MASTER_HOST=<master ip> -e DET_MASTER_PORT=8080 -e DET_RESOURCE_POOL=<pool> \
+    ghcr.io/wu-cvgl/determined-agent:<version> run --exclude-gpus <faulty GPU UUID>
+```
+
+node01 runs this way and leaves out its GPU at `81:00.0`, so its slots are 0-3 and 5-7. Check the slots with `det slot list` or `docker logs det-agent-<hostname>` ("excluded by exclude_gpus, not a slot").
+
+Agents before fork 0.41.0 refuse `--exclude-gpus`. Before rolling an agent back to such a version, hide the GPU from its container instead. That agent does not see the GPU at all, so the GPU is missing from the topology, and the slots after it move down by one: drain first, as for any slot change.
 
 ```bash
 GPUS=$(nvidia-smi --query-gpu=pci.bus_id,uuid --format=csv,noheader | grep -v '^<faulty bus id>' | cut -d' ' -f2 | paste -sd,)
-docker run -d --name det-agent-<agent> --hostname <agent> --network host --restart unless-stopped --init \
+docker run -d --name det-agent-<hostname> --hostname <hostname> --network host --restart unless-stopped --init \
     --gpus "\"device=$GPUS\",\"capabilities=gpu,utility\"" --label ai.determined.type=agent \
     -v /var/run/docker.sock:/var/run/docker.sock \
     -e DET_MASTER_HOST=<master ip> -e DET_MASTER_PORT=8080 -e DET_RESOURCE_POOL=<pool> \
     ghcr.io/wu-cvgl/determined-agent:<version> run
 ```
 
-This is the [agent container](#agents) with a GPU list instead of all GPUs; it also works on nodes where the `det` CLI is not installed. Check the slots with `det agent list` or `docker logs det-agent-<agent>` ("detected compute devices").
-
-`det slot disable <agent> <slot>` only keeps the scheduler off a slot until the next `det agent enable`/`disable`, reconnect or agent restart, which all reset it. Anything outside Determined (other containers, monitoring, `nvtop`) still reaches a hidden GPU; if the GPU's fault affects the host, also leave it out of such tools.
+`det slot disable <agent> <slot>` only keeps the scheduler off a slot until the next `det agent enable`/`disable`, reconnect or agent restart, which all reset it. Anything outside Determined (other containers, monitoring, `nvtop`) still reaches an excluded or hidden GPU; if the GPU's fault affects the host, also leave it out of such tools.
 
 ## Dynamic resource pools
 
