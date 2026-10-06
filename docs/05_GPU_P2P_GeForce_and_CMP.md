@@ -526,7 +526,9 @@ Do not roll back with cmpunlocker's `remove.sh`: it deletes the cmpunlocker tree
 
 ## Appendix A: Measurements
 
-On the GeForce nodes all runs used the branch `610.57.04-p2p-48g`, `iommu=pt`, HMM off and `uvm_bar1_p2p_managed=0` unless noted, and `run_host.sh` with `MANAGED=1` on the idle node. Every service run ended with `OVERALL: PASS` and a clean kernel log: peer access and integrity on all ordered pairs (56; 42 on the 7 GPUs of Node 1), `ordering`, `stale` and `hostnuma` passed, every all-reduce was `correct=True`, and managed memory passed in all modes on all pairs including oversubscription. NCCL is PyTorch 2.3 / NCCL 2.20.5 (`P2P/IPC`) unless noted, busbw at 1024 MiB. g292 has its own setup ([below](#g292-cmp-170hx-epyc-7j13-milan)).
+All runs used the branch `610.57.04-p2p-48g`, `iommu=pt`, HMM off and `uvm_bar1_p2p_managed=0` unless noted, and `run_host.sh` with `MANAGED=1` on the idle node. Every service run ended with `OVERALL: PASS` and a clean kernel log: peer access and integrity on all ordered pairs (56; 42 on the 7 GPUs of Node 1), `ordering`, `stale` and `hostnuma` passed, every all-reduce was `correct=True`, and managed memory passed in all modes on all pairs including oversubscription. NCCL is PyTorch 2.3 / NCCL 2.20.5 (`P2P/IPC`) unless noted, busbw at 1024 MiB.
+
+g292 differs: cmpunlocker, no managed memory tests, nccl-tests for NCCL ([setup](#g292-cmp-170hx-epyc-7j13-milan)).
 
 ### GPU Node 1: RTX 3090, EPYC 7302 (Rome)
 
