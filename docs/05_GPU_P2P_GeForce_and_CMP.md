@@ -463,6 +463,8 @@ Then start the workloads again and tell the users of the node about [the NCCL se
 
 ## CMP 170HX: using P2P in jobs
 
+Which GPUs of g292 share a PCIe switch, and how the choice of GPUs affects a job, is in [GPU Topology](06_GPU_Topology.md#g292).
+
 `/etc/nccl.conf` sets `NCCL_P2P_LEVEL=SYS` for NCCL processes on the host. A container sees it only when it is mounted, or with the variable set directly:
 
 ```bash
