@@ -72,7 +72,7 @@ error at start: the Resources pages show no samples, or the Grafana link finds n
 | Node | `node`: the target host without its port; `cvglloginnode.lan` becomes `login.cvgl.lab` | target relabel |
 | Jobs | `cadvisor` and `dcgm` (master queries), `det-master` (rules) | `job_name` |
 | Docker container | `container_runtime_id` on cAdvisor series: the 64-character Docker ID from an `id` of `/docker/<id>` or `docker-<id>.scope`. Containers with other cgroup paths are not attributed | metric relabel of `cadvisor` |
-| GPU | `gpu_uuid` on DCGM series, copied from `UUID`. DCGM's own `gpu`, `pci_bus_id` and `modelName` stay; the WebUI legend shows them | metric relabel of `dcgm` |
+| GPU | `gpu_uuid` on DCGM series, copied from `UUID`. DCGM's own `gpu` (the host's GPU index), `pci_bus_id` and `modelName` stay; from fork 0.41.0 on, the WebUI shows them on hover over a GPU legend entry | metric relabel of `dcgm` |
 | cAdvisor metrics | `container_cpu_usage_seconds_total` (`cpu` is `total` or empty), `container_memory_working_set_bytes`, `container_memory_rss` | cAdvisor |
 | DCGM metrics | `DCGM_FI_DEV_GPU_UTIL`, `DCGM_FI_DEV_FB_USED`, `DCGM_FI_DEV_POWER_USAGE`, `DCGM_FI_DEV_GPU_TEMP` | [`default-counters.csv`](../node-exporter/default-counters.csv) |
 | Task mappings | `det:allocation_task:info`, `det:runtime_task:info` (with `container_runtime_id`), `det:gpu_task:info` (with `gpu_uuid`), each with `det_cluster`, `task_id` and `allocation_id` | recording rules |
@@ -144,10 +144,10 @@ integrations:
 - Keep `observability.enable_prometheus: true` (the default): it serves `/prom/det-state-metrics`
   for the `det-master` job.
 
-With the block set, the WebUI shows **View Resources** in the action menus of tasks, experiments
-and generic tasks and in the job queue, a **Resources** tab on trials and generic tasks, and a
-**Resources** link on task logs. The same data is in the REST API:
-`GET /api/v1/task-resources/capability` (`{"enabled": true}`) and
+With the block set, the WebUI shows **View Resources** in the action menus of tasks and
+experiments and in the job queue, a **Resources** tab on trials, and a **Resources** link on task
+logs; from fork 0.41.0 on, generic tasks also have the menu entry and the tab. The same data is in
+the REST API: `GET /api/v1/task-resources/capability` (`{"enabled": true}`) and
 `GET /api/v1/tasks/{task_id}/resources?start=<unix s>&end=<unix s>&step=<s>`, optionally with
 `allocationId=<allocation>`. Both need a Determined login, and a task's series need permission to
 read that task; an unknown task and a task the user may not read both get 404. The master's limits
@@ -166,8 +166,11 @@ Grafana provisions the dashboard from
 Its link contract (the fork's Grafana link builds it):
 
 ```text
-/d/det-task-resources/task-resources?var-cluster=<det_cluster>&var-task_id=<task>&var-allocation_id=%24__all&from=<start-ms>&to=now
+/d/det-task-resources/task-resources?var-cluster=<det_cluster>&var-task_id=<task>&var-allocation_id=<allocation or %24__all>&from=<start-ms>&to=<end-ms or now>
 ```
+
+`var-allocation_id` is the selected allocation, or `$__all` (URL-encoded `%24__all`) when none is
+selected; `to` is the task's end, or `now` while it runs.
 
 Task identity is primary; generic tasks need no experiment mapping. Select the time range before
 choosing completed tasks or historical allocations. CPU is measured in logical cores, memory in
@@ -209,8 +212,8 @@ q() { docker compose exec -T prometheus promtool query instant http://localhost:
    task's containers and GPUs in
    `q '{__name__=~"det:.*_conflict:count|det:.*_without_.*:info"}'`.
 4. **Master to Prometheus.** From the master's host,
-   `curl -s -o /dev/null -w '%{http_code}\n' "<prometheus_url>/api/v1/query_range?query=up&start=$(($(date +%s)-60))&end=$(date +%s)&step=15"`
-   prints `200`.
+   `curl -s --noproxy '*' -o /dev/null -w '%{http_code}\n' "<prometheus_url>/api/v1/query_range?query=up&start=$(($(date +%s)-60))&end=$(date +%s)&step=15"`
+   prints `200`. `--noproxy '*'` makes curl ignore `http_proxy`, as the master does.
 5. **Master API.** With a CLI logged in to the master (`det user login`), as a user who may read
    the task:
 
@@ -222,11 +225,12 @@ q() { docker compose exec -T prometheus promtool query instant http://localhost:
 
    The second answer has series for `allocation_active`, `cpu_cores` and the memory metrics, and
    the `gpu_*` metrics for a task with GPUs.
-6. **GPU legend.** On **View Resources** of a trial, notebook or shell with GPUs, the legend reads
-   `GPU 0`, `GPU 1`, ... (the numbering of `nvidia-smi` inside the container). Hovering shows the
-   host GPU index and UUID, which match `nvidia-smi --query-gpu=index,uuid --format=csv` on that
-   node. Commands, TensorBoards and generic tasks record no GPU list, so their legend shows the
-   start of the GPU UUID.
+6. **GPU legend** (fork 0.41.0 and later). On **View Resources** of a trial, notebook or shell
+   with GPUs, the legend reads `GPU 0`, `GPU 1`, ... (the numbering of `nvidia-smi` inside the
+   container). Hovering shows the host GPU index and UUID, which match
+   `nvidia-smi --query-gpu=index,uuid --format=csv` on that node. Commands, TensorBoards and
+   generic tasks record no GPU list, so their legend shows the start of the GPU UUID. Earlier
+   releases label each GPU series `<allocation> · <node> · <GPU UUID>`; compare that UUID instead.
 
 ## Troubleshooting
 
@@ -234,15 +238,17 @@ q() { docker compose exec -T prometheus promtool query instant http://localhost:
 | :--- | :--- |
 | No **View Resources**; the page says "Native resource monitoring is not enabled for this cluster." | `integrations.task_resources` missing, or the master not restarted after adding it (the capability answers `"enabled": false`) |
 | The master does not start; the error names `task_resources` | only one key set, or `prometheus_url` is not a bare origin |
-| "Resource metrics could not be loaded. Please retry." (HTTP 502) | the master gets no `200` from `query_range` within 10 seconds: Prometheus down or unreachable from the master, a redirect, or authentication in front of it (check 4) |
-| "Resource monitoring is busy. Please retry shortly." (HTTP 503) | the master's concurrent resource requests are all in use; retry |
+| "Resource metrics could not be loaded. Please retry." (WebUI: HTTP 502; REST API: HTTP 503 with "task resource metrics are unavailable") | the master gets no `200` from `query_range` within 10 seconds: Prometheus down or unreachable from the master, a redirect, or authentication in front of it (check 4). "... are invalid" instead: the rules return series without the task's `task_id` or `det_cluster` |
+| "Resource monitoring is busy. Please retry shortly." (WebUI and REST API: HTTP 503 with "task resource query capacity exhausted") | the master's concurrent resource requests are all in use; retry |
 | "This task or its resource monitoring is unavailable." (HTTP 404) | unknown task, no permission to read it, or an allocation of another task |
 | "No attributed samples in this time range." on every chart of every task | `det_cluster` differs between the master and `prometheus.yml`; the `det-master` target is down (token, see below), which stops all mappings; or the rules are not loaded (checks 1 and 3) |
-| CPU and memory empty, GPU charts filled | cAdvisor target down on that node, or a cgroup path the `container_runtime_id` relabels do not match (`det:runtime_without_cadvisor:info`) |
-| GPU charts empty, CPU filled | DCGM target down, `gpu_uuid` missing, two exporters on one GPU, or out-of-range values (`det:gpu_without_dcgm:info`, `det:dcgm_gpu_conflict:count`, `det:dcgm_gpu_invalid:info`) |
-| Gaps in one task while others are complete | a conflict on its allocation, container or GPU (`det:*_conflict:count`), or the `det-master` scrape failed for a while (master restart, token) |
+| CPU and memory empty, GPU charts filled | cAdvisor target down on that node, or a cgroup path the `container_runtime_id` relabels do not match (`det:runtime_without_cadvisor:info`); or two cAdvisor series for one container (`det:cadvisor_cpu_conflict:count`, `det:cadvisor_memory_conflict:count`) |
+| GPU charts empty, CPU filled | DCGM target down or `gpu_uuid` missing (`det:gpu_without_dcgm:info`), or two exporters on one GPU (`det:dcgm_gpu_conflict:count`) |
+| One GPU chart empty or with gaps, the other GPU charts filled | values of that DCGM field outside their physical range. Only GPU utilization has a diagnostic (`det:dcgm_gpu_invalid:info`); for memory, power and temperature, query the raw `DCGM_FI_DEV_*` series of that GPU |
+| Gaps in one task while others are complete | a conflict on its allocation, container or GPU (`det:*_conflict:count`) |
+| Gaps in all tasks over the same period | the `det-master` scrape failed then (master restart or outage, token), which stops all mappings, or Prometheus itself was down |
 | Warning that RSS is zero throughout the range | an older cAdvisor on that node (cgroup v2); compare its image with [`docker-compose.yaml`](../node-exporter/docker-compose.yaml) |
-| Legend shows `GPU 1a2b3c4d` on a trial, notebook or shell | the GPU lists its containers recorded at start do not add up to the allocation's slots (for example, `nvidia-smi` missed a GPU then) |
+| Legend shows `GPU 1a2b3c4d` on a trial, notebook or shell (fork 0.41.0 and later) | the GPU lists its containers recorded at start do not add up to the allocation's slots (for example, `nvidia-smi` missed a GPU then) |
 | `det-master` target down with "unable to read authorization credentials" or HTTP 401 | token file missing or not readable by uid 1000, or the session revoked: see [the watchdog](../determined-watchdog/README.md#determined-token-shared-with-prometheus) and [7.3](../README.md#73-prometheus-authentication-for-determined-ai-bearer-token) |
 
 ## Checking the configuration
