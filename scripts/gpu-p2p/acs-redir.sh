@@ -2,7 +2,7 @@
 # PCIe ACS P2P redirect on the bridges above the NVIDIA GPUs, at runtime (no BIOS change, no reboot).
 # usage: sudo ./acs-redir.sh status|off|restore
 #   status   ACS Control of every bridge between a GPU and its root complex, and the persistent
-#            kernel-parameter equivalent of "off"
+#            kernel-parameter equivalent of "off" when those bridges share one PCI ID
 #   off      clears Request Redirect, Completion Redirect and Egress Control (the bits the kernel's
 #            pci=disable_acs_redir= clears); other ACS bits stay. Saves the old values first.
 #            Refuses unless every GPU is in an identity IOMMU domain (iommu=pt) or has no IOMMU group:
@@ -84,23 +84,23 @@ if [ "$1" = status ] && [ ${#acs_bridges[@]} -gt 0 ]; then
     # The bridges with ACS above the GPUs are usually just the root ports; with PCIe switches the switch
     # ports are included here too, since their redirect bits matter the same way.
     ids=$(for b in "${acs_bridges[@]}"; do pci_id "$b"; echo; done | sort -u)
+    listed=$(printf '%s\n' "${acs_bridges[@]}")
+    others=0
+    for d in /sys/bus/pci/devices/*; do
+        n=$(basename "$d")
+        grep -Fqx "$(pci_id "$n")" <<<"$ids" || continue
+        grep -Fqx "$n" <<<"$listed" || others=$((others + 1))
+    done
     echo
     if [ "$(printf '%s\n' "$ids" | wc -l)" = 1 ]; then
-        others=0
-        for d in /sys/bus/pci/devices/*; do
-            n=$(basename "$d")
-            [ "$(pci_id "$n")" = "$ids" ] || continue
-            printf '%s\n' "${acs_bridges[@]}" | grep -qx "$n" || others=$((others + 1))
-        done
         echo "Persistent equivalent of 'off' (all ${#acs_bridges[@]} bridges with ACS above the GPUs are $ids):"
         echo "  add to GRUB_CMDLINE_LINUX_DEFAULT: pci=disable_acs_redir=pci:$ids"
         echo "  only with iommu=pt (identity IOMMU domains for the GPUs, check with verify.sh)"
-        [ "$others" = 0 ] || echo "  note: $others other device(s) not above a GPU have the same ID and would be affected too"
     else
         echo "The bridges with ACS above the GPUs have different IDs: $(printf '%s\n' "$ids" | tr '\n' ' ')"
-        echo "  a persistent setting needs a ';'-separated pci=disable_acs_redir= list, which GRUB would split"
-        echo "  at the ';' unless it is quoted; run 'off' at every boot instead (gpu-acs-redir-off.service),"
-        echo "  or quote it carefully."
+        echo "  a pci=disable_acs_redir= list of them needs a ';', where GRUB's generated linux line ends the"
+        echo "  command; run 'off' at every boot instead (gpu-acs-redir-off.service)."
     fi
+    [ "$others" = 0 ] || echo "  note: $others other device(s) not above a GPU have one of these IDs and would be affected too"
 fi
 exit 0
