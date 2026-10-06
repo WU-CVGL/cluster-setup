@@ -3,7 +3,7 @@ from urllib.parse import urlsplit
 
 import requests
 
-from alert_config import HTTP_TIMEOUT, Config, log, redact
+from alert_config import HTTP_TIMEOUT, TASK_KIND_DEFAULT, TASK_KIND_LABELS, Config, log, redact
 
 
 class MessageNotifier:
@@ -52,9 +52,10 @@ class MessageNotifier:
         user_info,
         slack_webhook_url,
     ) -> bool:
-        """Warn about new idle shells and report the ones that were terminated.
+        """Warn about new idle shells and notebooks and report the ones that were terminated.
 
-        Only non-empty attachments are sent; nothing is posted if both are empty.
+        Each field's title names the kind ("[Shell] ..." or "[JupyterLab] ...") before the
+        description. Only non-empty attachments are sent; nothing is posted if both are empty.
         """
         try:
             attachments = []
@@ -65,13 +66,16 @@ class MessageNotifier:
                 if not recipients:
                     continue
                 fields = []
-                for shell_id, info in recipients.items():
+                for task_id, info in recipients.items():
                     username = info.get("username")
                     user = user_info.get(username) if isinstance(user_info, dict) else None
                     uid = user.get("UID") if isinstance(user, dict) else None
                     slack_id = f"<@{uid}>" if uid and not self.config.is_debug else username
                     description = info.get("description", "")
-                    field = {"value": slack_id, "title": f"{description}\n", "short": True}
+                    kind = info.get("kind", TASK_KIND_DEFAULT)
+                    label = TASK_KIND_LABELS.get(kind, kind)
+                    title = f"[{label}] {description}\n"
+                    field = {"value": slack_id, "title": title, "short": True}
                     fields.append(field)
 
                 footer = (

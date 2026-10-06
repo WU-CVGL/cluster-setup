@@ -1,0 +1,16 @@
+[Unit]
+Description=PCIe ACS P2P redirect off on the bridges above the NVIDIA GPUs
+Documentation=https://github.com/WU-CVGL/cluster-setup/blob/main/docs/05_GPU_P2P_GeForce_and_CMP.md#acs-redirect-behind-pcie-switches
+Documentation=https://github.com/WU-CVGL/cluster-setup/blob/main/scripts/gpu-p2p/README.md#acs
+After=systemd-modules-load.service
+Before=docker.service cmpunlocker-passthrough.service
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+Environment=ACS_STATE=/run/acs-redir-saved.txt
+ExecStart=/usr/local/sbin/acs-redir.sh off
+ExecStop=/usr/local/sbin/acs-redir.sh restore
+
+[Install]
+WantedBy=multi-user.target

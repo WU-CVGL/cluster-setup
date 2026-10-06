@@ -14,7 +14,7 @@ This is a manual for system admin.
 
 [4. Setup Supplementary Services](docs/04_Setup_Supplementary_Services.md)
 
-[5. GPU P2P on GeForce](docs/05_GPU_P2P_GeForce.md)
+[5. GPU P2P on GeForce and CMP](docs/05_GPU_P2P_GeForce_and_CMP.md)
 
 [6. GPU Topology](docs/06_GPU_Topology.md)
 

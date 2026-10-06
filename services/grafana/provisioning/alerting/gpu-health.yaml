@@ -290,10 +290,10 @@ groups:
           description: >-
             Prometheus has not been able to scrape DCGM-Exporter on {{ $labels.node }} (port 9400)
             for 5 minutes. Until it is back, this node has no GPU metrics, no XID alerts and no
-            idle-shell detection. On the node, in ~/ws/node-exporter: `docker compose ps` and
-            `docker compose logs --tail 50 dcgm-exporter` (an exporter that exits at start usually
-            rejects a field in default-counters.csv). A node that is down or in maintenance also
-            raises this alert: silence it by node.
+            idle shell or notebook detection. On the node, in ~/ws/node-exporter:
+            `docker compose ps` and `docker compose logs --tail 50 dcgm-exporter` (an exporter that
+            exits at start usually rejects a field in default-counters.csv). A node that is down or
+            in maintenance also raises this alert: silence it by node.
           dashboard_url: https://grafana.cvgl.lab/d/Oxed_c6Wz/?var-instance={{ $labels.node }}:9400
         notification_settings:
           receiver: slack-gpu-critical

@@ -1,10 +1,10 @@
-# GPU P2P tools (GeForce)
+# GPU P2P tools (GeForce and CMP)
 
-Scripts to install, verify, test and roll back P2P-patched NVIDIA open kernel modules on a GPU node. The procedure (including building the modules), the background and the measured results are in [docs/05_GPU_P2P_GeForce.md](../../docs/05_GPU_P2P_GeForce.md#procedure). Placeholders as in [docs/05](../../docs/05_GPU_P2P_GeForce.md#introduction): `<K>` kernel, `<N>` driver branch, `<version>` driver version, `<fork>` absolute path of the built fork tree, `<image>` CUDA + PyTorch image; here also `<n>` resident GiB per GPU (VRAM minus a few GiB) and `<label>` log name.
+Scripts to install, verify, test and roll back P2P-patched NVIDIA open kernel modules on a GPU node. The procedure (including building the modules), the background and the measured results are in [docs/05_GPU_P2P_GeForce_and_CMP.md](../../docs/05_GPU_P2P_GeForce_and_CMP.md#procedure). The CMP 170HX node gets its modules from cmpunlocker instead; its helpers are in `cmp/` ([CMP 170HX](#cmp-170hx)), and the tests and the ACS tools below apply to it as well. Placeholders as in [docs/05](../../docs/05_GPU_P2P_GeForce_and_CMP.md#introduction): `<K>` kernel, `<N>` driver branch, `<version>` driver version, `<fork>` absolute path of the built fork tree, `<image>` CUDA + PyTorch image; here also `<n>` resident GiB per GPU (VRAM minus a few GiB) and `<label>` log name.
 
 ## Contents
 
-- [GPU P2P tools (GeForce)](#gpu-p2p-tools-geforce)
+- [GPU P2P tools (GeForce and CMP)](#gpu-p2p-tools-geforce-and-cmp)
   - [Contents](#contents)
   - [Files](#files)
   - [Install and verify](#install-and-verify)
@@ -15,6 +15,8 @@ Scripts to install, verify, test and roll back P2P-patched NVIDIA open kernel mo
     - [Settings](#settings)
     - [Building and running the tests by hand](#building-and-running-the-tests-by-hand)
   - [ACS](#acs)
+    - [At every boot](#at-every-boot)
+  - [CMP 170HX](#cmp-170hx)
   - [Roll back](#roll-back)
 
 ## Files
@@ -24,6 +26,11 @@ Scripts to install, verify, test and roll back P2P-patched NVIDIA open kernel mo
 | `install-p2p-modules.sh` | root | Disables UVM HMM, sets `iommu=pt` in GRUB, holds the driver packages, then installs the patched modules into `/lib/modules/<K>/updates/p2p` next to the Ubuntu DKMS build and adds the depmod override. `--restore` undoes it. Never reboots. |
 | `verify.sh` | user | Checks after the reboot: open module and version, loaded modules are the P2P build, BAR1 resized, `iommu=pt` and identity IOMMU domains, HMM off, `nvidia-smi topo -p2p r` all `OK`, PCIe link width, no Xid in the kernel log, package hold, `unattended-upgrades` purged. `PASS`/`FAIL`/`WARN`/`SKIP` per line, exit 1 on any `FAIL`. |
 | `acs-redir.sh` | root | `status`, `off`, `restore` of the PCIe ACS redirect bits on the bridges above the GPUs at runtime; `status` prints the equivalent kernel parameter. |
+| `gpu-acs-redir-off.service` | systemd | Oneshot unit that runs `/usr/local/sbin/acs-redir.sh off` at every boot (after the kernel modules load, before docker) and `restore` when stopped ([at every boot](#at-every-boot)). |
+| `cmp/verify-boot.sh` | user | CMP 170HX: checks after the cold power cycle into a cmpunlocker build: GPUs and 64 GB BAR1 enumerated, the module and its sha256, unlock and static-BAR1 log lines, `topo -p2p r`, memory, BAR1, link, ECC mode, HMM off. `PASS`/`FAIL`/`HARD-STOP` per line; exit 2 on a `HARD-STOP` (roll back). |
+| `cmp/trees.sh` | root | CMP 170HX: `save <label>` copies the live cmpunlocker module tree with the initramfs and the boot configuration to `/root/cmpunlocker-trees/<label>`; `activate <label>` makes a saved tree live (rsync, depmod, initramfs); `show` lists the trees by the sha256 of `nvidia.ko`. |
+| `cmp/gpu-baseline.sh` | user (docker) | SM count, memory (total/free) and device-to-device copy bandwidth per GPU, to compare two builds. |
+| `cmp/p2p-copy-check.sh` | user (docker) | Peer access on every ordered pair, a 256 MiB random block copied to every peer and back, then nearly all free memory of each GPU filled from a peer and read back (the top of the memory a truncated static BAR1 misses). Ends with `RESULT ok`. |
 | `tests/p2ptest.cu` | user | Peer access matrix; integrity of peer stores, peer loads and copy-engine copies over 12 regions of each GPU's buffer; copy bandwidth with peer access disabled and enabled (uni- and bidirectional), summarized same-socket vs cross-socket; host-GPU bandwidth per GPU. |
 | `tests/ordering.cu` | user | Peer stores into GPU B, `__threadfence_system()`, then a sequence flag in host memory (CPU waits, then checks on B), in B's memory (control) or in a third GPU's memory; a stale word fails. |
 | `tests/stale.cu` | user | GPU A reads B's buffer, B overwrites it (kernel or copy engine) and signals an event, A waits and must re-read the new data; every ordered pair. |
@@ -37,7 +44,7 @@ Scripts to install, verify, test and roll back P2P-patched NVIDIA open kernel mo
 
 ## Install and verify
 
-From this directory, after steps 1-3 of [docs/05](../../docs/05_GPU_P2P_GeForce.md#procedure) (node disabled and drained in Determined, matching open driver installed, fork built):
+From this directory, after steps 1-3 of [docs/05](../../docs/05_GPU_P2P_GeForce_and_CMP.md#procedure) (node disabled and drained in Determined, matching open driver installed, fork built):
 
 ```bash
 sudo SRC=<fork>/kernel-open ./install-p2p-modules.sh install   # K=<K> V=<version> optional
@@ -46,12 +53,12 @@ nvidia-modprobe -u -c 0     # loads nvidia_uvm (otherwise loaded on first CUDA u
 ./verify.sh                                                     # no root needed
 ```
 
-After the reboot `det agent list` must still show the node as disabled; enable it only after [docs/05 step 6](../../docs/05_GPU_P2P_GeForce.md#6-run-the-tests) passed (step 7 there). If `verify.sh` reports `nvidia_modeset` or `nvidia_drm` not loaded (a headless node), run `sudo modprobe nvidia_drm` and run it again.
+After the reboot `det agent list` must still show the node as disabled; enable it only after [docs/05 step 6](../../docs/05_GPU_P2P_GeForce_and_CMP.md#6-run-the-tests) passed (step 7 there). If `verify.sh` reports `nvidia_modeset` or `nvidia_drm` not loaded (a headless node), run `sudo modprobe nvidia_drm` and run it again.
 
-- Refusals and the order of changes: [docs/05 step 4](../../docs/05_GPU_P2P_GeForce.md#4-install-the-modules); all options: `./install-p2p-modules.sh --help`.
+- Refusals and the order of changes: [docs/05 step 4](../../docs/05_GPU_P2P_GeForce_and_CMP.md#4-install-the-modules); all options: `./install-p2p-modules.sh --help`.
 - **State** in `/var/backups/nvidia-p2p/`: the original `/etc/default/grub` (`grub.pre-p2p`, taken once), the GRUB parameters the script added (`grub-added-params.txt`), the packages it held (`held-packages.txt`), package lists and replaced modules. `--restore` uses the two lists.
 - **Per kernel**: the override applies to `<K>` only; after a kernel upgrade the node boots the stock DKMS modules (safe, but without P2P) until the modules are rebuilt and installed with `K=<new kernel>`.
-- `verify.sh` prints BAR1 vs VRAM but cannot tell whether static BAR1 is actually on; use the [hold test](../../docs/05_GPU_P2P_GeForce.md#static-or-dynamic-how-to-tell) (it also loads `nvidia_uvm`; run it before `verify.sh`). It does not check the UVM gate either: `/sys/module/nvidia_uvm/parameters/uvm_bar1_p2p_managed` must exist and be `0`.
+- `verify.sh` prints BAR1 vs VRAM but cannot tell whether static BAR1 is actually on; use the [hold test](../../docs/05_GPU_P2P_GeForce_and_CMP.md#static-or-dynamic-how-to-tell) (it also loads `nvidia_uvm`; run it before `verify.sh`). It does not check the UVM gate either: `/sys/module/nvidia_uvm/parameters/uvm_bar1_p2p_managed` must exist and be `0`.
 - `verify.sh` ends with `RESULT: PASS` when everything is in place. `WARN` lines do not fail it: a narrow PCIe link (such a GPU caps every transfer and NCCL ring through it), `METHOD3` lines in the kernel log (dynamic BAR1 window errors: investigate before enabling the node), a missing package hold. The kernel-log check needs the `adm` or `systemd-journal` group, otherwise it prints `SKIP`.
 
 ## Test
@@ -75,13 +82,13 @@ GPU numbering follows `nvidia-smi` (`CUDA_DEVICE_ORDER=PCI_BUS_ID`). By default 
 
 ### Managed memory and the UVM BAR1 fix
 
-On static-BAR1 GPUs (BAR1 >= VRAM: the RTX 3090 and RTX 4090 24 GB) cross-GPU managed memory faults all GPUs with drivers that lack the UVM BAR1 fix: observed on the RTX 4090 24 GB (Xid 31 `FAULT_UNSUPPORTED_APERTURE`, then Xid 154; only a reboot recovers), and expected on the RTX 3090, which uses the same pre-Hopper UVM code but was not tested without the fix ([why](../../docs/05_GPU_P2P_GeForce.md#managed-memory-uvm)). The fixed driver has the `nvidia_uvm` module parameter `uvm_bar1_p2p_managed`: `0` (default, the gate) keeps managed memory of BAR1 peers off direct peer access, so managed pages stage through host memory; `1` (opt-in, validated per platform and card type in an opt-in window; results for the RTX 4090 24 GB: [docs/05 Appendix A](../../docs/05_GPU_P2P_GeForce.md#opt-in-uvm_bar1_p2p_managed1)) lets UVM map and copy them over BAR1 with the new page-table and copy-engine encodings. `run_host.sh` logs which mode is active and refuses `MANAGED=1` whenever the parameter is missing (`MANAGED_FORCE=1` overrides): on static-BAR1 cards the test would fault all GPUs, and on dynamic-BAR1 cards duanyll's Method 3 without this fork's dynamic-pair guard would address host RAM. Run `managedtest` first with `MANAGED_ARGS="--quick --pair 0,1"` (2 MiB, one pair, no `oversub`), then in full.
+On static-BAR1 GPUs (BAR1 >= VRAM: the RTX 3090 and RTX 4090 24 GB) cross-GPU managed memory faults all GPUs with drivers that lack the UVM BAR1 fix: observed on the RTX 4090 24 GB (Xid 31 `FAULT_UNSUPPORTED_APERTURE`, then Xid 154; only a reboot recovers), and expected on the RTX 3090, which uses the same pre-Hopper UVM code but was not tested without the fix ([why](../../docs/05_GPU_P2P_GeForce_and_CMP.md#managed-memory-uvm)). The fixed driver has the `nvidia_uvm` module parameter `uvm_bar1_p2p_managed`: `0` (default, the gate) keeps managed memory of BAR1 peers off direct peer access, so managed pages stage through host memory; `1` (opt-in, validated per platform and card type in an opt-in window; results for the RTX 4090 24 GB: [docs/05 Appendix A](../../docs/05_GPU_P2P_GeForce_and_CMP.md#opt-in-uvm_bar1_p2p_managed1)) lets UVM map and copy them over BAR1 with the new page-table and copy-engine encodings. `run_host.sh` logs which mode is active and refuses `MANAGED=1` whenever the parameter is missing (`MANAGED_FORCE=1` overrides): on static-BAR1 cards the test would fault all GPUs, and on dynamic-BAR1 cards duanyll's Method 3 without this fork's dynamic-pair guard would address host RAM. Run `managedtest` first with `MANAGED_ARGS="--quick --pair 0,1"` (2 MiB, one pair, no `oversub`), then in full.
 
 Returning a static-BAR1 node to service needs only the gate (step 1); the opt-in is a separate window (steps 2-4):
 
 1. **Gate validation** (the node stays out of service until it passes):
    1. Install the fixed modules and reboot; do not set `uvm_bar1_p2p_managed` (default `0`). `verify.sh` passes.
-   2. Run the two commands of [docs/05 step 6](../../docs/05_GPU_P2P_GeForce.md#6-run-the-tests) (quick pair first, then the service run with `MANAGED=1 RESIDENT_GB=<n>`).
+   2. Run the two commands of [docs/05 step 6](../../docs/05_GPU_P2P_GeForce_and_CMP.md#6-run-the-tests) (quick pair first, then the service run with `MANAGED=1 RESIDENT_GB=<n>`).
    3. Both logs end with `OVERALL: PASS` and `KERNEL LOG: PASS` (no Xid, no assert), and the log header says `gate on`. Then the node can be enabled. The header reflects only the value of `uvm_bar1_p2p_managed`. A `managedtest` PASS shows that managed memory works without an Xid; it cannot show whether pages staged through host memory or went over a direct BAR1 peer mapping, since both give correct data. That the gate keeps static pre-Hopper pairs off direct peer access rests on review of the driver predicate `uvm_parent_gpus_bar1_managed_unsupported()`.
 2. **Opt-in window** (node disabled in the scheduler, a reboot is acceptable): set the option in a file of its own, `echo 'options nvidia-uvm uvm_bar1_p2p_managed=1' | sudo tee /etc/modprobe.d/nvidia-uvm-bar1-optin.conf` (do not edit `nvidia-uvm-hmm.conf`: the installer rewrites it and `--restore` deletes it), preferably with the UVM debug build (`make modules ... UVM_BUILD_TYPE=debug`, installed like the release build), reboot, and run in this order. Instead of a reboot, `nvidia-uvm` alone can be swapped and reloaded (copy its `nvidia-uvm.ko` into `updates/p2p`, `depmod -a`, `modprobe -r nvidia_uvm && modprobe nvidia_uvm`) when no process holds `/dev/nvidia-uvm` (stop GPU jobs, the scheduler agent and DCGM first) and the loaded `nvidia.ko` comes from the same tree (same `srcversion`). The debug and release `nvidia-uvm.ko` have the same `srcversion`: tell them apart by file hash.
    1. `MANAGED=1 MANAGED_ARGS="--quick --pair 0,1 --modes accessedby" STAGES=managedtest ./run_host.sh <image> optin-pte`. This tests the page-table encoding alone (peer remote mappings through `SetAccessedBy`, no peer copy-engine copies). It is not a lower-risk run: a wrong peer address can reach host memory.
@@ -227,7 +234,7 @@ Every program ends with a `RESULT: PASS|FAIL` line (`compress` also `SKIP`, exit
 
 ## ACS
 
-When and why: [docs/05 ACS redirect](../../docs/05_GPU_P2P_GeForce.md#acs-redirect).
+When and why: [docs/05 ACS redirect](../../docs/05_GPU_P2P_GeForce_and_CMP.md#acs-redirect); behind PCIe switches: [ACS redirect behind PCIe switches](../../docs/05_GPU_P2P_GeForce_and_CMP.md#acs-redirect-behind-pcie-switches).
 
 ```bash
 sudo ./acs-redir.sh status     # also prints the persistent pci=disable_acs_redir=pci:<vendor>:<device>
@@ -237,15 +244,49 @@ sudo ./acs-redir.sh restore
 
 `off` refuses unless every GPU is in an identity IOMMU domain (`iommu=pt`) or has no IOMMU group (`ACS_FORCE=1` overrides). `ACS_STATE=<file>` replaces `/root/acs-redir-saved.txt`. A reboot also restores the kernel's defaults.
 
+### At every boot
+
+`gpu-acs-redir-off.service` runs `acs-redir.sh off` at every boot. It needs the script in `/usr/local/sbin` and keeps the saved values in `/run/acs-redir-saved.txt`. Only with `iommu=pt` and with no GPU of the node passed through to a VM ([why](../../docs/05_GPU_P2P_GeForce_and_CMP.md#acs-redirect-behind-pcie-switches)). From this directory:
+
+```bash
+sudo install -m 755 acs-redir.sh /usr/local/sbin/
+sudo install -m 644 gpu-acs-redir-off.service /etc/systemd/system/
+sudo systemctl daemon-reload
+sudo systemctl enable --now gpu-acs-redir-off.service
+sudo /usr/local/sbin/acs-redir.sh status      # RR=0 CR=0 on every bridge; check again after the next boot
+```
+
+Undo: `sudo systemctl disable --now gpu-acs-redir-off.service` (stopping the unit restores the saved values), then `sudo rm /etc/systemd/system/gpu-acs-redir-off.service /usr/local/sbin/acs-redir.sh` and `sudo systemctl daemon-reload`. On a node where NCCL should use P2P across root ports, `/etc/nccl.conf` with `NCCL_P2P_LEVEL=SYS` goes with the unit ([docs/05](../../docs/05_GPU_P2P_GeForce_and_CMP.md#cmp-170hx-using-p2p-in-jobs)); remove it together with the unit.
+
+## CMP 170HX
+
+The procedure, the checks and the measured results are in [docs/05 CMP 170HX](../../docs/05_GPU_P2P_GeForce_and_CMP.md#cmp-170hx-procedure). The helpers in `cmp/`, run from this directory (`<old-label>` and `<new-label>` name saved module trees, `<gpus>` is the number of GPUs, `<sha256>` the hash of a build's `nvidia.ko`):
+
+```bash
+cmp/gpu-baseline.sh <image> baseline-before.txt     # before the change; again after it, then compare
+sudo cmp/trees.sh save <old-label>                   # before install.sh
+sudo cmp/trees.sh save <new-label>                   # after install.sh
+sudo cmp/trees.sh activate <old-label>               # rollback rehearsal, then activate <new-label> again
+sudo cmp/trees.sh show                               # live tree, what modprobe resolves, saved trees by sha256
+cmp/verify-boot.sh <gpus> <sha256>                   # after the cold power cycle; <gpus> GPUs, <sha256> of nvidia.ko
+cmp/p2p-copy-check.sh <image> copy-check.txt         # idle node only
+```
+
+- `trees.sh` works on `/lib/modules/<K>/updates/cmpunlocker` with `<K>` from `uname -r`; set `K=<K>` when running it from another kernel (the GRUB fallback). `STORE=<dir>` replaces `/root/cmpunlocker-trees`. `activate` restores the module tree only; the saved `/etc/modprobe.d`, `/etc/default/grub` and units in `<store>/<label>/etc` are for comparing and restoring by hand. A new tree takes effect at the next cold power cycle.
+- `verify-boot.sh` expects the CMP 170HX with cmpunlocker's 64 GiB unlock: `DEV=20c2`, `MEM_MIB=65536`, `BAR1_MIB=65536`, `LINK_GEN=2`, `LINK_WIDTH=16` (environment overrides), ECC `[N/A]` (`ECC=1` for a build with the ECC patches). Without `<sha256>` it prints the hash instead of checking it. It reads `uvm_disable_hmm` only once `nvidia_uvm` is loaded (`nvidia-modprobe -u -c 0`).
+- `gpu-baseline.sh` and `p2p-copy-check.sh` refuse while any GPU has a compute process; `<image>` is a CUDA + PyTorch image.
+
 ## Roll back
 
-Procedure: [docs/05 Rollback](../../docs/05_GPU_P2P_GeForce.md#rollback).
+Procedure: [docs/05 Rollback](../../docs/05_GPU_P2P_GeForce_and_CMP.md#rollback).
 
 ```bash
 sudo ./install-p2p-modules.sh --restore       # K=<K> for another kernel than the running one
 sudo systemctl reboot
 ```
 
-This removes `updates/p2p` of the kernel and its depmod override. While other kernels still have P2P modules, the global settings stay. Otherwise it also removes the GRUB parameters listed in `grub-added-params.txt` and unholds the packages in `held-packages.txt`. It removes the HMM setting only when `iommu=pt` is no longer on the GRUB command line: keep `/etc/modprobe.d/nvidia-uvm-hmm.conf` as long as `iommu=pt` stays ([why](../../docs/05_GPU_P2P_GeForce.md#hmm-breaks-host-cumem-allocations-under-iommu-passthrough)). It does not remove a `pci=disable_acs_redir=...` parameter or `/etc/modprobe.d/nvidia-uvm-bar1-optin.conf`.
+This removes `updates/p2p` of the kernel and its depmod override. While other kernels still have P2P modules, the global settings stay. Otherwise it also removes the GRUB parameters listed in `grub-added-params.txt` and unholds the packages in `held-packages.txt`. It removes the HMM setting only when `iommu=pt` is no longer on the GRUB command line: keep `/etc/modprobe.d/nvidia-uvm-hmm.conf` as long as `iommu=pt` stays ([why](../../docs/05_GPU_P2P_GeForce_and_CMP.md#hmm-breaks-host-cumem-allocations-under-iommu-passthrough)). It does not remove a `pci=disable_acs_redir=...` parameter, `gpu-acs-redir-off.service` ([undo](#at-every-boot)) or `/etc/modprobe.d/nvidia-uvm-bar1-optin.conf`.
+
+The CMP 170HX node rolls back with `cmp/trees.sh activate <old-label>` and a cold power cycle: [docs/05 CMP 170HX: rollback](../../docs/05_GPU_P2P_GeForce_and_CMP.md#cmp-170hx-rollback).
 
 Without `grub-added-params.txt` (a node set up by hand, or by an older version of this script) `--restore` leaves GRUB unchanged and says so; without `held-packages.txt` it leaves the package holds unchanged. Remove the parameters from `/etc/default/grub` by hand if wanted, run `update-grub`, then remove the HMM setting; release holds with `apt-mark unhold`.
