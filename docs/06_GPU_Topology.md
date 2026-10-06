@@ -49,7 +49,7 @@ All eight nodes have the same layout:
 | 0 | `01:00.0`, `21:00.0` (nodes 06-08) / `23:00.0` (node 05) / `25:00.0` (nodes 01-04), `41:00.0`, `61:00.0` |
 | 1 | `81:00.0`, `A1:00.0`, `C1:00.0`, `E1:00.0` |
 
-- **Node 01:** its agent excludes the GPU at `81:00.0` with `exclude_gpus` (see [Leaving out a faulty GPU](../services/determined/README.md#leaving-out-a-faulty-gpu)). Determined shows that GPU as excluded, and the slots are 0-3 on socket 0 and 5-7 on socket 1.
+- **Node 01:** its agent leaves out the GPU at `81:00.0`; [Leaving out a faulty GPU](../services/determined/README.md#leaving-out-a-faulty-gpu) has the method and the resulting slot IDs.
 - **PCIe link width:** a GPU that trained at x8 caps every ring that includes it, whatever the topology; some nodes have one or two. Determined marks a GPU whose link was below its maximum width at agent start as `link below max` (`narrow` in the CLI). See [PCIe link width](05_GPU_P2P_GeForce_and_CMP.md#pcie-link-width) for how to check it.
 - **100GbE/IB NIC:** `NIC0` in `nvidia-smi topo -m` shows which socket the ConnectX card is on (`PHB` to the GPU that shares its host bridge).
 
@@ -67,11 +67,11 @@ g292 is a single-socket node with a different layout:
 | GPU 4, 5 | `87:00.0`, `88:00.0` |
 | GPU 6, 7 | `C3:00.0`, `C4:00.0` |
 
-- Peer-to-peer reads are `OK` for all 56 ordered pairs with the BAR1 P2P build of cmpunlocker ([CMP 170HX](05_GPU_P2P_GeForce_and_CMP.md#cmp-170hx)). Two host settings go with it: ACS redirect off on the bridges above the GPUs, so that the two GPUs of a switch reach each other across the switch instead of through the root port ([why](05_GPU_P2P_GeForce_and_CMP.md#acs-redirect-behind-pcie-switches)), and `NCCL_P2P_LEVEL=SYS` in `/etc/nccl.conf` ([in jobs](05_GPU_P2P_GeForce_and_CMP.md#cmp-170hx-using-p2p-in-jobs)). Then pairs, four and eight GPUs all reach 6.2-6.4 GB/s all-reduce bus bandwidth, on one switch or across: the Gen2 links set the limit, not the switch distance ([results](05_GPU_P2P_GeForce_and_CMP.md#results-summary)).
+- Peer-to-peer reads are `OK` for all 56 ordered pairs with the BAR1 P2P build of cmpunlocker ([CMP 170HX](05_GPU_P2P_GeForce_and_CMP.md#cmp-170hx)). Two host settings go with it: ACS redirect off on the bridges above the GPUs, so that the two GPUs of a switch reach each other across the switch instead of through the root port ([why](05_GPU_P2P_GeForce_and_CMP.md#acs-redirect-behind-pcie-switches)), and `NCCL_P2P_LEVEL=SYS` in `/etc/nccl.conf` ([in jobs](05_GPU_P2P_GeForce_and_CMP.md#cmp-170hx-using-p2p-in-jobs)). With both, the Gen2 links set the limit, not the switch distance ([results](05_GPU_P2P_GeForce_and_CMP.md#results-summary)).
 - Without peer-to-peer (`GNS` for every pair, as with a driver without the P2P patches), traffic between the GPUs goes through host memory, and the two GPUs of a pair share their switch's link to the CPU. Recheck `nvidia-smi topo -p2p r` after a driver change.
 
 ## Choosing GPUs for a job
 
 - **Nodes 01-08:** a job of up to four GPUs that communicate should stay on one socket. With P2P, four GPUs on one socket reach a higher all-reduce bandwidth than any set that crosses the sockets; see the results table in [GPU P2P on GeForce and CMP](05_GPU_P2P_GeForce_and_CMP.md#results-summary). An eight-GPU job always spans both sockets.
-- **g292:** with peer-to-peer, ACS redirect off and `NCCL_P2P_LEVEL=SYS`, pairs, four and eight GPUs run at 6.2-6.4 GB/s whichever GPUs they use. Without peer-to-peer, sharing a switch is a disadvantage: the two GPUs of a pair share one uplink, so a pair on one switch is the slowest set (all-reduce 1.70 GB/s against 3.00 for a pair on two switches, and 1.93 for four GPUs on two switches against 4.19 for one GPU per switch).
+- **g292:** with peer-to-peer, ACS redirect off and `NCCL_P2P_LEVEL=SYS`, the choice of GPUs does not change the all-reduce bandwidth. Without peer-to-peer, sharing a switch is a disadvantage: the two GPUs of a pair share one uplink, so a pair on one switch is the slowest set, and four GPUs do better with one GPU per switch than with two switch pairs ([results](05_GPU_P2P_GeForce_and_CMP.md#results-summary)).
 - Jobs whose GPUs work independently (no collectives) do not benefit from any of this.
