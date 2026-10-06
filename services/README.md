@@ -23,6 +23,7 @@ These are container-based supplementary services.
           - [Update from the hand-deployed state of 2026-09-28](#update-from-the-hand-deployed-state-of-2026-09-28)
           - [Rollback](#rollback)
         - [7.4. GPU health alerts (Grafana)](#74-gpu-health-alerts-grafana)
+        - [7.5. Determined task resources](#75-determined-task-resources)
   - [Notes](#notes)
   - [Acknowledgments](#acknowledgments)
 
@@ -61,7 +62,7 @@ We are currently offering these web services:
 ### Background services
 
 - NGINX
-- Prometheus
+- Prometheus ([Determined task resources](prometheus/README.md))
 - Grafana image renderer (`grafana-renderer`)
 - [Determined watchdog](determined-watchdog/README.md) (kills idle GPU shells and JupyterLab notebooks; renews the Determined token for Prometheus)
 - V2Ray Exporter
@@ -114,7 +115,7 @@ mkdir -p grafana/data && sudo chown -R 472:0 grafana/data
 # gitignored). `git pull` creates neither: create both for uid 1000 before the first
 # `docker compose up` (this also fixes a directory Docker already created as root).
 # The paths below are the live ones from .env.example.
-# See prometheus/README.md (scrape credential migration).
+# See prometheus/README.md (Determined scrape token).
 sudo install -d -o 1000 -g 1000 /home/cvgladmin/.local/share/cluster-setup-monitoring/prometheus
 sudo install -d -m 0700 -o 1000 -g 1000 /home/cvgladmin/.local/share/cluster-setup-monitoring/secrets
 
@@ -182,7 +183,7 @@ Use plain `[A-Za-z0-9]` values in the secret env files: Compose expands `$` in t
 
 After a `git pull` that changes `frp/frps.ini` or `frp/.env` (including the first pull with the templated `frps.ini`), recreate frp right away, in the same session, with `docker compose up -d --force-recreate frp`, and check `docker compose logs --tail 20 frp`. Never use `docker restart` (or Portainer's restart) for it: a plain restart re-reads the new `frps.ini` but keeps the container's old environment, so the `FRP_*` values become `<no value>`.
 
-The Determined bearer token that Prometheus uses is not an env file: it is the file `token` in `DET_METRICS_SECRETS_DIR` (live: `/home/cvgladmin/.local/share/cluster-setup-monitoring/secrets/token`; default `prometheus/secrets/token`). `git pull` does not create that directory. Create it private to uid 1000 before the first `docker compose up`, e.g. `sudo install -d -m 0700 -o 1000 -g 1000 prometheus/secrets` for the default; otherwise Docker creates it owned by root and the watchdog cannot write the token. See [7.3](#73-prometheus-authentication-for-determined-ai-bearer-token) and [the credential migration guide](prometheus/README.md#scrape-credential-migration).
+The Determined bearer token that Prometheus uses is not an env file: it is the file `token` in `DET_METRICS_SECRETS_DIR` (live: `/home/cvgladmin/.local/share/cluster-setup-monitoring/secrets/token`; default `prometheus/secrets/token`). `git pull` does not create that directory. Create it private to uid 1000 before the first `docker compose up`, e.g. `sudo install -d -m 0700 -o 1000 -g 1000 prometheus/secrets` for the default; otherwise Docker creates it owned by root and the watchdog cannot write the token. See [7.3](#73-prometheus-authentication-for-determined-ai-bearer-token) and [Determined scrape token](prometheus/README.md#determined-scrape-token).
 
 [`frp/frpc.ini`](frp/frpc.ini) is the client template handed to users. Its token is a placeholder (`REPLACE_WITH_FRP_TOKEN`): give users the real `FRP_TOKEN` out-of-band, and tell them when it is rotated.
 
@@ -233,11 +234,10 @@ Update `static_configs[targets]` in `prometheus/prometheus.yml` if any new nodes
 
 ##### 7.3. Prometheus authentication for Determined AI (Bearer token)
 
-Prometheus reads its Determined bearer token from a private runtime file. Follow
-[the credential migration and task-resource monitoring guide](prometheus/README.md)
-to provision it and update the watchdog mounts. Do not put tokens in YAML.
+Prometheus reads its Determined bearer token from a private runtime file (see
+[Determined scrape token](prometheus/README.md#determined-scrape-token)). Do not put tokens in YAML.
 
-The `det-master` job in `prometheus/prometheus.yml` reads the token with `authorization.credentials_file: /run/determined-metrics/token`. On the host that is the file `token` in the directory `DET_METRICS_SECRETS_DIR` from `.env` (see [6.1](#61-secrets-and-env-files); live: `/home/cvgladmin/.local/share/cluster-setup-monitoring/secrets/token`, default: `prometheus/secrets/token`): Prometheus mounts that directory read-only at `/run/determined-metrics`, and the [Determined watchdog](determined-watchdog/README.md#determined-token-shared-with-prometheus) mounts the same directory read-write. At start and every hour it logs in to Determined and writes a new token if the file is missing, unreadable or empty, if the token's expiry cannot be decoded (so a hand-placed token that is not a Determined session token is replaced), if it expires in less than 48 hours, or if Determined answers `GET /api/v1/me` with HTTP 401 for it (details in [the watchdog README](determined-watchdog/README.md#determined-token-shared-with-prometheus)). The start-up check only logs; the hourly checks also post the outcome of a renewal to Slack. Prometheus re-reads the file on every scrape, so a new token needs no reload or restart. If the `det-master` target is down with "unable to read authorization credentials", check the watchdog logs (`docker compose logs watchdog`) and that the token directory is owned by uid 1000. If it is down with "server returned HTTP status 401 Unauthorized" (the session was revoked before its expiry), the watchdog renews the token at its next hourly check; `docker compose restart watchdog` renews it at once (silently: look for `Obtained new Determined token` in its log; never during minute 0 of an hour, see [the watchdog README](determined-watchdog/README.md#what-it-does)). To provision or replace the token by hand, follow [the guide](prometheus/README.md#scrape-credential-migration).
+The `det-master` job in `prometheus/prometheus.yml` reads the token with `authorization.credentials_file: /run/determined-metrics/token`. On the host that is the file `token` in the directory `DET_METRICS_SECRETS_DIR` from `.env` (see [6.1](#61-secrets-and-env-files); live: `/home/cvgladmin/.local/share/cluster-setup-monitoring/secrets/token`, default: `prometheus/secrets/token`): Prometheus mounts that directory read-only at `/run/determined-metrics`, and the [Determined watchdog](determined-watchdog/README.md#determined-token-shared-with-prometheus) mounts the same directory read-write. At start and every hour it logs in to Determined and writes a new token if the file is missing, unreadable or empty, if the token's expiry cannot be decoded (so a hand-placed token that is not a Determined session token is replaced), if it expires in less than 48 hours, or if Determined answers `GET /api/v1/me` with HTTP 401 for it (details in [the watchdog README](determined-watchdog/README.md#determined-token-shared-with-prometheus)). The start-up check only logs; the hourly checks also post the outcome of a renewal to Slack. Prometheus re-reads the file on every scrape, so a new token needs no reload or restart. If the `det-master` target is down with "unable to read authorization credentials", check the watchdog logs (`docker compose logs watchdog`) and that the token directory is owned by uid 1000. If it is down with "server returned HTTP status 401 Unauthorized" (the session was revoked before its expiry), the watchdog renews the token at its next hourly check; `docker compose restart watchdog` renews it at once (silently: look for `Obtained new Determined token` in its log; never during minute 0 of an hour, see [the watchdog README](determined-watchdog/README.md#what-it-does)). To provision or replace the token by hand, follow [Determined scrape token](prometheus/README.md#determined-scrape-token).
 
 Older versions of the watchdog wrote the token into the last line of `prometheus.yml` instead. The token tracked there is in the public git history: revoke it (step 13 below).
 
@@ -710,25 +710,27 @@ docker rm -f grafana-dryrun
   and reload or recreate. The empty folder **GPU health** can then be deleted in the UI.
 - Dashboard: check out the previous `grafana/provisioning/dashboards/json/dcgm-exporter-dashboard.json`; Grafana applies it within about 10 seconds.
 
+##### 7.5. Determined task resources
+
+Prometheus joins the exporters' samples to Determined tasks and allocations with the recording rules in [`prometheus/rules/`](prometheus/rules/determined-task-resources.yml). The master's native **Resources** pages and its `GET /api/v1/tasks/{task_id}/resources` API (enabled by `integrations.task_resources` in [`master.yaml`](system-configurations/etc/determined/master.yaml)) and the Grafana dashboard `det-task-resources` read them. How the pieces connect, the names the fork's master relies on, connecting the master, end-to-end checks and troubleshooting: [Determined task resources](prometheus/README.md).
+
 ## Notes
 
-Although Determined-AI's [det-state-metrics](https://gpu.cvgl.lab/prom/det-state-metrics) (to view it in your browser you need to log in to https://gpu.cvgl.lab first) provides enough information about tasks and containers, the [official document](https://docs.determined.ai/latest/integrations/prometheus/prometheus.html) and [repo](https://github.com/determined-ai/works-with-determined) did not provide a Grafana dashboard that integrates these data with `cAdvisor` and `dcgm-exporter` to provide usage statistics by individual users or tasks. Further development is required for more precise cluster management.
+Determined-AI's [det-state-metrics](https://gpu.cvgl.lab/prom/det-state-metrics) (to view it in your browser you need to log in to https://gpu.cvgl.lab first) relates tasks to containers and GPUs, but the [official document](https://docs.determined.ai/latest/integrations/prometheus/prometheus.html) and [repo](https://github.com/determined-ai/works-with-determined) do not join it with `cAdvisor` and `dcgm-exporter`. Our [recording rules](prometheus/rules/determined-task-resources.yml) do, for the master's native Resources pages and the Grafana dashboard `det-task-resources` (see [7.5](#75-determined-task-resources)).
 
-For example, in `https://gpu.cvgl.lab/prom/det-state-metrics`, each job will have an `allocation_id`. With this `allocation_id`, you can get the corresponding `container_id` in `det_container_id_allocation_id`.
+They follow this chain. In `https://gpu.cvgl.lab/prom/det-state-metrics`, each job will have an `allocation_id`. With this `allocation_id`, you can get the corresponding `container_id` in `det_container_id_allocation_id`.
 
 With this `container_id`, you can:
 
 - Get `container_runtime_id` in `det_container_id_runtime_container_id`
 - Get `gpu_uuid` in `det_gpu_uuid_container_id`
 
-With `container_runtime_id`, you can get container stats of this job with `cAdvisor`;`
+With `container_runtime_id`, you can get container stats of this job with `cAdvisor`.
 
 With `gpu_uuid`, you can get GPU stats of this job with `dcgm-exporter`.
 
 TODOs:
 
-- Native Determined resource charts with per-task authorization (the first-phase
-  [shared Grafana task dashboard](prometheus/README.md) is provided)
 - A management watchdog that utilizes these data and kills tasks (the existing
   [determined-watchdog](determined-watchdog/README.md) only kills idle shells and JupyterLab
   notebooks; it acts on a Grafana alert and does not use the task-resource recording rules)

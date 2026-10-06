@@ -130,9 +130,8 @@ token and the Slack webhook, and the Determined token never appears in the logs.
 
 ## Determined token (shared with Prometheus)
 
-[`../prometheus/README.md`](../prometheus/README.md#scrape-credential-migration) is the
-authoritative description of this credential and of its one-time migration (revoke the token that
-used to be tracked in `prometheus.yml`; it stays in Git history). In short:
+[`../prometheus/README.md`](../prometheus/README.md#determined-scrape-token) describes what
+Prometheus needs from this credential. In short:
 
 - The host directory is `DET_METRICS_SECRETS_DIR` from `services/.env` (live:
   `/home/cvgladmin/.local/share/cluster-setup-monitoring/secrets`; default when unset or empty:
@@ -300,7 +299,7 @@ nothing to Slack. The token file is `token` in `DET_METRICS_SECRETS_DIR` from `s
 
 If the same update changed `prometheus/prometheus.yml` or `prometheus/rules/`, check them before
 Prometheus loads them (as required by
-[`../prometheus/README.md`](../prometheus/README.md#focused-validation-and-rollout)):
+[`../prometheus/README.md`](../prometheus/README.md#checking-the-configuration)):
 
 ```sh
 cd ~/ws/cluster-setup/services
