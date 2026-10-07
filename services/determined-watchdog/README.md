@@ -81,6 +81,10 @@ The PromQL in A is:
 max by(container_id)((DCGM_FI_DEV_GPU_UTIL * on(gpu_uuid) group_left(container_id) det_gpu_uuid_container_id))
 ```
 
+With fork 0.41.0 and later, `det_gpu_uuid_container_id` appears only
+`observability.task_mapping_delay` (default 5 minutes) after a shell or notebook starts, so with the
+15-minute pending period the alert fires no earlier than about 20 minutes after start.
+
 The rule lives only in Grafana's database (it is not in this repo): folder `test`, rule group
 `test1`, evaluated every minute. A is an instant query over the last 30 minutes, B reduces A to
 its last value, and C, the condition, is `B IS BELOW 10` (GPU utilization in %). Pending period
@@ -130,9 +134,8 @@ token and the Slack webhook, and the Determined token never appears in the logs.
 
 ## Determined token (shared with Prometheus)
 
-[`../prometheus/README.md`](../prometheus/README.md#scrape-credential-migration) is the
-authoritative description of this credential and of its one-time migration (revoke the token that
-used to be tracked in `prometheus.yml`; it stays in Git history). In short:
+[`../prometheus/README.md`](../prometheus/README.md#determined-scrape-token) describes what
+Prometheus needs from this credential. In short:
 
 - The host directory is `DET_METRICS_SECRETS_DIR` from `services/.env` (live:
   `/home/cvgladmin/.local/share/cluster-setup-monitoring/secrets`; default when unset or empty:
@@ -269,12 +272,9 @@ Put a `User.json` into `data/debug/` first (the check fails without it).
 
 ## Deploy / update
 
-The one-time update of `cvglsuppvm` from the hand-deployed state of 2026-09-28 (PR #4's image
-`determined-watchdog:metrics-20260928`, checkout at `f71d24c` with local changes) is
-[step by step in `../README.md`](../README.md#update-from-the-hand-deployed-state-of-2026-09-28);
-its step 9 is the watchdog part. For later updates of the watchdog, from `services/` (it needs
-`.env`, see [6.1](../README.md#61-secrets-and-env-files); if the same update changes other
-services, apply those too, see [6](../README.md#6-all-in-one-services-except-harbor-and-node-exporter)):
+To update the watchdog, from `services/` (it needs `.env`, see
+[6.1](../README.md#61-secrets-and-env-files); if the same update changes other services, apply
+those too, see [6](../README.md#6-all-in-one-services-except-harbor-and-node-exporter)):
 
 ```sh
 cd ~/ws/cluster-setup/services
@@ -300,7 +300,7 @@ nothing to Slack. The token file is `token` in `DET_METRICS_SECRETS_DIR` from `s
 
 If the same update changed `prometheus/prometheus.yml` or `prometheus/rules/`, check them before
 Prometheus loads them (as required by
-[`../prometheus/README.md`](../prometheus/README.md#focused-validation-and-rollout)):
+[`../prometheus/README.md`](../prometheus/README.md#checking-the-configuration)):
 
 ```sh
 cd ~/ws/cluster-setup/services
@@ -311,15 +311,11 @@ The check runs with the service's own mounts. It needs `--user 1000:1000` (also 
 user): the image's default user cannot enter the 0700 token directory, so "permission denied"
 there is not a configuration error (never loosen the directory mode). It fails with "no such
 file or directory" until the watchdog has written the token. Then recreate Prometheus
-(`docker compose up -d --force-recreate prometheus`) and check that the `det-master` target is UP,
-as in step 10 of [the update](../README.md#update-from-the-hand-deployed-state-of-2026-09-28).
+(`docker compose up -d --force-recreate prometheus`) and check that the `det-master` target is UP
+(check 1 of [Checking the chain end to end](../prometheus/README.md#checking-the-chain-end-to-end)).
 
 Older versions treated only `WATCHDOG_DEBUG=1` as debug mode; `true`, `yes` and `on` now enable it
 too (no kills, debug webhook). Set any value other than `0` or `1` to `0` before `up -d watchdog`.
-
-The `PORTAINER_*` and `PROMETHEUS_*` lines in `determined-watchdog/.env` are ignored. Delete them
-only when a rollback to `determined-watchdog:metrics-20260928` (PR #4) is no longer wanted: that
-image exits at start without `PORTAINER_WEB_URL` and `PORTAINER_API_TOKEN`.
 
 ## Tests
 
