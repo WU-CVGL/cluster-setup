@@ -19,6 +19,7 @@
   - [Maintainance](#maintainance)
     - [Upgrade Determined](#upgrade-determined)
     - [Add a resource pool](#add-a-resource-pool)
+    - [Task resource monitoring](#task-resource-monitoring)
 
 The cluster runs our fork of Determined, [WU-CVGL/determined](https://github.com/WU-CVGL/determined) (version `0.41.0`): the `det` CLI, the master image `ghcr.io/wu-cvgl/determined-master` and the agent image `ghcr.io/wu-cvgl/determined-agent` all come from its releases. The upstream documentation linked below still describes the concepts and the configuration.
 
@@ -241,3 +242,7 @@ Add pools at runtime as dynamic pools of our fork ([guide](https://github.com/WU
 4. Check it with a small task: `det command run --config resources.resource_pool=<pool> --config resources.slots=1 nvidia-smi`.
 
 Warning: Do not upgrade when the cluster is in use! Upgrading packages especially those related to the kernel, DKMS, GPU drivers and containers will kill running tasks.
+
+### Task resource monitoring
+
+The WebUI's **Resources** pages (**View Resources** in the task and experiment menus) and the API `GET /api/v1/tasks/{task_id}/resources` show a task's CPU, memory and GPU use. The master reads them from the Prometheus of the supplementary services, as set by `integrations.task_resources` in the [master configuration file](../services/system-configurations/etc/determined/master.yaml). What the master and Prometheus must agree on, how to check the chain and what to look at when the charts stay empty: [Determined task resources](../services/prometheus/README.md).
