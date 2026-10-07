@@ -20,7 +20,7 @@
     - [Upgrade Determined](#upgrade-determined)
     - [Add a resource pool](#add-a-resource-pool)
 
-The cluster runs our fork of Determined, [WU-CVGL/determined](https://github.com/WU-CVGL/determined) (currently `0.40.1`): the `det` CLI, the master image `ghcr.io/wu-cvgl/determined-master` and the agent image `ghcr.io/wu-cvgl/determined-agent` all come from its releases. The upstream documentation linked below still describes the concepts and the configuration.
+The cluster runs our fork of Determined, [WU-CVGL/determined](https://github.com/WU-CVGL/determined) (version `0.41.0`): the `det` CLI, the master image `ghcr.io/wu-cvgl/determined-master` and the agent image `ghcr.io/wu-cvgl/determined-agent` all come from its releases. The upstream documentation linked below still describes the concepts and the configuration.
 
 ## Deploy a Determined AI Single-Node Cluster
 
@@ -134,17 +134,17 @@ On a node that is rarely idle (long-running tasks, interactive sessions on the l
 
 ### Installation
 
-Install the CLI of our fork, in the version of the master (`0.40.1`); see [Install Determined AI Systemwide](./01_First-time_Setup_of_Cluster_Nodes.md#install-determined-ai-systemwide) for the nodes:
+Install the CLI of our fork, in the version of the master (`0.41.0`); see [Install Determined AI Systemwide](./01_First-time_Setup_of_Cluster_Nodes.md#install-determined-ai-systemwide) for the nodes:
 
 ```bash
-pip install -U "https://github.com/WU-CVGL/determined/releases/download/0.40.1/determined-0.40.1-py3-none-any.whl"
+pip install -U "https://github.com/WU-CVGL/determined/releases/download/0.41.0/determined-0.41.0-py3-none-any.whl"
 ```
 
 Not `pip install determined`: that is the upstream package.
 
 ### Launch master & agents
 
-See [notes](../services/determined/README.md) and the [master configuration file](../services/system-configurations/etc/determined/master.yaml).
+The master and the agents run as Docker containers started with `docker run`, not with `det deploy local`: see the [notes](../services/determined/README.md) ([Master](../services/determined/README.md#master), [Agents](../services/determined/README.md#agents)) and the [master configuration file](../services/system-configurations/etc/determined/master.yaml).
 
 ## Conduct an experiment with `Determined AI`
 
@@ -165,6 +165,8 @@ det user login user_name
 ```
 
 then, input `password` to log in.
+
+To change your own password or username, the master asks for your current password. Use the WebUI or the CLI of the master's version (`det user change-password`, see [Installation](#installation)); a CLI of version 0.40.1 or older cannot do it.
 
 ### Upload code and data to the server
 
@@ -200,26 +202,33 @@ det shell start --config-file config.yaml
 
 Then, `cd` to `/run/determined/workdir/xxx/` inside the container and run your code.
 
+The WebUI can also launch a shell or a JupyterLab with the same configuration, and opens the shell's terminal in the browser.
+
 ## Maintainance
 
 See [Maintainance: Upgrade APT packages & `Determined AI`](./01_First-time_Setup_of_Cluster_Nodes.md#maintainance-upgrade-apt-packages--determined-ai).
 
 ### Upgrade Determined
 
-Upgrade to a [release of our fork](https://github.com/WU-CVGL/determined/releases), following its [installation and deployment guide](https://github.com/WU-CVGL/determined/blob/main/docs/maintenance/distribution.md). Keep the CLI, the master and all agents on the same version. In short:
+Upgrade to a [release of our fork](https://github.com/WU-CVGL/determined/releases), following its [installation and deployment guide](https://github.com/WU-CVGL/determined/blob/main/docs/maintenance/distribution.md). Keep the CLI, the master and all agents on the same version; during a rolling agent upgrade, mixed versions work.
 
-1. Disable the agents: `det agent disable --all --drain` lets the running tasks finish first, plain `det agent disable --all` stops them now (announce either). Once nothing runs, back up the PostgreSQL database.
-2. On the master node, install the new CLI (see [Installation](#installation)) and start the new master: `det deploy local master-down`, then the `master-up` command of the [notes](../services/determined/README.md) with the new `--det-version`. Check that the database migration finished and that you can log in.
-3. On every agent node, install the new CLI and restart the agent with the `agent-down`/`agent-up` commands of the [notes](../services/determined/README.md) and the new `--det-version`; enable the agents again (`det agent enable --all`).
-4. Check tasks, metrics and checkpoints.
+When the release allows a hot upgrade (see the fork's [hot upgrade guide](https://github.com/WU-CVGL/determined/blob/main/docs/maintenance/hot-upgrade.md)), running tasks continue. In short (commands in the [notes](../services/determined/README.md#upgrade)):
 
-Rollback: stop the agents and the master, restore the database backup, and start the previous version again. Switching back to the old images alone does not undo the database migration.
+1. Install the new CLI (see [Installation](#installation)) and pull the new images on the master node and on every agent node.
+2. Back up the PostgreSQL database.
+3. Stop the old master container, keep it for a rollback, and start the new one from a new deploy directory. Check that the database migration finished and that you can log in. Keep the master outage well under ten minutes: tasks that write output are killed after about 11 minutes without a master.
+4. Replace the agent containers one node at a time, with the same GPUs and pool, so that they reattach the running tasks.
+5. Check tasks, metrics and checkpoints.
+
+Otherwise upgrade cold: disable the agents first (`det agent disable --all --drain` lets the running tasks finish, plain `det agent disable --all` stops them now; announce either), back up the database once nothing runs, replace the master and the agents as above, and enable the agents again (`det agent enable --all`).
+
+Rollback: when the previous master starts against the migrated database, stop the new master container and start the old one again; the [notes](../services/determined/README.md#rollback) list the preconditions. Otherwise stop the agents and the master, restore the database backup, and start the previous version again. Switching back to the old images alone does not undo the database migration.
 
 ### Add a resource pool
 
-Add pools at runtime as dynamic pools of our fork ([guide](https://github.com/WU-CVGL/determined/blob/main/docs/maintenance/dynamic-pools.md)); do not edit `master.yaml` for that. A dynamic pool cannot be renamed, updated or deleted, so choose its name and settings carefully, and never list it in `master.yaml` afterwards (the master would refuse to start).
+Add pools at runtime as dynamic pools of our fork ([guide](https://github.com/WU-CVGL/determined/blob/main/docs/maintenance/dynamic-pools.md)); every pool of the cluster is one. Never add a pool to `master.yaml` (the master would refuse to start when a pool there has the name of a dynamic pool). A dynamic pool cannot be renamed or deleted, so choose its name carefully; `det resource-pool update` changes its settings later (see [Dynamic resource pools](../services/determined/README.md#dynamic-resource-pools)).
 
-1. Write the pool as its own file in [`services/determined/resource-pools/`](../services/determined/resource-pools/) (the pool object itself, not a `resource_pools:` list). Use the settings of the other pools (`agent_reconnect_wait: 10m`, `max_aux_containers_per_agent: 100`, `agent_reattach_enabled: false`; see the [reference `master.yaml`](../services/system-configurations/etc/determined/master.yaml)). The scheduler and the task container defaults are copied from the master when the pool is created and do not follow later `master.yaml` changes.
+1. Write the pool as its own file in [`services/determined/resource-pools/`](../services/determined/resource-pools/) (the pool object itself, not a `resource_pools:` list). Use the settings of the other pools there (`agent_reconnect_wait: 10m`). A pool without its own `scheduler` or `task_container_defaults` uses those of `master.yaml`, also after later changes there (from the next master restart).
 2. As an administrator, create it with a fixed idempotency key (safe to repeat with the same file and key), and check that it becomes `Ready`:
 
     ```bash
@@ -228,7 +237,7 @@ Add pools at runtime as dynamic pools of our fork ([guide](https://github.com/WU
     ```
 
     `--cluster-name` is not needed: the cluster has a single agent resource manager. If it ends `Failed`, fix the cause and run `det resource-pool retry <pool>` (it reuses the saved configuration, not the file).
-3. Start the agents of the pool with `--agent-resource-pool=<pool>` (see the [notes](../services/determined/README.md)). Creating a pool does not move agents; move a busy agent only after disabling it with `--drain` and waiting for its tasks.
+3. Start the agents of the pool with `DET_RESOURCE_POOL=<pool>` (see [Agents](../services/determined/README.md#agents)). Creating a pool does not move agents; move a busy agent only after disabling it with `--drain` and waiting for its tasks.
 4. Check it with a small task: `det command run --config resources.resource_pool=<pool> --config resources.slots=1 nvidia-smi`.
 
 Warning: Do not upgrade when the cluster is in use! Upgrading packages especially those related to the kernel, DKMS, GPU drivers and containers will kill running tasks.

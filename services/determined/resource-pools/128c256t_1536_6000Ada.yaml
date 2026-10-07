@@ -1,0 +1,9 @@
+# Dynamic resource pool. It was a master.yaml entry, adopted as is with
+#   det resource-pool adopt 128c256t_1536_6000Ada 128c256t_1536_6000Ada.yaml
+# and then removed from master.yaml. The master's database holds the live spec
+# (det resource-pool list-dynamic --json). Change it with
+#   det resource-pool update 128c256t_1536_6000Ada 128c256t_1536_6000Ada.yaml
+# (replaces the whole spec; effective at the next master restart). Never add it to master.yaml.
+pool_name: 128c256t_1536_6000Ada
+description: "2x AMD Epyc 9554 64c128t 3.1-3.75GHz CPU; 1536GB RAM; NVIDIA RTX 6000 Ada Generation 48G GPU."
+agent_reconnect_wait: 10m
