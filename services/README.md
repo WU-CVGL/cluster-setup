@@ -63,7 +63,7 @@ We are currently offering these web services:
 - NGINX
 - Prometheus
 - Grafana image renderer (`grafana-renderer`)
-- [Determined watchdog](determined-watchdog/README.md) (kills idle GPU shells; renews the Determined token for Prometheus)
+- [Determined watchdog](determined-watchdog/README.md) (kills idle GPU shells and JupyterLab notebooks; renews the Determined token for Prometheus)
 - V2Ray Exporter
 - frp (server `frps`, host network)
 - RustDesk server (`hbbs`, `hbbr`, host network)
@@ -730,8 +730,8 @@ TODOs:
 - Native Determined resource charts with per-task authorization (the first-phase
   [shared Grafana task dashboard](prometheus/README.md) is provided)
 - A management watchdog that utilizes these data and kills tasks (the existing
-  [determined-watchdog](determined-watchdog/README.md) only kills idle shells; it acts on a Grafana alert and
-  does not use the task-resource recording rules)
+  [determined-watchdog](determined-watchdog/README.md) only kills idle shells and JupyterLab
+  notebooks; it acts on a Grafana alert and does not use the task-resource recording rules)
 
 ## Acknowledgments
 

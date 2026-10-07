@@ -4,7 +4,14 @@ from urllib.parse import urljoin
 
 import requests
 
-from alert_config import HTTP_TIMEOUT, Config, log
+from alert_config import (
+    HTTP_TIMEOUT,
+    TASK_KIND_DEFAULT,
+    TASK_KIND_NOTEBOOK,
+    TASK_KIND_SHELL,
+    Config,
+    log,
+)
 from alert_DataProcessor import write_json_atomic
 
 
@@ -23,7 +30,13 @@ class APIHandler:
     def __init__(self, config: Config):
         self.config = config
         self.det_shell_api = urljoin(config.det_web, "api/v1/shells/")
+        self.det_notebook_api = urljoin(config.det_web, "api/v1/notebooks/")
         self.det_task_api = urljoin(config.det_web, "api/v1/tasks/")
+        # Base URL of each policed kind: <base><id>/kill kills it, <base><id> gets it.
+        self.det_kind_api = {
+            TASK_KIND_SHELL: self.det_shell_api,
+            TASK_KIND_NOTEBOOK: self.det_notebook_api,
+        }
         self.grafana_alert_api = urljoin(
             config.grafana_web,
             "api/alertmanager/grafana/api/v2/alerts/"
@@ -94,49 +107,69 @@ class APIHandler:
             raise DetAPIError("GET shells: 'shells' is not a list")
         return data
 
+    def get_notebook_api_data(self, det_headers):
+        data = self._get_det_json(self.det_notebook_api, det_headers, "GET notebooks")
+        if not isinstance(data.get("notebooks") or [], list):
+            raise DetAPIError("GET notebooks: 'notebooks' is not a list")
+        return data
+
     def get_task_api_data(self, det_headers):
         data = self._get_det_json(self.det_task_api, det_headers, "GET tasks")
         if not isinstance(data.get("allocationIdToSummary") or {}, dict):
             raise DetAPIError("GET tasks: 'allocationIdToSummary' is not a map")
         return data
 
-    def parse_api_data(self, shell_api_data, task_api_data):
-        """Return {shell_id: info} for the shells that have a container."""
+    def parse_api_data(self, shell_api_data, task_api_data, notebook_api_data=None):
+        """Return {task_id: info} for the shells and notebooks that have a container.
+
+        info["kind"] is "shell" or "notebook". shell_api_data or notebook_api_data may be None
+        (that listing failed). A notebook's serviceAddress carries its Jupyter token: it is not
+        copied (info is logged and saved).
+        """
         result = {}
         summaries = task_api_data.get("allocationIdToSummary") or {}
-        for shell in shell_api_data.get("shells") or []:
-            shell_id = shell.get("id")
-            if shell_id is None:
-                continue
-
-            ## container is null in shell_api. Retrieve from task_api
-            shell_task_data = summaries.get(f"{shell_id}.1")
-            if not shell_task_data:
-                continue
-            resources = shell_task_data.get("resources")
-            if not resources:
-                continue
-            container_id = resources[0].get("containerId")
-            if container_id is None:
-                print(f"[debug] container_id is none for shell_id {shell_id}")
-                continue
-
-            # agentDevices: {agent_id: {"devices": [...]}}, may be null
-            devices = []
-            for agent in (resources[0].get("agentDevices") or {}).values():
-                if isinstance(agent, dict):
-                    devices.extend(agent.get("devices") or [])
-
-            if shell_id not in result:
-                result[shell_id] = {
-                    "container_id": container_id,
-                    "description": shell.get("description"),
-                    "username": shell.get("username"),
-                    "startTime": shell.get("startTime"),
-                    "device_count": len(devices),
-                    "devices": devices,
-                }
+        for kind, tasks in (
+            (TASK_KIND_SHELL, (shell_api_data or {}).get("shells")),
+            (TASK_KIND_NOTEBOOK, (notebook_api_data or {}).get("notebooks")),
+        ):
+            for task in tasks or []:
+                self._add_task_container(result, kind, task, summaries)
         return result
+
+    def _add_task_container(self, result, kind, task, summaries):
+        task_id = task.get("id")
+        if task_id is None:
+            return
+
+        ## container is null in shell_api / notebook_api. Retrieve from task_api:
+        ## shells and notebooks have one allocation, "<task id>.1"
+        task_data = summaries.get(f"{task_id}.1")
+        if not task_data:
+            return
+        resources = task_data.get("resources")
+        if not resources:
+            return
+        container_id = resources[0].get("containerId")
+        if container_id is None:
+            print(f"[debug] container_id is none for {kind} {task_id}")
+            return
+
+        # agentDevices: {agent_id: {"devices": [...]}}, may be null
+        devices = []
+        for agent in (resources[0].get("agentDevices") or {}).values():
+            if isinstance(agent, dict):
+                devices.extend(agent.get("devices") or [])
+
+        if task_id not in result:
+            result[task_id] = {
+                "kind": kind,
+                "container_id": container_id,
+                "description": task.get("description"),
+                "username": task.get("username"),
+                "startTime": task.get("startTime"),
+                "device_count": len(devices),
+                "devices": devices,
+            }
 
     def get_alert_rules(self):
         """Firing alerts from Grafana's Alertmanager; silenced and inhibited alerts are excluded."""
@@ -182,19 +215,23 @@ class APIHandler:
                     container_ids[alertname].add(container_id)
         return container_ids
 
-    def kill_container(self, shell_id, det_header, debug) -> bool:
-        """Kill one shell; in debug mode only GET it (dry run). True on success."""
+    def kill_container(self, task_id, det_header, debug, kind=TASK_KIND_DEFAULT) -> bool:
+        """Kill one shell or notebook; in debug mode only GET it (dry run). True on success."""
+        base_api = self.det_kind_api.get(kind)
+        if base_api is None:
+            log(f"Cannot kill task {task_id}: unknown kind {kind!r}.")
+            return False
         try:
             if debug is True:
                 response = requests.get(
-                    url=urljoin(self.det_shell_api, shell_id),
+                    url=urljoin(base_api, task_id),
                     headers=det_header,
                     verify=False,
                     timeout=HTTP_TIMEOUT,
                 )
             else:
                 response = requests.post(
-                    url=urljoin(self.det_shell_api, f"{shell_id}/kill"),
+                    url=urljoin(base_api, f"{task_id}/kill"),
                     headers=det_header,
                     verify=False,
                     timeout=HTTP_TIMEOUT,
@@ -202,18 +239,22 @@ class APIHandler:
             response.raise_for_status()
         except requests.exceptions.RequestException as e:
             action = "retrieve (debug)" if debug is True else "kill"
-            log(f"Failed to {action} shell {shell_id}. Error: {e}")
+            log(f"Failed to {action} {kind} {task_id}. Error: {e}")
             return False
         if debug is True:
-            log(f"[debug] would kill shell {shell_id}: {response}")
+            log(f"[debug] would kill {kind} {task_id}: {response}")
         return True
 
-    def kill_containers(self, shells, debug, det_headers):
-        """Kill the given {shell_id: info} shells. Returns (killed, failed), both {shell_id: info}."""
+    def kill_containers(self, tasks, debug, det_headers):
+        """Kill the given {task_id: info} shells and notebooks (by info["kind"], default shell).
+
+        Returns (killed, failed), both {task_id: info}.
+        """
         killed, failed = {}, {}
-        for shell_id, info in shells.items():
-            if self.kill_container(shell_id, det_headers, debug):
-                killed[shell_id] = info
+        for task_id, info in tasks.items():
+            kind = info.get("kind", TASK_KIND_DEFAULT)
+            if self.kill_container(task_id, det_headers, debug, kind):
+                killed[task_id] = info
             else:
-                failed[shell_id] = info
+                failed[task_id] = info
         return killed, failed
