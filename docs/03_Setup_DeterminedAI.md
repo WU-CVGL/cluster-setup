@@ -21,7 +21,7 @@
     - [Add a resource pool](#add-a-resource-pool)
     - [Task resource monitoring](#task-resource-monitoring)
 
-The cluster runs our fork of Determined, [WU-CVGL/determined](https://github.com/WU-CVGL/determined) (version `0.41.0`): the `det` CLI, the master image `ghcr.io/wu-cvgl/determined-master` and the agent image `ghcr.io/wu-cvgl/determined-agent` all come from its releases. The upstream documentation linked below still describes the concepts and the configuration.
+The cluster runs our fork of Determined, [WU-CVGL/determined](https://github.com/WU-CVGL/determined) (version `0.42.0`): the `det` CLI, the master image `ghcr.io/wu-cvgl/determined-master` and the agent image `ghcr.io/wu-cvgl/determined-agent` all come from its releases. The upstream documentation linked below still describes the concepts and the configuration.
 
 ## Deploy a Determined AI Single-Node Cluster
 
@@ -135,10 +135,10 @@ On a node that is rarely idle (long-running tasks, interactive sessions on the l
 
 ### Installation
 
-Install the CLI of our fork, in the version of the master (`0.41.0`); see [Install Determined AI Systemwide](./01_First-time_Setup_of_Cluster_Nodes.md#install-determined-ai-systemwide) for the nodes:
+Install the CLI of our fork, in the version of the master (`0.42.0`); see [Install Determined AI Systemwide](./01_First-time_Setup_of_Cluster_Nodes.md#install-determined-ai-systemwide) for the nodes:
 
 ```bash
-pip install -U "https://github.com/WU-CVGL/determined/releases/download/0.41.0/determined-0.41.0-py3-none-any.whl"
+pip install -U "https://github.com/WU-CVGL/determined/releases/download/0.42.0/determined-0.42.0-py3-none-any.whl"
 ```
 
 Not `pip install determined`: that is the upstream package.
@@ -229,7 +229,7 @@ Rollback: when the previous master starts against the migrated database, stop th
 
 Add pools at runtime as dynamic pools of our fork ([guide](https://github.com/WU-CVGL/determined/blob/main/docs/maintenance/dynamic-pools.md)); every pool of the cluster is one. Never add a pool to `master.yaml` (the master would refuse to start when a pool there has the name of a dynamic pool). A dynamic pool cannot be renamed or deleted, so choose its name carefully; `det resource-pool update` changes its settings later (see [Dynamic resource pools](../services/determined/README.md#dynamic-resource-pools)).
 
-1. Write the pool as its own file in [`services/determined/resource-pools/`](../services/determined/resource-pools/) (the pool object itself, not a `resource_pools:` list). Use the settings of the other pools there (`agent_reconnect_wait: 10m`). A pool without its own `scheduler` or `task_container_defaults` uses those of `master.yaml`, also after later changes there (from the next master restart).
+1. Write the pool as its own file in [`services/determined/resource-pools/`](../services/determined/resource-pools/) (the pool object itself, not a `resource_pools:` list). Use the settings of the other pools there (`agent_reconnect_wait: 10m`). A pool without its own `scheduler` or `task_container_defaults` uses those of `master.yaml`, also after later changes there (from the next master restart). A new pool is public once it is `Ready`. For a pool restricted to some users, restrict and grant its name before creating it ([Pool access](../services/determined/README.md#pool-access)).
 2. As an administrator, create it with a fixed idempotency key (safe to repeat with the same file and key), and check that it becomes `Ready`:
 
     ```bash
