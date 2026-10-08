@@ -152,12 +152,12 @@ integrations:
   container, [`../native-task-resources-prometheus-proxy/`](../native-task-resources-prometheus-proxy/compose.yaml),
   publishes port 19090 on 10.0.1.68 only. It passes `GET /api/v1/query_range` and `GET /-/ready`
   from the master's host (10.0.1.66) to `prometheus:9090` at the root path, without
-  authentication or redirects. Other clients get 403, other methods 405 and other paths 404. The
-  master's GPU health (recent critical XIDs, fork 0.41.1) goes the same way, and so does its GPU
-  selection (fork 0.42.0), which puts GPUs in error last. The proxy is a compose project of its
-  own: run `docker compose up -d` in its directory after the all-in-one services, which create
-  `services_grafana_monitor`. Its image is pinned by digest and never pulled by compose: pull it
-  first on a new host.
+  authentication or redirects. Other methods get 405, GETs from other clients 403, and other
+  paths 404. The master's GPU health (recent critical XIDs, fork 0.41.1) goes the same way, and so
+  does its GPU selection (fork 0.42.0), which puts GPUs in error last. The proxy is a compose
+  project of its own: run `docker compose up -d` in its directory after the all-in-one services,
+  which create `services_grafana_monitor`. Its image is pinned by digest and never pulled by
+  compose: pull it first on a new host.
 - Keep `observability.enable_prometheus: true` (the default): it serves `/prom/det-state-metrics`
   for the `det-master` job.
 
