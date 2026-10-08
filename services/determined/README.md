@@ -62,7 +62,7 @@ The old version's deploy directory keeps its `master.yaml` and `master.env`. Del
 
 The master and the agents can be replaced while tasks run (hot upgrade) when the release allows it: see the fork's [hot upgrade guide](https://github.com/WU-CVGL/determined/blob/main/docs/maintenance/hot-upgrade.md) and the release notes. In short:
 
-1. Install the new CLI system-wide on the login node, where users run `det` ([docs/01](../../docs/01_First-time_Setup_of_Cluster_Nodes.md#install-determined-ai-systemwide)), and set `DET_VERSION` in the [users' guide](https://github.com/WU-CVGL/cluster-user-guide/blob/master/docs/Determined_AI_User_Guide.md) and its Chinese page. Pull the new images on core (`determined-master`) and on every GPU node (`determined-agent`); pulling does not touch running containers.
+1. Install the new CLI system-wide on the login node, where users run `det` ([docs/01](../../docs/01_First-time_Setup_of_Cluster_Nodes.md#install-determined-ai-systemwide)), and set the new version where the docs state the deployed one: `DET_VERSION` in the [users' guide](https://github.com/WU-CVGL/cluster-user-guide/blob/master/docs/Determined_AI_User_Guide.md) and its Chinese page, and in this repo `docs/01`, `docs/03` and the top of this page (`git grep -n '<old version>'`). Pull the new images on core (`determined-master`) and on every GPU node (`determined-agent`); pulling does not touch running containers.
 2. Back up the database ([Backups](#backups)).
 3. Create the new deploy directory with copies of the old `master.yaml` and `master.env`:
 
