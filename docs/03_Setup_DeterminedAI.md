@@ -229,7 +229,7 @@ Rollback: when the previous master starts against the migrated database, stop th
 
 Add pools at runtime as dynamic pools of our fork ([guide](https://github.com/WU-CVGL/determined/blob/main/docs/maintenance/dynamic-pools.md)); every pool of the cluster is one. Never add a pool to `master.yaml` (the master would refuse to start when a pool there has the name of a dynamic pool). A dynamic pool cannot be renamed or deleted, so choose its name carefully; `det resource-pool update` changes its settings later (see [Dynamic resource pools](../services/determined/README.md#dynamic-resource-pools)).
 
-1. Write the pool as its own file in [`services/determined/resource-pools/`](../services/determined/resource-pools/) (the pool object itself, not a `resource_pools:` list). Use the settings of the other pools there (`agent_reconnect_wait: 10m`). A pool without its own `scheduler` or `task_container_defaults` uses those of `master.yaml`, also after later changes there (from the next master restart).
+1. Write the pool as its own file in [`services/determined/resource-pools/`](../services/determined/resource-pools/) (the pool object itself, not a `resource_pools:` list). Use the settings of the other pools there (`agent_reconnect_wait: 10m`). A pool without its own `scheduler` or `task_container_defaults` uses those of `master.yaml`, also after later changes there (from the next master restart). A new pool is public once it is `Ready`. For a pool restricted to some users, restrict and grant its name before creating it ([Pool access](../services/determined/README.md#pool-access)).
 2. As an administrator, create it with a fixed idempotency key (safe to repeat with the same file and key), and check that it becomes `Ready`:
 
     ```bash
@@ -238,8 +238,6 @@ Add pools at runtime as dynamic pools of our fork ([guide](https://github.com/WU
     ```
 
     `--cluster-name` is not needed: the cluster has a single agent resource manager. If it ends `Failed`, fix the cause and run `det resource-pool retry <pool>` (it reuses the saved configuration, not the file).
-
-    A new pool is public once it is `Ready`. For a pool restricted to some users, restrict and grant its name before creating it ([Pool access](../services/determined/README.md#pool-access)).
 3. Start the agents of the pool with `DET_RESOURCE_POOL=<pool>` (see [Agents](../services/determined/README.md#agents)). Creating a pool does not move agents; move a busy agent only after disabling it with `--drain` and waiting for its tasks.
 4. Check it with a small task: `det command run --config resources.resource_pool=<pool> --config resources.slots=1 nvidia-smi`.
 

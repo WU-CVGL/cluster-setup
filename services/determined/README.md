@@ -48,13 +48,13 @@ docker exec determined_determined-db_1 pg_dumpall -U postgres --globals-only > $
 docker exec -i determined_determined-db_1 pg_restore -l < $B/determined-<old version>-<yyyymmdd>.dump | head
 ```
 
-Save the [pool access](#pool-access) next to each dump, with `det` logged in as an administrator:
+Save the [pool access](#pool-access) next to each dump. Run this where `det` is logged in as an administrator, then put the file into `~/determined-deploy/backups/` on core:
 
 ```bash
-det resource-pool access list --json > $B/pool-access-<old version>-<yyyymmdd>.json
+det resource-pool access list --json > pool-access-<old version>-<yyyymmdd>.json
 ```
 
-Restoring a dump loses the access changes made after it, and a dump from before 0.42.0 has no access, so every pool is public. Restrict and grant again from the saved file. A master before 0.42.0 ignores the access: every pool is public while it runs, and the restrictions apply again unchanged when 0.42.0 runs.
+Restoring a dump loses the access changes made after it, and a dump from before 0.42.0 has no access, so every pool is public. Restrict and grant again from the saved file. A master before 0.42.0 ignores the access: every pool is public while it runs, and the restrictions apply again unchanged under a master of 0.42.0 or later.
 
 The old version's deploy directory keeps its `master.yaml` and `master.env`. Delete the dumps once the upgrade is verified.
 
@@ -188,7 +188,7 @@ docker run -d --name det-agent-<hostname> --hostname <hostname> --network host -
     ghcr.io/wu-cvgl/determined-agent:<version> run
 ```
 
-`det slot disable <agent> <slot>` only keeps the scheduler off a slot until the next `det agent enable`/`disable`, reconnect, agent restart or master restart, which all reset it. Use it only as a stopgap. With [NUMA packing](../../docs/06_GPU_Topology.md#choosing-gpus-for-a-job) the choice of GPUs is predictable, and a faulty GPU that shows no NVML error or critical XID is chosen like a healthy one: on an idle node, GPU 0 (nodes 02-08) or slot 5 (node01) is the first pick. Once its slot is enabled again, such a GPU takes every task whose set includes it, restarts included. Anything outside Determined (other containers, monitoring, `nvtop`) still reaches an excluded or hidden GPU; if the GPU's fault affects the host, also leave it out of such tools.
+`det slot disable <agent> <slot>` only keeps the scheduler off a slot until the next `det agent enable`/`disable`, reconnect, agent restart or master restart, which all reset it. Use it only as a stopgap. With [NUMA packing](../../docs/06_GPU_Topology.md#choosing-gpus-for-a-job) the choice of GPUs is predictable, and a faulty GPU that shows no NVML error or critical XID is chosen like a healthy one, so a faulty GPU 0 (nodes 02-08) or slot 5 (node01) gets the first 1-GPU task on an idle node. Once its slot is enabled again, such a GPU takes every task whose set includes it, restarts included. Anything outside Determined (other containers, monitoring, `nvtop`) still reaches an excluded or hidden GPU; if the GPU's fault affects the host, also leave it out of such tools.
 
 ## Dynamic resource pools
 
@@ -227,6 +227,6 @@ det resource-pool access set <pool> --mode public      # keeps the grants
 - A new pool is public once it is `Ready`. To restrict it, restrict and grant its name before `det resource-pool create`: a name can be restricted before the pool exists. The spec of [`64c128t_1024_170hx_64`](resource-pools/64c128t_1024_170hx_64.yaml) lists the commands.
 - A user without access does not see the pool in pool lists (WebUI, CLI) and gets `403` (`PermissionDenied`) on submit, also when the pool is the default of the workspace or the cluster: `user "<user>" may not use resource pool "<pool>": the pool is restricted; ...`.
 - Access is checked when work enters a pool (submit, activate, continue, a move in the job queue), not while it runs: restricting a pool or revoking a grant stops nothing that runs.
-- A master before 0.42.0 ignores the access: rolling the master back makes every pool public until 0.42.0 runs again. Save the access with each database dump ([Backups](#backups)).
+- A master before 0.42.0 ignores the access: rolling the master back makes every pool public until a master of 0.42.0 or later runs again. Save the access with each database dump ([Backups](#backups)).
 
 Details: the fork's [resource pool access guide](https://github.com/WU-CVGL/determined/blob/main/docs/maintenance/resource-pool-access.md).

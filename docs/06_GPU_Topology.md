@@ -34,7 +34,7 @@ nvidia-smi topo -p2p r    # whether each pair can do peer-to-peer reads
 
 A close class does not mean peer-to-peer works: check `nvidia-smi topo -p2p r` (`OK`; `GNS` means the GPU or driver does not support it). Determined's slot IDs are the `nvidia-smi` indices the agent sees: the host's indices when the agent container gets all GPUs (also with `exclude_gpus`), not when it gets only some. Inside a task container the GPUs are numbered from 0. Match GPUs by UUID or PCI bus ID.
 
-Determined (our fork, 0.41.0 and later) shows the topology as the agent measured it at its start: the GPU Topology and GPU Health columns of `det agent list`, `det agent describe <agent>`, and the Topology section of a resource pool's page in the WebUI, which groups each agent's GPUs by NUMA node and PCIe switch. Hover over a GPU for its details (`PCIe link`, `NVML errors`, `Collected at`, and `Recent critical XIDs` when it has any); a click keeps them open. A GPU turns red (`error`) when it has a critical XID in the last 24 hours, which the master reads from the Prometheus set in `integrations.task_resources`. Reference: "GPU topology and health" and "Recent critical XIDs" in the fork's [agent configuration reference](https://github.com/WU-CVGL/determined/blob/main/docs/reference/deploy/agent-config-reference.rst).
+Determined (our fork, 0.41.0 and later) shows the topology as the agent measured it at its start: the GPU Topology and GPU Health columns of `det agent list`, `det agent describe <agent>`, and the Topology section of a resource pool's page in the WebUI, which groups each agent's GPUs by NUMA node and PCIe switch. Hover over a GPU for its details (`PCIe link`, `NVML errors`, `Collected at`, and `Recent critical XIDs` when it has any); a click keeps them open. A GPU turns red (`error` in the CLI) when it has a critical XID in the last 24 hours, which the master reads from the Prometheus set in `integrations.task_resources`. Reference: "GPU topology and health" and "Recent critical XIDs" in the fork's [agent configuration reference](https://github.com/WU-CVGL/determined/blob/main/docs/reference/deploy/agent-config-reference.rst).
 
 ## GPU nodes 01-08
 
@@ -88,6 +88,6 @@ A job whose GPUs communicate (DDP) can also set `resources.prefer_gpu_topology`:
 
 Packing, `soft` and `strong` work by NUMA node, which is one socket only with NPS1. Every node runs NPS1; after an NPS change in the BIOS, review this page.
 
-A resource pool's **Active** tab in the WebUI lists the GPUs each job holds, by slot ID; a click on them outlines the job's GPUs in the topology panel.
+A resource pool's **Active** tab in the WebUI lists the GPUs each job holds, by slot ID; a click on them outlines the job's GPUs in the Topology section.
 
 References: `prefer_gpu_topology` in the fork's [experiment configuration reference](https://github.com/WU-CVGL/determined/blob/main/docs/reference/experiment-config-reference.rst) and `numa_packing` in its [master configuration reference](https://github.com/WU-CVGL/determined/blob/main/docs/reference/deploy/master-config-reference.rst).
