@@ -21,7 +21,7 @@
     - [Add a resource pool](#add-a-resource-pool)
     - [Task resource monitoring](#task-resource-monitoring)
 
-The cluster runs our fork of Determined, [WU-CVGL/determined](https://github.com/WU-CVGL/determined) (version `0.41.0`): the `det` CLI, the master image `ghcr.io/wu-cvgl/determined-master` and the agent image `ghcr.io/wu-cvgl/determined-agent` all come from its releases. The upstream documentation linked below still describes the concepts and the configuration.
+The cluster runs our fork of Determined, [WU-CVGL/determined](https://github.com/WU-CVGL/determined) (version `0.42.0`): the `det` CLI, the master image `ghcr.io/wu-cvgl/determined-master` and the agent image `ghcr.io/wu-cvgl/determined-agent` all come from its releases. The upstream documentation linked below still describes the concepts and the configuration.
 
 ## Deploy a Determined AI Single-Node Cluster
 
@@ -135,10 +135,10 @@ On a node that is rarely idle (long-running tasks, interactive sessions on the l
 
 ### Installation
 
-Install the CLI of our fork, in the version of the master (`0.41.0`); see [Install Determined AI Systemwide](./01_First-time_Setup_of_Cluster_Nodes.md#install-determined-ai-systemwide) for the nodes:
+Install the CLI of our fork, in the version of the master (`0.42.0`); see [Install Determined AI Systemwide](./01_First-time_Setup_of_Cluster_Nodes.md#install-determined-ai-systemwide) for the nodes:
 
 ```bash
-pip install -U "https://github.com/WU-CVGL/determined/releases/download/0.41.0/determined-0.41.0-py3-none-any.whl"
+pip install -U "https://github.com/WU-CVGL/determined/releases/download/0.42.0/determined-0.42.0-py3-none-any.whl"
 ```
 
 Not `pip install determined`: that is the upstream package.
@@ -238,6 +238,8 @@ Add pools at runtime as dynamic pools of our fork ([guide](https://github.com/WU
     ```
 
     `--cluster-name` is not needed: the cluster has a single agent resource manager. If it ends `Failed`, fix the cause and run `det resource-pool retry <pool>` (it reuses the saved configuration, not the file).
+
+    A new pool is public once it is `Ready`. For a pool restricted to some users, restrict and grant its name before creating it ([Pool access](../services/determined/README.md#pool-access)).
 3. Start the agents of the pool with `DET_RESOURCE_POOL=<pool>` (see [Agents](../services/determined/README.md#agents)). Creating a pool does not move agents; move a busy agent only after disabling it with `--drain` and waiting for its tasks.
 4. Check it with a small task: `det command run --config resources.resource_pool=<pool> --config resources.slots=1 nvidia-smi`.
 

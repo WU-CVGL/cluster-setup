@@ -528,13 +528,13 @@ Docker pulls images from Docker Hub, which is blocked from the campus network, t
 
 ## Install Determined AI Systemwide
 
-The cluster runs our fork, [WU-CVGL/determined](https://github.com/WU-CVGL/determined), version `0.41.0`. Install the `det` CLI from the fork's release wheel, with the same version as the master (the WebUI shows it, or `det master info`):
+The cluster runs our fork, [WU-CVGL/determined](https://github.com/WU-CVGL/determined), version `0.42.0`. Install the `det` CLI from the fork's release wheel, with the same version as the master (the WebUI shows it, or `det master info`):
 
 ```sh
-DET_VERSION=0.41.0
+DET_VERSION=0.42.0
 sudo pip install -U pip
 sudo pip install -U "https://github.com/WU-CVGL/determined/releases/download/$DET_VERSION/determined-$DET_VERSION-py3-none-any.whl"
-det --version     # must show 0.41.0
+det --version     # must show 0.42.0
 ```
 
 Do not `pip install determined` from PyPI: that is the upstream package, and its `det deploy local` starts the upstream images. If the node cannot reach GitHub directly, add `--proxy http://192.168.233.8:59889` (the cluster proxy, see [chapter 00](00_Network_Proxy.md#pip-and-git)) to the `pip install` of the wheel. Details: the fork's [installation and deployment guide](https://github.com/WU-CVGL/determined/blob/main/docs/maintenance/distribution.md).
