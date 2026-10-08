@@ -131,6 +131,7 @@ Start the new container with the same settings (`docker run` above, with the old
 | `128c256t_1536_4090` | 2x AMD Epyc 9554, 1536 GB RAM, RTX 4090 | node06 |
 | `128c256t_1536_4090_48` | 2x AMD Epyc 9554, 1536 GB RAM, RTX 4090 48G | node07 |
 | `128c256t_1536_6000Ada` | 2x AMD Epyc 9554, 1536 GB RAM, RTX 6000 Ada | node08 |
+| `64c128t_1024_170hx_64` | AMD Epyc 7J13, 1024 GB RAM, CMP 170HX | none; restricted to administrators and lzzhao |
 | `temp` | none | none (for temporary use) |
 
 All of them are dynamic pools ([Dynamic resource pools](#dynamic-resource-pools)). The master also has the built-in `default` pool, which is static and empty: an agent without `DET_RESOURCE_POOL` joins it. Tasks that name no pool run in the default pools set in `master.yaml`: `48c96t_512_3090` with GPUs, `128c256t_1536_4090` without.
@@ -200,4 +201,5 @@ The spec of each pool is kept in [`resource-pools/`](resource-pools/); the datab
 - [`128c256t_1536_4090`](resource-pools/128c256t_1536_4090.yaml)
 - [`128c256t_1536_4090_48`](resource-pools/128c256t_1536_4090_48.yaml)
 - [`128c256t_1536_6000Ada`](resource-pools/128c256t_1536_6000Ada.yaml)
+- [`64c128t_1024_170hx_64`](resource-pools/64c128t_1024_170hx_64.yaml)
 - [`temp`](resource-pools/temp.yaml)

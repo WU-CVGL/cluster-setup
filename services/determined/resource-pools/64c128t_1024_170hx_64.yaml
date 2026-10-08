@@ -1,0 +1,12 @@
+# Dynamic resource pool. Restricted to administrators and lzzhao before it was created, with
+#   det resource-pool access set --mode restricted 64c128t_1024_170hx_64
+#   det resource-pool access grant 64c128t_1024_170hx_64 lzzhao
+# and created with
+#   det resource-pool create 64c128t_1024_170hx_64.yaml --idempotency-key create-64c128t_1024_170hx_64-20261008
+# The master's database holds the live spec (det resource-pool list-dynamic --json) and the
+# access (det resource-pool access list). Change the spec with
+#   det resource-pool update 64c128t_1024_170hx_64 64c128t_1024_170hx_64.yaml
+# (replaces the whole spec; effective at the next master restart). Never add it to master.yaml.
+pool_name: 64c128t_1024_170hx_64
+description: "AMD EPYC 7J13 64c128t CPU; 1024GB RAM; 8x NVIDIA CMP 170HX GPU."
+agent_reconnect_wait: 10m
