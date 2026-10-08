@@ -76,7 +76,7 @@ g292 is a single-socket node with a different layout:
 - **g292:** with peer-to-peer, ACS redirect off and `NCCL_P2P_LEVEL=SYS`, the choice of GPUs does not change the all-reduce bandwidth. Without peer-to-peer, sharing a switch is a disadvantage: the two GPUs of a pair share one uplink, so a pair on one switch is the slowest set, and four GPUs do better with one GPU per switch than with two switch pairs ([results](05_GPU_P2P_GeForce_and_CMP.md#results-summary)).
 - Jobs whose GPUs work independently (no collectives) do not benefit from any of this.
 
-Every pool takes `fitting_policy: best` from `master.yaml` (no pool spec sets a `scheduler`), so Determined packs each task's GPUs by NUMA node (`numa_packing`, on by default under `best`). A task gets GPUs that are not in error first, on one NUMA node when it fits there, from the NUMA node with the fewest free GPUs that can hold it, lowest IDs first. On an idle node:
+The pool specs in [`services/determined/resource-pools/`](../services/determined/resource-pools/) set no `scheduler`, so every pool takes `fitting_policy: best` from `master.yaml` and Determined packs each task's GPUs by NUMA node (`numa_packing`, on by default under `best`). A task gets GPUs that are not in error first, on one NUMA node when it fits there, from the NUMA node with the fewest free GPUs that can hold it, lowest IDs first. On an idle node:
 
 - Nodes 02-08: a task of 1, 2 or 4 GPUs gets GPU 0, GPUs 0-1 or GPUs 0-3, and 1-GPU tasks fill the node in the order 0 to 7.
 - Node 01 (slots 0-3 and 5-7): a task of 1, 2 or 3 GPUs gets slot 5, 5-6 or 5-7, and a 4-GPU task gets slots 0-3.
