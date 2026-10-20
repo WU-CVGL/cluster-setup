@@ -21,7 +21,7 @@
     - [Add a resource pool](#add-a-resource-pool)
     - [Task resource monitoring](#task-resource-monitoring)
 
-The cluster runs our fork of Determined, [WU-CVGL/determined](https://github.com/WU-CVGL/determined) (version `0.42.0`): the `det` CLI, the master image `ghcr.io/wu-cvgl/determined-master` and the agent image `ghcr.io/wu-cvgl/determined-agent` all come from its releases. The upstream documentation linked below still describes the concepts and the configuration.
+The cluster runs our fork of Determined, [WU-CVGL/determined](https://github.com/WU-CVGL/determined) (version `0.42.1`): the `det` CLI, the master image `ghcr.io/wu-cvgl/determined-master` and the agent image `ghcr.io/wu-cvgl/determined-agent` all come from its releases. The upstream documentation linked below still describes the concepts and the configuration.
 
 ## Deploy a Determined AI Single-Node Cluster
 
@@ -135,10 +135,10 @@ On a node that is rarely idle (long-running tasks, interactive sessions on the l
 
 ### Installation
 
-Install the CLI of our fork, in the version of the master (`0.42.0`); see [Install Determined AI Systemwide](./01_First-time_Setup_of_Cluster_Nodes.md#install-determined-ai-systemwide) for the nodes:
+Install the CLI of our fork, in the version of the master (`0.42.1`); see [Install Determined AI Systemwide](./01_First-time_Setup_of_Cluster_Nodes.md#install-determined-ai-systemwide) for the nodes:
 
 ```bash
-pip install -U "https://github.com/WU-CVGL/determined/releases/download/0.42.0/determined-0.42.0-py3-none-any.whl"
+pip install -U "https://github.com/WU-CVGL/determined/releases/download/0.42.1/determined-0.42.1-py3-none-any.whl"
 ```
 
 Not `pip install determined`: that is the upstream package.

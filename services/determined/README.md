@@ -1,6 +1,6 @@
 # Determined Configuration Files
 
-The cluster runs our fork, [WU-CVGL/determined](https://github.com/WU-CVGL/determined), version `0.42.0`, with its images `ghcr.io/wu-cvgl/determined-master` and `ghcr.io/wu-cvgl/determined-agent`. Install the fork's `det` CLI first (see [docs/01](../../docs/01_First-time_Setup_of_Cluster_Nodes.md#install-determined-ai-systemwide)). Keep the CLI, the master and all agents on the same version. The fork has no version gate, so mixed versions work during a rolling agent upgrade; the fork's [hot upgrade guide](https://github.com/WU-CVGL/determined/blob/main/docs/maintenance/hot-upgrade.md) says which mixes were tested.
+The cluster runs our fork, [WU-CVGL/determined](https://github.com/WU-CVGL/determined), version `0.42.1`, with its images `ghcr.io/wu-cvgl/determined-master` and `ghcr.io/wu-cvgl/determined-agent`. Install the fork's `det` CLI first (see [docs/01](../../docs/01_First-time_Setup_of_Cluster_Nodes.md#install-determined-ai-systemwide)). Keep the CLI, the master and all agents on the same version. The fork has no version gate, so mixed versions work during a rolling agent upgrade; the fork's [hot upgrade guide](https://github.com/WU-CVGL/determined/blob/main/docs/maintenance/hot-upgrade.md) says which mixes were tested.
 
 - [Configuration file](../system-configurations/etc/determined/master.yaml): a copy of the master's `master.yaml`, without secrets.
 
@@ -225,7 +225,7 @@ det resource-pool access set <pool> --mode public      # keeps the grants
 ```
 
 - A new pool is public once it is `Ready`. To restrict it, restrict and grant its name before `det resource-pool create`: a name can be restricted before the pool exists. The spec of [`64c128t_1024_170hx_64`](resource-pools/64c128t_1024_170hx_64.yaml) lists the commands.
-- A user without access does not see the pool in pool lists (WebUI, CLI) and gets `403` (`PermissionDenied`) on submit, also when the pool is the default of the workspace or the cluster: `user "<user>" may not use resource pool "<pool>": the pool is restricted; ...`.
+- A user without access sees the pool in pool lists with `usable` false, striped and tagged **Restricted** in the WebUI and not selectable in its pool pickers (`resource_pool_access.hide_unusable_pools: true` in `master.yaml` hides it instead), and gets `403` (`PermissionDenied`) on submit, also when the pool is the default of the workspace or the cluster: `user "<user>" may not use resource pool "<pool>": the pool is restricted; ...`.
 - Access is checked when work enters a pool (submit, activate, continue, a move in the job queue), not while it runs: restricting a pool or revoking a grant stops nothing that runs.
 - A master before 0.42.0 ignores the access: rolling the master back makes every pool public until a master of 0.42.0 or later runs again. Save the access with each database dump ([Backups](#backups)).
 
