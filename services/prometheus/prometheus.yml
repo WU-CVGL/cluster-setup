@@ -108,12 +108,10 @@ scrape_configs:
     metrics_path: /scrape
     static_configs:
       - targets:
-          - "xray-jp-osaka-bwh-exporter:9550"
           - "xray-us-west-racknerd-12tb-exporter:9550"
           - "xray-usca1-bwh-megaboxpro-2tb-exporter:9550"
           - "xray-usca5-bwh-sla-1tb-exporter:9550"
           - "xray-usca6-bwh-1tb-exporter:9550"
-          - "xray-temp-bwh-2tb-exporter:9550"
           - "xray-jpty1-bwh-2tb-exporter:9550"
           - "xray-miyaip-jp-01_relay_jpty1-bwh-2tb-exporter:9550"
           - "xray-miyaip-jp-01_relay_usca5-bwh-sla-2tb-exporter:9550"
