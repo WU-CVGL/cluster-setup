@@ -14,9 +14,9 @@
 
 On 2026-10-25, S3 and S4 each ran eight RTX 3090 24 GB GPUs with [Zagitta/gpu-unlock](https://github.com/Zagitta/gpu-unlock/tree/af28cbbfd3d922a659227ecfb7369adfd924cf03), version `1.0.0`, commit `af28cbbfd3d922a659227ecfb7369adfd924cf03`.
 
-The tested environment was Ubuntu 22.04.5, kernel `6.8.0-138-generic`, NVIDIA `615.71.09`, and our [P2P modules](https://github.com/LingzheZhao/open-gpu-kernel-modules/tree/7812dde8eed7b13fbf924bdde4f9cbda33847f87). Every GPU retained its 350 W power limit; clock settings and PCIe/IOMMU configuration were unchanged.
+The tested environment was Ubuntu 22.04.5, kernel `6.8.0-138-generic`, and NVIDIA `615.71.09`. Every GPU retained its 350 W power limit; clock settings and PCIe/IOMMU configuration were unchanged.
 
-`gpu_unlock` runs before NVIDIA binds the GPUs, sets the tensor speed selectors, and resets the devices before NVIDIA initialization. The existing P2P modules continue to provide BAR1/UVM peer transfers. Both features were verified together on these two hosts.
+`gpu_unlock` runs before NVIDIA binds the GPUs, sets the tensor speed selectors, and resets the devices before NVIDIA initialization.
 
 ## Results
 
@@ -31,16 +31,7 @@ GEMM numbers below are the median of the eight individual GPUs, in TFLOP/s. GPUs
 | S4 | BF16 input, FP32 accumulation | 73.13 | 119.01 | +62.74% |
 | S4 | TF32 | 38.80 | 64.18 | +65.43% |
 
-Each node also passed all 56 directed P2P transfers, including SHA-256 validation of every 256 MiB destination buffer.
-
-| Node | P2P median before (GB/s) | P2P median after (GB/s) |
-| --- | ---: | ---: |
-| S3 | 22.7078 | 22.7068 |
-| S4 | 22.7095 | 22.7187 |
-
-The P2P bandwidth remained effectively unchanged. The [existing RTX 3090 P2P measurements](./05_GPU_P2P_GeForce_and_CMP.md#appendix-a-measurements) on the same EPYC 7402 platform record about 26.4 GB/s per pair and 21.5–22.7 GB/s across sockets, consistent with this run. NVIDIA's unmodified CUDA 12.4 `p2pBandwidthLatencyTest` independently measured 20.78–26.00 GB/s unidirectional and 39.28–50.67 GB/s bidirectional on S4 before the tensor unlock.
-
-These checks cover GEMM and explicit P2P data transfers on the configuration above. They do not establish production NCCL/training performance or dynamic 48 GB/mixed-generation compatibility.
+These figures measure GEMM throughput on the configuration above; production model performance depends on the workload.
 
 ## Initramfs ordering on Ubuntu 22.04
 
@@ -117,7 +108,7 @@ modinfo -F firmware gpu_unlock
 sudo lsinitramfs "/boot/initrd.img-$unlock_kernel" | grep -E 'gpu_unlock\.ko|gpu-unlock/|nvidia.*\.ko'
 ```
 
-Confirm `gpu-unlock-early` precedes `udev`, which precedes `framebuffer`; all five firmware files reported by `modinfo` must be present. Confirm the existing P2P NVIDIA modules remain unchanged in the generated image. Repeat this image verification whenever rebuilding the initramfs for this integration.
+Confirm `gpu-unlock-early` precedes `udev`, which precedes `framebuffer`; all five firmware files reported by `modinfo` must be present. Confirm the existing NVIDIA modules remain unchanged in the generated image. Repeat this image verification whenever rebuilding the initramfs for this integration.
 
 Use an OS reboot:
 
@@ -138,43 +129,23 @@ systemctl --failed
 
 Match the journal entries to all eight GPU PCI addresses. Each must have `gpu_unlock: unlocked` and a post-FLR readback of `SS0=88888888`, `SS1=00000008`. All eight completions must precede the early script's completion message and the first NVIDIA initialization. A loaded module by itself does not prove that any GPU unlocked.
 
-Verify the unchanged 350 W limits, P2P module paths, and all directed P2P copies before accepting the deployment. On S3 and S4, the boot-order checks, register readbacks, GEMM correctness, and P2P data validation all passed without new Xid/assert errors or failed systemd services.
+Verify the unchanged 350 W limits and run the same GEMM checks used for the baseline. On S3 and S4, the boot-order checks, register readbacks, and GEMM correctness all passed without new Xid/assert errors or failed systemd services.
 
 ## Benchmark procedure
 
-Use the [benchmark script](./examples/gpu_unlock/benchmark.py) and the same container image, GPU set, power limits, and clock policy in both phases. Copy the script once before installation and reuse that exact copy after reboot:
+Use the same container image, GPU set, power limits, and clock policy before and after the unlock. Record the baseline before enabling the kernel opt-in, then use separate output files after installation and boot verification.
 
-```bash
-unlock_results="$HOME/p2p-logs/gpu-unlock-comparison"
-mkdir -p "$unlock_results"
-cp docs/examples/gpu_unlock/benchmark.py "$unlock_results/benchmark.py"
-sha256sum "$unlock_results/benchmark.py" > "$unlock_results/benchmark.sha256"
-```
+The recorded run used `determinedai/pytorch-ngc@sha256:67ab2dc2f6fcfba90d2085e82ea2f3a8a5ef3205cbf3203f6d1f5490d000f525`, containing PyTorch `2.3.0a0+40ec155e58.nv24.03` and CUDA `12.4`. `NVIDIA_TF32_OVERRIDE` was unset.
 
-Set `unlock_phase=before` for the clean baseline. After installation and boot verification, use the same results directory and set `unlock_phase=after` to create separate result files:
+The GEMM protocol was:
 
-```bash
-unlock_results="$HOME/p2p-logs/gpu-unlock-comparison"
-unlock_phase=before
-unlock_image='determinedai/pytorch-ngc@sha256:67ab2dc2f6fcfba90d2085e82ea2f3a8a5ef3205cbf3203f6d1f5490d000f525'
-sha256sum -c "$unlock_results/benchmark.sha256"
-sudo docker run --rm --gpus all --network none --ipc=host --entrypoint python \
-  -v "$unlock_results:/results" "$unlock_image" \
-  /results/benchmark.py --mode gemm --phase "$unlock_phase" \
-  --node-label "$(hostname -s)" --output "/results/gemm-$unlock_phase.json"
-sudo python3 "$unlock_results/benchmark.py" --mode p2p --phase "$unlock_phase" \
-  --node-label "$(hostname -s)" --output "$unlock_results/p2p-$unlock_phase.json"
-```
+- Test each GPU serially with 8192 × 8192 inputs, using seed `20261025 + GPU index`.
+- Measure FP16 and BF16 inputs with FP32 accumulation settings: `allow_fp16_reduced_precision_reduction=False` and `allow_bf16_reduced_precision_reduction=False`. Explicitly enable `allow_tf32=True` for the FP32-input TF32 measurement.
+- Warm up with 10 matrix multiplications, then time five groups of 20 iterations using CUDA events. Take the median group mean and calculate TFLOP/s as `2 * 8192**3 / seconds / 1e12`.
+- After timing, check all outputs are finite and compare an 8 × 8 output tile against a CPU FP64 reference over the full reduction dimension. The relative L2 error limits were 0.02 for BF16 and 0.01 for FP16 and TF32.
+- Save per-GPU timings, correctness results, power limits, temperatures, SM/memory clocks, and PyTorch/CUDA versions. The table above reports the median across the eight GPUs.
 
-The tested image contains PyTorch `2.3.0a0+40ec155e58.nv24.03` and CUDA `12.4`. `NVIDIA_TF32_OVERRIDE` was unset. The script rejects a forced value of `0`.
-
-The fixed protocol is 8192³ GEMM, 10 warmups, and five groups of 20 iterations timed with CUDA events. FP16/BF16 reductions use FP32 accumulation settings; TF32 is explicitly enabled. Finite-output and CPU FP64 reference checks run outside the timed sections. The JSON records individual GPUs, settings, clocks, temperatures, power limits, and script hashes.
-
-P2P uses 256 MiB per copy, five warmups, and 20 timed synchronous copies per directed pair. **Enable every directed peer relationship before timing any pair.** The initial one-direction-at-a-time implementation produced a false 4.6 GB/s half-matrix; those speed results were superseded. The included script establishes both directions in advance and validates the full destination buffer outside the timed section.
-
-The `before` phase rejects an active unlock or opt-in parameter. The `after` phase requires the module to be loaded; the separate boot-log verification above establishes that every card actually unlocked. Preserve the original before JSON files when collecting after results.
-
-Raw deployment records remain on S3 under `/home/cvgladmin/p2p-logs/maintenance-20261025/node13/` and on S4 under `/home/cvgladmin/p2p-logs/maintenance-20261025/S4/`.
+Confirm the baseline has no active unlock or kernel opt-in. For the after measurements, verify every GPU's boot-log entries as described above. Preserve the original baseline output.
 
 ## Rollback
 
