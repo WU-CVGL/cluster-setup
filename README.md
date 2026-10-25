@@ -18,6 +18,8 @@ This is a manual for system admin.
 
 [6. GPU Topology](docs/06_GPU_Topology.md)
 
+[7. GPU Tensor Unlock](docs/07_GPU_Unlock.md)
+
 [Notes on Supplementary Services](services/README.md)
 
 ## Cluster Information

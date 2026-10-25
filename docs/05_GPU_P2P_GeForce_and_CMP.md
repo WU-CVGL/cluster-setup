@@ -50,6 +50,8 @@ The CMP 170HX, a mining card with the A100's GA100 chip, has no P2P either. **cm
 
 This guide covers P2P over PCIe BAR1 on the four card types of this cluster listed below; other GeForce and CMP models were not tested. "24 GB cards" means the RTX 3090 and the RTX 4090 24 GB, "48 GB cards" the modded RTX 4090 48 GB.
 
+The separate RTX 3090 tensor-speed unlock and its measured coexistence with P2P on S3 and S4 are documented in [GPU Tensor Unlock](./07_GPU_Unlock.md).
+
 We deploy one branch of our fork on every node with GeForce cards: [`610.57.04-p2p-48g`](https://github.com/LingzheZhao/open-gpu-kernel-modules/tree/610.57.04-p2p-48g). It works for all three GeForce card types; the Method 3 code stays dormant where VRAM fits into BAR1. The CMP 170HX node runs the branch [`g292/p2p-bar1-v0.5`](https://github.com/LingzheZhao/cmpunlocker/tree/g292/p2p-bar1-v0.5) of our cmpunlocker fork: upstream cmpunlocker v0.5 with BAR1 P2P.
 
 The sections from [How it works](#how-it-works) to [Rollback](#rollback) cover the GeForce cards. The CMP 170HX needs its own kernel, installer and PCIe settings; its sections start at [CMP 170HX](#cmp-170hx).

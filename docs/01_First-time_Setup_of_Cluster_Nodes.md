@@ -44,6 +44,7 @@
     - [Disable IPv6](#disable-ipv6)
     - [Configure RDMA](#configure-rdma)
   - [Do stress test](#do-stress-test)
+  - [GPU tensor unlock](#gpu-tensor-unlock)
   - [Maintainance: Upgrade APT packages \& `Determined AI`](#maintainance-upgrade-apt-packages--determined-ai)
 - [Common References](#common-references)
   - [Cluster Management System](#cluster-management-system)
@@ -618,6 +619,10 @@ Then reboot.
 ## Do stress test
 
 > https://lambdalabs.com/blog/perform-gpu-and-cpu-stress-testing-on-linux
+
+## GPU tensor unlock
+
+For the RTX 3090 tensor unlock deployed on S3 and S4, see [GPU Tensor Unlock](./07_GPU_Unlock.md). It covers the initramfs loading order, installation, verification, rollback, and measured coexistence with P2P.
 
 ## Maintainance: Upgrade APT packages & `Determined AI`
 
