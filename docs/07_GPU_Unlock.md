@@ -13,35 +13,35 @@
 
 ## Validated deployment
 
-On 2026-10-25, S3 and S4 each ran eight RTX 3090 24 GB GPUs with [Zagitta/gpu-unlock](https://github.com/Zagitta/gpu-unlock/tree/af28cbbfd3d922a659227ecfb7369adfd924cf03), version `1.0.0`, commit `af28cbbfd3d922a659227ecfb7369adfd924cf03`.
+On 2026-10-25, cvgl-node03 and cvgl-node04 each ran eight RTX 3090 24 GB GPUs with [Zagitta/gpu-unlock](https://github.com/Zagitta/gpu-unlock/tree/af28cbbfd3d922a659227ecfb7369adfd924cf03), version `1.0.0`, commit `af28cbbfd3d922a659227ecfb7369adfd924cf03`.
 
-S1 joined this deployment on 2026-10-27 with seven healthy RTX 3090 GPUs. Its kernel opt-in uses an explicit PCI-address allowlist, excluding physical GPU 4 at `0000:81:00.0`.
+cvgl-node01 joined this deployment on 2026-10-27 with seven healthy RTX 3090 GPUs. Its kernel opt-in uses an explicit PCI-address allowlist, excluding physical GPU 4 at `0000:81:00.0`.
 
-For S1, S3 and S4, the tested environment was Ubuntu 22.04.5, kernel `6.8.0-138-generic`, and NVIDIA `615.71.09`. Every GPU retained its 350 W power limit; clock settings and PCIe/IOMMU configuration were unchanged.
+For cvgl-node01, cvgl-node03 and cvgl-node04, the tested environment was Ubuntu 22.04.5, kernel `6.8.0-138-generic`, and NVIDIA `615.71.09`. Every GPU retained its 350 W power limit; clock settings and PCIe/IOMMU configuration were unchanged.
 
 `gpu_unlock` runs before NVIDIA binds the GPUs, sets the tensor speed selectors, and resets the devices before NVIDIA initialization.
 
 ## Results
 
-GEMM numbers below are medians across the tested GPUs: seven on S1 and eight each on S3 and S4, in TFLOP/s. GPUs were measured serially; these are not simultaneous whole-node throughput figures.
+GEMM numbers below are medians across the tested GPUs: seven on cvgl-node01 and eight each on cvgl-node03 and cvgl-node04, in TFLOP/s. GPUs were measured serially; these are not simultaneous whole-node throughput figures.
 
 | Node | Operation | Before | After | Change |
 | --- | --- | ---: | ---: | ---: |
-| S1 | FP16 input, FP32 accumulation | 71.66 | 114.79 | +60.19% |
-| S1 | BF16 input, FP32 accumulation | 72.90 | 117.70 | +61.46% |
-| S1 | TF32 | 38.85 | 63.68 | +63.89% |
-| S3 | FP16 input, FP32 accumulation | 71.02 | 113.28 | +59.52% |
-| S3 | BF16 input, FP32 accumulation | 72.05 | 116.72 | +62.00% |
-| S3 | TF32 | 38.61 | 62.31 | +61.40% |
-| S4 | FP16 input, FP32 accumulation | 71.54 | 115.87 | +61.96% |
-| S4 | BF16 input, FP32 accumulation | 73.13 | 119.01 | +62.74% |
-| S4 | TF32 | 38.80 | 64.18 | +65.43% |
+| cvgl-node01 | FP16 input, FP32 accumulation | 71.66 | 114.79 | +60.19% |
+| cvgl-node01 | BF16 input, FP32 accumulation | 72.90 | 117.70 | +61.46% |
+| cvgl-node01 | TF32 | 38.85 | 63.68 | +63.89% |
+| cvgl-node03 | FP16 input, FP32 accumulation | 71.02 | 113.28 | +59.52% |
+| cvgl-node03 | BF16 input, FP32 accumulation | 72.05 | 116.72 | +62.00% |
+| cvgl-node03 | TF32 | 38.61 | 62.31 | +61.40% |
+| cvgl-node04 | FP16 input, FP32 accumulation | 71.54 | 115.87 | +61.96% |
+| cvgl-node04 | BF16 input, FP32 accumulation | 73.13 | 119.01 | +62.74% |
+| cvgl-node04 | TF32 | 38.80 | 64.18 | +65.43% |
 
 These figures measure GEMM throughput on the configuration above; production model performance depends on the workload.
 
 ## RTX 4090 (Ada)
 
-S5 (`cvgl-node05`, pool `64c128t_512_4090`) was tested on 2026-10-27 with eight RTX 4090 24 GB GPUs, Ubuntu 22.04, kernel `6.5.0-25-generic`, NVIDIA `610.57.04`, and unchanged 450 W limits. The source was [JustAResearcher/gpu-unlock-ada 1.1.1](https://github.com/JustAResearcher/gpu-unlock-ada/tree/d28c485418c3d9d034cd4bac19200bc33dd3453b), pinned to `d28c485418c3d9d034cd4bac19200bc33dd3453b`.
+`cvgl-node05` (pool `64c128t_512_4090`) was tested on 2026-10-27 with eight RTX 4090 24 GB GPUs, Ubuntu 22.04, kernel `6.5.0-25-generic`, NVIDIA `610.57.04`, and unchanged 450 W limits. The source was [JustAResearcher/gpu-unlock-ada 1.1.1](https://github.com/JustAResearcher/gpu-unlock-ada/tree/d28c485418c3d9d034cd4bac19200bc33dd3453b), pinned to `d28c485418c3d9d034cd4bac19200bc33dd3453b`.
 
 A single OS reboot activated the module on all eight cards. The last target completed at 16.42 s and the early script completed at 16.44 s, before NVIDIA initialization at 18.73 s. Each card passed the post-FLR selector and effective full-rate readback checks. The five existing NVIDIA module files retained their hashes.
 
@@ -84,7 +84,7 @@ On the same physical canary GPU, the read-only RM getter changed `fmla32` from h
 
 Use the [backup procedure](#installation) before installing anything. Build the two DEBs locally from the pinned Ada commit and keep the firmware input SHA-256 checks enabled. On this Jammy host, Python 3.10 built the firmware successfully. The existing DKMS package supplied `dh_dkms` and its debhelper sequence but not the newer `dh-sequence-dkms` dependency declaration; the build bypassed that declaration only after verifying those helpers and confirming it was the sole unmet build dependency. `make test-full` passed its firmware transaction tests; three optional offline decoder tests were skipped because PyCryptodome was absent.
 
-Install the Ada `gpu-unlock-firmware_1.1.1_all.deb` and `gpu-unlock-dkms_1.1.1_all.deb`, then use the same [early-loading installer](./examples/gpu_unlock/install_early_initramfs.sh) and image-order verification below. S5's exact opt-in is:
+Install the Ada `gpu-unlock-firmware_1.1.1_all.deb` and `gpu-unlock-dkms_1.1.1_all.deb`, then use the same [early-loading installer](./examples/gpu_unlock/install_early_initramfs.sh) and image-order verification below. cvgl-node05's exact opt-in is:
 
 ```text
 gpu_unlock.targets=0000:01:00.0,0000:23:00.0,0000:41:00.0,0000:61:00.0,0000:81:00.0,0000:a1:00.0,0000:c1:00.0,0000:e1:00.0
@@ -92,9 +92,9 @@ gpu_unlock.targets=0000:01:00.0,0000:23:00.0,0000:41:00.0,0000:61:00.0,0000:81:0
 
 Retain `amd_iommu=on iommu=pt` and verify that GRUB still selects the baseline kernel. Ada 1.1.1 declares **nine** firmware files; verify the complete paths under `gpu-unlock/610.43.03/` in the extracted initramfs against the installed assets. The ordinary NVIDIA driver also has files with some of the same basenames, so basename-only matching is insufficient. Verify all existing NVIDIA module hashes in the actual image before booting.
 
-Upstream recommends fresh card firmware state for first activation. All eight S5 cards accepted the state after this ordinary OS reboot; this single result does not establish warm-reboot behavior for other boards. If the module refuses an already initialized WPR2 state, do not retry the firmware transaction live. Use an OS shutdown and confirmed power-off before starting the machine again through BMC.
+Upstream recommends fresh card firmware state for first activation. All eight cvgl-node05 cards accepted the state after this ordinary OS reboot; this single result does not establish warm-reboot behavior for other boards. If the module refuses an already initialized WPR2 state, do not retry the firmware transaction live. Use an OS shutdown and confirmed power-off before starting the machine again through BMC.
 
-Require all eight target-specific unlock completions and post-FLR selector checks before NVIDIA initialization, eight healthy cards on the original driver, unchanged power limits, and no new Xid/assert errors. Repeat the identical binaries, image, GPU UUID set and test parameters into separate after files. The [upstream RM getter](https://github.com/JustAResearcher/gpu-unlock-ada/blob/d28c485418c3d9d034cd4bac19200bc33dd3453b/tools/read_sm_rates.py) assumes device minor 0: S5 used the GPU actually assigned that minor as the single-device canary, while all eight cards received the compute and correctness tests.
+Require all eight target-specific unlock completions and post-FLR selector checks before NVIDIA initialization, eight healthy cards on the original driver, unchanged power limits, and no new Xid/assert errors. Repeat the identical binaries, image, GPU UUID set and test parameters into separate after files. The [upstream RM getter](https://github.com/JustAResearcher/gpu-unlock-ada/blob/d28c485418c3d9d034cd4bac19200bc33dd3453b/tools/read_sm_rates.py) assumes device minor 0: cvgl-node05 used the GPU actually assigned that minor as the single-device canary, while all eight cards received the compute and correctness tests.
 
 The [rollback procedure](#rollback) also applies to the Ada packages; restore a fresh boot and verify stock behavior after disabling the opt-in.
 
@@ -152,7 +152,7 @@ sudo bash docs/examples/gpu_unlock/install_early_initramfs.sh
 
 The installer refuses to replace an unrelated administrator-provided udev override. It installs the ordering integration but does not rebuild images or reboot.
 
-On S3 and S4, add `gpu_unlock.targets=all` inside `GRUB_CMDLINE_LINUX_DEFAULT` in `/etc/default/grub`, preserving all existing options, including `amd_iommu=on iommu=pt` on these nodes. S1 instead uses this explicit seven-card target list:
+On cvgl-node03 and cvgl-node04, add `gpu_unlock.targets=all` inside `GRUB_CMDLINE_LINUX_DEFAULT` in `/etc/default/grub`, preserving all existing options, including `amd_iommu=on iommu=pt` on these nodes. cvgl-node01 instead uses this explicit seven-card target list:
 
 ```text
 gpu_unlock.targets=0000:01:00.0,0000:25:00.0,0000:41:00.0,0000:61:00.0,0000:a1:00.0,0000:c1:00.0,0000:e1:00.0
@@ -189,7 +189,7 @@ sudo systemctl reboot
 
 ## Boot verification
 
-The all-card queries below apply to S3 and S4. On S1, use only the seven healthy UUIDs already passed to its agent for GPU queries and benchmark containers; see [Leaving out a faulty GPU](../services/determined/README.md#leaving-out-a-faulty-gpu).
+The all-card queries below apply to cvgl-node03 and cvgl-node04. On cvgl-node01, use only the seven healthy UUIDs already passed to its agent for GPU queries and benchmark containers; see [Leaving out a faulty GPU](../services/determined/README.md#leaving-out-a-faulty-gpu).
 
 ```bash
 cat /proc/sys/kernel/random/boot_id
@@ -200,9 +200,9 @@ sudo journalctl -k -b | grep -E 'NVRM: Xid|assert|fallen off'
 systemctl --failed
 ```
 
-Match the journal entries to every configured GPU PCI address: seven on S1 and eight each on S3 and S4. Each must have `gpu_unlock: unlocked` and a post-FLR readback of `SS0=88888888`, `SS1=00000008`. All completions must precede the early script's completion message and the first NVIDIA initialization. A loaded module by itself does not prove that any GPU unlocked. S1's excluded `0000:81:00.0` must have no unlock or post-FLR activity.
+Match the journal entries to every configured GPU PCI address: seven on cvgl-node01 and eight each on cvgl-node03 and cvgl-node04. Each must have `gpu_unlock: unlocked` and a post-FLR readback of `SS0=88888888`, `SS1=00000008`. All completions must precede the early script's completion message and the first NVIDIA initialization. A loaded module by itself does not prove that any GPU unlocked. cvgl-node01's excluded `0000:81:00.0` must have no unlock or post-FLR activity.
 
-Verify the unchanged 350 W limits and run the same GEMM checks used for the baseline. On S3 and S4, the boot-order checks, register readbacks, and GEMM correctness all passed without new Xid/assert errors or failed systemd services.
+Verify the unchanged 350 W limits and run the same GEMM checks used for the baseline. On cvgl-node03 and cvgl-node04, the boot-order checks, register readbacks, and GEMM correctness all passed without new Xid/assert errors or failed systemd services.
 
 ## Benchmark procedure
 
@@ -212,7 +212,7 @@ The recorded run used `determinedai/pytorch-ngc@sha256:67ab2dc2f6fcfba90d2085e82
 
 The GEMM protocol was:
 
-- Test each GPU serially with 8192 × 8192 inputs, using seed `20261025 + physical GPU index`. Preserve the physical index when a container renumbers S1's seven visible GPUs.
+- Test each GPU serially with 8192 × 8192 inputs, using seed `20261025 + physical GPU index`. Preserve the physical index when a container renumbers cvgl-node01's seven visible GPUs.
 - Measure FP16 and BF16 inputs with FP32 accumulation settings: `allow_fp16_reduced_precision_reduction=False` and `allow_bf16_reduced_precision_reduction=False`. Explicitly enable `allow_tf32=True` for the FP32-input TF32 measurement.
 - Warm up with 10 matrix multiplications, then time five groups of 20 iterations using CUDA events. Take the median group mean and calculate TFLOP/s as `2 * 8192**3 / seconds / 1e12`.
 - After timing, check all outputs are finite and compare an 8 × 8 output tile against a CPU FP64 reference over the full reduction dimension. The relative L2 error limits were 0.02 for BF16 and 0.01 for FP16 and TF32.

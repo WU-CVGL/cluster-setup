@@ -622,7 +622,7 @@ Then reboot.
 
 ## GPU tensor unlock
 
-For the RTX 3090 tensor unlock deployed on S3 and S4, see [GPU Tensor Unlock](./07_GPU_Unlock.md). It covers the initramfs loading order, installation, verification, rollback, and measured tensor throughput.
+For the RTX 3090 tensor unlock deployed on cvgl-node03 and cvgl-node04, see [GPU Tensor Unlock](./07_GPU_Unlock.md). It covers the initramfs loading order, installation, verification, rollback, and measured tensor throughput.
 
 ## Maintainance: Upgrade APT packages & `Determined AI`
 
