@@ -1,11 +1,15 @@
+import logging
 import os
 import signal
 import sys
-import time
 import traceback
 from datetime import datetime, timedelta
 
 import requests
+from apscheduler.events import EVENT_JOB_ERROR, EVENT_JOB_MAX_INSTANCES, EVENT_JOB_MISSED
+from apscheduler.executors.pool import ThreadPoolExecutor
+from apscheduler.schedulers.blocking import BlockingScheduler
+from apscheduler.triggers.interval import IntervalTrigger
 
 from alert_config import (
     TASK_KIND_DEFAULT,
@@ -23,10 +27,19 @@ from alert_DataProcessor import DataProcessor
 from alert_TokenManager import TokenManager
 
 
-color_green = "\033[36m"
-color_yellow = "\033[33m"
-color_red = "\033[31m"
-color_reset = "\033[0m"
+CHECK_JOB_ID = "check"
+DEBUG_CHECK_JOB_ID = "debug alert check"
+# A check that starts late (busy host, clock step) still runs within this; later it is skipped.
+MISFIRE_GRACE_SECONDS = 5 * 60
+DEBUG_CHECK_SECONDS = 20  # debug mode: the alert check also runs this often
+
+# Job errors, missed and skipped runs are logged by MainApplication.log_job_event instead.
+logging.getLogger("apscheduler").addHandler(logging.NullHandler())
+
+
+def next_check_time(job):
+    """Next fire time of a job of a scheduler that has not started yet."""
+    return job.trigger.get_next_fire_time(None, datetime.now(job.trigger.timezone))
 
 
 class MainApplication:
@@ -37,57 +50,83 @@ class MainApplication:
         self.api_handler = APIHandler(config)
         self.DataProcessor = DataProcessor(config)
         self.now = datetime.now  # replaced in tests
-        self.hourly_enabled = True
         # Config.__str__ redacts the password, the Grafana token and the Slack webhook.
         print(config)
 
     def run(self):
+        scheduler = self.build_scheduler()
+        self.startup()
+        log(
+            f"Check schedule: {self.config.check_schedule} (every "
+            f"{self.config.check_interval_minutes} min); next check at "
+            f"{next_check_time(scheduler.get_job(CHECK_JOB_ID))}."
+        )
+        try:
+            scheduler.start()  # blocks
+        finally:
+            # SIGTERM raises SystemExit here. A check that is running still finishes (the
+            # thread pool is joined at exit, and every HTTP request has a timeout).
+            if scheduler.running:
+                scheduler.shutdown(wait=False)
+
+    def startup(self):
         requests.packages.urllib3.disable_warnings()
-        # Start-up token check: same renewal rules as the hourly one, but silent (log
+        # Start-up token check: same renewal rules as the regular one, but silent (log
         # only) on success and on failure, so a restart posts nothing to Slack. A failed
-        # renewal is retried by the next hourly check, which notifies as usual. If the
-        # watchdog starts during minute alert_min, that check follows immediately.
+        # renewal is retried by the next check, which notifies as usual. A start never
+        # runs a check: the first one is the next fire time of the schedule.
         self.run_safely(
             "start-up token check", lambda: self.token_manager.ensure_token(notify=False)
         )
         self.self_check()
 
-        current_time = self.now()
-        is_next_color_a = True
-        next_color = "\033[34m"
-
-        while True:
-            now_time = self.now()
-            self.tick(now_time)
-
-            if self.config.is_debug:
-                self.run_safely("alert check", self.check_alerts)
-                time.sleep(10)
-
-            next_color, is_next_color_a = get_next_color(
-                is_next_color_a, color_green, color_yellow
+    def build_scheduler(self):
+        """The scheduler with its jobs, not started."""
+        # One worker: the debug job and the check never run at the same time (both save
+        # the warning records).
+        scheduler = BlockingScheduler(executors={"default": ThreadPoolExecutor(1)})
+        scheduler.add_listener(
+            self.log_job_event, EVENT_JOB_ERROR | EVENT_JOB_MISSED | EVENT_JOB_MAX_INSTANCES
+        )
+        # 定时检查: at every fire time of config.check_schedule (local timezone)
+        scheduler.add_job(
+            self.check_cycle,
+            self.config.check_trigger(),
+            id=CHECK_JOB_ID,
+            max_instances=1,
+            coalesce=True,
+            misfire_grace_time=MISFIRE_GRACE_SECONDS,
+        )
+        if self.config.is_debug:
+            scheduler.add_job(
+                self.debug_check_job,
+                IntervalTrigger(seconds=DEBUG_CHECK_SECONDS),
+                id=DEBUG_CHECK_JOB_ID,
+                max_instances=1,
+                coalesce=True,
+                misfire_grace_time=DEBUG_CHECK_SECONDS,
             )
+        return scheduler
 
-            print(
-                f"start: {current_time}, now: {next_color}{now_time}{color_reset}",
-                end="\r",
-                flush=True,
-            )
-            time.sleep(10)
+    def debug_check_job(self):
+        self.run_safely("alert check", self.check_alerts)
 
-    def tick(self, now_time):
-        # 定时检查: once per hour, at minute alert_min
-        if now_time.minute == self.config.alert_min:
-            if self.hourly_enabled:
-                self.hourly_enabled = False
-                self.hourly_cycle()
+    def log_job_event(self, event):
+        # Replaces APScheduler's own log lines, which are dropped (NullHandler above).
+        if event.code == EVENT_JOB_ERROR:
+            secrets = self.config.secret_values() + [self.token_manager.token]
+            exc = event.exception
+            text = "".join(traceback.format_exception(type(exc), exc, exc.__traceback__))
+            log(f"{event.job_id} failed, continuing:\n{redact(text, secrets)}")
+        elif event.code == EVENT_JOB_MISSED:
+            log(f"{event.job_id} missed (scheduled for {event.scheduled_run_time}).")
         else:
-            self.hourly_enabled = True
+            log(f"{event.job_id} skipped: the previous run is still running.")
 
-    def hourly_cycle(self):
-        # Token first, so this hour's Determined calls use a renewed token.
+    def check_cycle(self):
+        # Token first, so this check's Determined calls use a renewed token.
         # Each step has its own error handling: one failure never skips the other
-        # step or ends the loop; the next hour simply tries again.
+        # step or stops the scheduler; the next check simply tries again.
         self.run_safely("token check", self.token_manager.ensure_token)
         self.run_safely("alert check", self.check_alerts)
 
@@ -196,7 +235,7 @@ class MainApplication:
         if not self.config.is_debug and age is not None and timedelta(0) <= age < min_age:
             log(
                 f"The previous check saved its record {int(age.total_seconds())} s ago (the "
-                f"watchdog restarted during minute {self.config.alert_min}?); skipping this check "
+                "watchdog restarted during a check minute?); skipping this check "
                 "so that its warnings get a full interval."
             )
             return
@@ -302,17 +341,6 @@ class MainApplication:
             "alert_local_item",
             self.config.file_info_path,
         )
-
-
-def get_next_color(is_color_a: bool, color_a: str, color_b: str) -> tuple:
-    if is_color_a:
-        next_color = color_b
-        is_next_color_a = False
-    else:
-        next_color = color_a
-        is_next_color_a = True
-
-    return next_color, is_next_color_a
 
 
 def _exit_on_sigterm(signum, frame):

@@ -1,8 +1,10 @@
 import os
 from dataclasses import dataclass, field, fields
-from datetime import datetime
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Dict, Iterable, List, Mapping, Optional
+
+from apscheduler.triggers.cron import CronTrigger
 
 # Values of WATCHDOG_DEBUG that enable debug mode (compared case-insensitively).
 TRUE_VALUES = ("1", "true", "yes", "on")
@@ -36,6 +38,14 @@ DEFAULT_DATA_DIR_DEBUG = "/app/data/debug"
 # /run/determined-metrics (read-write here, read-only in Prometheus, whose det-master
 # job reads the token through authorization.credentials_file).
 DEFAULT_DETERMINED_METRICS_TOKEN_FILE = "/run/determined-metrics/token"
+
+# When the check runs (crontab: minute hour day month day-of-week); WATCHDOG_SCHEDULE overrides it.
+DEFAULT_CHECK_SCHEDULE = "*/30 * * * *"
+# The schedule must fire at a fixed interval over this window (any weekday pattern repeats in it).
+# A fixed start keeps the result independent of the start time. The analysis runs in UTC: a
+# fixed interval is the same in the local timezone unless it has daylight saving time.
+SCHEDULE_SAMPLE_WINDOW = timedelta(days=8)
+SCHEDULE_SAMPLE_START = datetime(2026, 1, 1, tzinfo=timezone.utc)
 
 # (connect, read) timeout in seconds, used for every HTTP request.
 HTTP_TIMEOUT = (10, 60)
@@ -74,6 +84,33 @@ def redact(text: str, secrets: Iterable[Optional[str]]) -> str:
     return text
 
 
+def cron_trigger(schedule: str, tz=None) -> CronTrigger:
+    """CronTrigger of a crontab string, in tz (default: the local timezone, as the scheduler's)."""
+    try:
+        return CronTrigger.from_crontab(schedule, timezone=tz)
+    except (TypeError, ValueError) as e:
+        raise ConfigError(f"invalid crontab {schedule!r} ({e})") from None
+
+
+def schedule_interval_minutes(schedule: str) -> int:
+    """Minutes between consecutive fire times; refuses a schedule without a fixed interval.
+
+    The warning footer promises one interval until the kill, and the age windows of the
+    warning records are derived from it, so both stay true only for a periodic schedule.
+    """
+    trigger = cron_trigger(schedule, timezone.utc)
+    end = SCHEDULE_SAMPLE_START + SCHEDULE_SAMPLE_WINDOW
+    fire_times = [trigger.get_next_fire_time(None, SCHEDULE_SAMPLE_START)]
+    while fire_times[-1] is not None and (len(fire_times) < 3 or fire_times[-1] < end):
+        fire_times.append(trigger.get_next_fire_time(fire_times[-1], fire_times[-1]))
+    if None in fire_times:
+        raise ConfigError(f"crontab {schedule!r} never fires")
+    gaps = {b - a for a, b in zip(fire_times, fire_times[1:])}
+    if len(gaps) != 1:
+        raise ConfigError(f"crontab {schedule!r} does not fire at a fixed interval")
+    return int(gaps.pop().total_seconds()) // 60
+
+
 @dataclass(repr=False)
 class Config:
     """Config class for alert service. Build it with Config.from_env()."""
@@ -99,14 +136,29 @@ class Config:
         "file_type",
     ])
 
-    alert_min: int = 0  # the hourly check runs at this minute of every hour
-    # A warning older than this (one hourly interval plus margin) no longer counts as the
+    check_schedule: str = DEFAULT_CHECK_SCHEDULE  # crontab string, in the local timezone
+    # The fields below default (None) to values derived from check_schedule.
+    # Minutes between two checks: the time from a warning to its kill.
+    check_interval_minutes: Optional[int] = None
+    # A warning older than this (one interval plus half of one) no longer counts as the
     # previous check; the shell or notebook is warned again.
-    warning_max_age_minutes: int = 90
-    # A check that runs sooner than this after the previous saved one (a restart during minute
-    # alert_min) is skipped, so that the warnings it just sent still get a full interval.
-    warning_min_age_minutes: int = 30
+    warning_max_age_minutes: Optional[int] = None
+    # A check that runs sooner than this (half an interval) after the previous saved one is
+    # skipped, so that the warnings that one sent still get a full interval.
+    warning_min_age_minutes: Optional[int] = None
     token_renew_hours: int = 48  # renew the Determined token when it expires sooner than this
+
+    def __post_init__(self):
+        if self.check_interval_minutes is None:
+            self.check_interval_minutes = schedule_interval_minutes(self.check_schedule)
+        interval = self.check_interval_minutes
+        if self.warning_max_age_minutes is None:
+            self.warning_max_age_minutes = interval + interval // 2
+        if self.warning_min_age_minutes is None:
+            self.warning_min_age_minutes = interval // 2
+
+    def check_trigger(self, tz=None) -> CronTrigger:
+        return cron_trigger(self.check_schedule, tz)
 
     @property
     def file_info_path(self) -> Path:
@@ -135,6 +187,11 @@ class Config:
         else:
             base_path = env.get("DATA_DIR", DEFAULT_DATA_DIR)
             slack_webhook_url = env["SLACK_WEBHOOK_URL"]
+        check_schedule = env.get("WATCHDOG_SCHEDULE", "").strip() or DEFAULT_CHECK_SCHEDULE
+        try:
+            check_interval_minutes = schedule_interval_minutes(check_schedule)
+        except ConfigError as e:
+            raise ConfigError(f"WATCHDOG_SCHEDULE: {e}") from None
         return cls(
             det_web=env["DET_WEB_URL"],
             det_username=env["DET_USERNAME"],
@@ -144,6 +201,8 @@ class Config:
             alert_name=env["GRAFANA_ALERT_NAME"],
             slack_webhook_url=slack_webhook_url,
             is_debug=is_debug,
+            check_schedule=check_schedule,
+            check_interval_minutes=check_interval_minutes,
             base_path=Path(base_path),
             det_metrics_token_path=Path(
                 env.get(

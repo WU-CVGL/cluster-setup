@@ -117,7 +117,7 @@ class SlackMessageFormatTest(unittest.TestCase):
                 "color": "warning",
                 "title": "Warning",
                 "fields": [{"value": "<@U0ALICE>", "title": "[Shell] Shell (a)\n", "short": True}],
-                "footer": "Your container will be released in 60 minutes. Please check your task!!!",
+                "footer": "Your container will be released in 30 minutes. Please check your task!!!",
             },
         )
 
@@ -148,7 +148,7 @@ class SlackMessageFormatTest(unittest.TestCase):
         self.assertEqual(
             [(a["title"], a["color"], a["footer"]) for a in (warning, terminated)],
             [("Warning", "warning",
-              "Your container will be released in 60 minutes. Please check your task!!!"),
+              "Your container will be released in 30 minutes. Please check your task!!!"),
              ("Terminated", "good", "These GPU containers have been released")],
         )
 

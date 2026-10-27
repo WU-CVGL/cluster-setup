@@ -79,7 +79,8 @@ class MessageNotifier:
                     fields.append(field)
 
                 footer = (
-                    "Your container will be released in 60 minutes. Please check your task!!!"
+                    f"Your container will be released in {self.config.check_interval_minutes} minutes. "
+                    "Please check your task!!!"
                     if color == "warning"
                     else "These GPU containers have been released"
                 )

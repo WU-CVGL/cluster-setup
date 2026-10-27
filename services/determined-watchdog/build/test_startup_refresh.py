@@ -1,15 +1,15 @@
 """A service restart checks the Determined token without sending a notification.
 
 PR #4 made the start-up token refresh silent. The weekly refresh it scheduled
-around is gone: TokenManager renews the token at start and at every hourly check
-when needed (missing, undecodable, expiring within 48 h, or HTTP 401). Each test
+around is gone: TokenManager renews the token at start and at every check when
+needed (missing, undecodable, expiring within 48 h, or HTTP 401). Each test
 asserts PR #4's behaviour against the current code:
 
 1. the start-up check posts nothing to Slack, on success and on failure;
-2. an hourly renewal still notifies (success and FAILED);
+2. a renewal at a check still notifies (success and FAILED);
 3. no duplicate notification right after a start-up renewal, and the next
    renewal notifies (PR #4: "Thursday start-up skips the duplicate");
-4. a failed start-up renewal is retried at the next hourly check, which notifies.
+4. a failed start-up renewal is retried at the next check, which notifies.
 
 Run: cd services/determined-watchdog/build && python3 -B -m unittest test_startup_refresh.py
 Needs `requests` (the watchdog modules import it); no network, no credentials.
@@ -48,10 +48,6 @@ def fake_token(expiry: datetime) -> str:
 
 def at(day, hour, minute):
     return datetime(2026, 10, day, hour, minute)
-
-
-class StopLoop(BaseException):
-    """Raised from the patched time.sleep to leave the endless main loop."""
 
 
 class StartupRefreshTest(unittest.TestCase):
@@ -102,21 +98,15 @@ class StartupRefreshTest(unittest.TestCase):
         # GET /api/v1/me never answers 401 here (no network access in these tests).
         return mock.patch("alert_TokenManager.token_rejected", return_value=False)
 
-    def run_app(self, app, times):
-        """app.run(): start at times[0]; after each sleep the clock moves to the next time."""
-        self.clock = times[0]
-        later = iter(times[1:])
-
-        def fake_sleep(_seconds):
-            try:
-                self.clock = next(later)
-            except StopIteration:
-                raise StopLoop() from None
-
+    def run_app(self, app, start, checks=()):
+        """app.run() at start (the scheduler is not started), then the checks at these times."""
+        self.clock = start
         out = io.StringIO()
-        with mock.patch.object(main_module.time, "sleep", side_effect=fake_sleep), redirect_stdout(out):
-            with self.assertRaises(StopLoop):
-                app.run()
+        with mock.patch.object(main_module.BlockingScheduler, "start"), redirect_stdout(out):
+            app.run()
+            for when in checks:
+                self.clock = when
+                app.check_cycle()
         return out.getvalue()
 
     def kinds(self):
@@ -127,7 +117,7 @@ class StartupRefreshTest(unittest.TestCase):
         # Success: no token file -> login -> file written; nothing posted.
         app = self.make_app()
         with self.login(new) as login, self.probe_ok():
-            out = self.run_app(app, [at(1, 12, 5)])  # minute 5: no hourly check
+            out = self.run_app(app, at(1, 12, 5))  # a start runs no check
         login.assert_called_once()
         self.assertEqual(self.path.read_text(), new + "\n")
         self.assertEqual(app.token_manager.token, new)
@@ -139,7 +129,7 @@ class StartupRefreshTest(unittest.TestCase):
         self.path.unlink()
         app = self.make_app()
         with self.login(TokenError("login unavailable")) as login, self.probe_ok():
-            out = self.run_app(app, [at(1, 12, 5)])
+            out = self.run_app(app, at(1, 12, 5))
         login.assert_called_once()
         self.assertFalse(self.path.exists())
         self.assertIn("renewal FAILED (TokenError: login unavailable)", out)
@@ -151,21 +141,21 @@ class StartupRefreshTest(unittest.TestCase):
         with self.login(new), self.probe_ok(), mock.patch(
             "metrics_token.os.replace", side_effect=OSError("disk full")
         ):
-            out = self.run_app(app, [at(1, 12, 5)])
+            out = self.run_app(app, at(1, 12, 5))
         self.assertFalse(self.path.exists())
         self.assertIn("renewal FAILED (OSError: disk full)", out)
         self.assertEqual(self.posted, [])
         self.assertNotIn(new, out)
         self.assertNotIn("PLACEHOLDER-det-password", out)
 
-    def test_hourly_renewal_keeps_notification(self):
-        # Success: the file token expires within 48 h -> the hourly check renews and notifies.
+    def test_renewal_at_a_check_keeps_notification(self):
+        # Success: the file token expires within 48 h -> the check renews and notifies.
         self.path.write_text(fake_token(at(2, 0, 0)) + "\n")
         new = fake_token(at(8, 13, 0))
         app = self.make_app()
         with self.login(new) as login, self.probe_ok(), redirect_stdout(io.StringIO()):
             self.clock = at(1, 13, 0)
-            app.tick(self.clock)  # minute alert_min (0): the hourly check
+            app.check_cycle()
         login.assert_called_once()
         self.assertEqual(self.path.read_text(), new + "\n")
         self.assertEqual(self.kinds(), [SUCCESS])
@@ -175,31 +165,28 @@ class StartupRefreshTest(unittest.TestCase):
         self.path.write_text(fake_token(at(2, 0, 0)) + "\n")
         app = self.make_app()
         with self.login(TokenError("login unavailable")), self.probe_ok(), redirect_stdout(io.StringIO()):
-            app.tick(self.clock)
+            app.check_cycle()
         self.assertEqual(self.kinds(), [FAILED])
 
     def test_startup_renewal_is_not_notified_again_then_next_renewal_notifies(self):
-        start = at(1, 12, 0)  # starts in minute alert_min: the hourly check follows at once
+        start = at(1, 11, 59)  # start-up check: renews, silent
         first = fake_token(start + timedelta(days=7))
         second = fake_token(start + timedelta(days=13))
         app = self.make_app()
-        times = [
-            start,  # start-up check (renews, silent) + first loop: hourly check, token fresh
-            at(1, 12, 1),  # resets the hourly schedule
-            at(1, 13, 0),  # next hourly check: token still fresh
-            at(1, 13, 1),
-            at(7, 12, 0),  # `first` now expires in 24 h: the hourly check renews and notifies
+        checks = [
+            at(1, 12, 0),  # first check, a minute after the start: token fresh, no duplicate
+            at(1, 12, 30),  # token still fresh
+            at(7, 12, 0),  # `first` now expires in 24 h: the check renews and notifies
         ]
         with self.login(first, second) as login, self.probe_ok():
-            self.run_app(app, times)
+            self.run_app(app, start, checks)
         self.assertEqual(login.call_count, 2)
         self.assertEqual(app.check_alerts.call_count, 3)
         self.assertEqual(self.posted, [(at(7, 12, 0),) + SUCCESS])
         self.assertEqual(self.path.read_text(), second + "\n")
 
-    def test_failed_startup_keeps_hourly_retry_that_notifies(self):
+    def test_failed_startup_keeps_retry_at_the_next_check_that_notifies(self):
         new = fake_token(at(8, 13, 0))
-        times = [at(1, 12, 5), at(1, 12, 59), at(1, 13, 0)]
         cases = [
             ("retry fails", [TokenError("login unavailable"), TokenError("still down")], FAILED),
             ("retry succeeds", [TokenError("login unavailable"), new], SUCCESS),
@@ -210,10 +197,10 @@ class StartupRefreshTest(unittest.TestCase):
                     self.path.unlink()
                 app = self.make_app()
                 with self.login(*results) as login, self.probe_ok():
-                    self.run_app(app, times)
-                self.assertEqual(login.call_count, 2)  # start-up + the 13:00 hourly check
-                # Nothing before 13:00; exactly one message, posted by the hourly check.
-                self.assertEqual([when for when, _, _ in self.posted], [at(1, 13, 0)])
+                    self.run_app(app, at(1, 12, 5), [at(1, 12, 30)])
+                self.assertEqual(login.call_count, 2)  # start-up + the 12:30 check
+                # Nothing before 12:30; exactly one message, posted by the check.
+                self.assertEqual([when for when, _, _ in self.posted], [at(1, 12, 30)])
                 self.assertEqual(self.kinds(), [expected])
 
 
