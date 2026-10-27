@@ -11,20 +11,20 @@ Prometheus mounts the same directory read-only and reads the file through
 YAML edit, reload or restart is needed on rotation. The watchdog's own
 Determined API calls use the same token.
 
-The token is renewed at start and on every hourly check when the file is
+The token is renewed at start and on every check when the file is
 missing/unreadable, when its expiry cannot be decoded, or when it expires in
 less than Config.token_renew_hours; when Determined answers GET /api/v1/me with
-HTTP 401 for the file token (checked at start and at every hourly check, so a
+HTTP 401 for the file token (checked at start and at every check, so a
 revoked session recovers even though the det-master scrape, and the Grafana alert
 built on it, are down); and once, immediately, when Determined answers the
 watchdog's own API calls with HTTP 401 (ensure_token(force=True)).
 If a login succeeds but the file cannot be written, the watchdog keeps using the
 new session and later checks retry only the write.
 Slack: a renewal posts "Automatic update success ~", a failed one "Automatic update
-FAILED ~" (hourly checks, including a renewal after HTTP 401 from /api/v1/me, and
+FAILED ~" (regular checks, including a renewal after HTTP 401 from /api/v1/me, and
 the forced renewal). The start-up check (ensure_token(notify=False)) posts neither,
 whatever the reason for renewing, and only logs, so a restart is silent; a failed
-start-up renewal is still pending, so the next hourly check retries it and notifies
+start-up renewal is still pending, so the next check retries it and notifies
 as usual.
 Determined issues PASETO v2.public tokens:
 "v2.public.<base64url(JSON payload + 64-byte signature)>[.<base64url footer>]";
@@ -221,7 +221,7 @@ class TokenManager:
             self._renewal_failed(
                 e,
                 f"{self.path} left unchanged; the watchdog keeps using the session obtained "
-                "earlier and retries the write at the next hourly check.",
+                "earlier and retries the write at the next check.",
                 notify,
             )
             return False
@@ -283,7 +283,7 @@ class TokenManager:
             )
         except Exception as e:
             self._renewal_failed(
-                e, f"{self.path} left unchanged, retrying at the next hourly check.", notify
+                e, f"{self.path} left unchanged, retrying at the next check.", notify
             )
             return False
         # The new session is valid even if the file cannot be written below.
@@ -295,7 +295,7 @@ class TokenManager:
             self._renewal_failed(
                 e,
                 f"{self.path} left unchanged; the watchdog uses the new session itself "
-                "and retries only the write at the next hourly check.",
+                "and retries only the write at the next check.",
                 notify,
             )
             return False
@@ -303,10 +303,10 @@ class TokenManager:
 
         expiry = token_expiry(new_token)
         if expiry is None:
-            # Renewed at every hourly check until the format is understood: log, don't spam Slack.
+            # Renewed at every check until the format is understood: log, don't spam Slack.
             log(
                 f"Obtained new Determined token, written to {self.path}, but its expiry "
-                "cannot be decoded: it will be renewed at every hourly check."
+                "cannot be decoded: it will be renewed at every check."
             )
             return True
         log(f"Obtained new Determined token (expires at {expiry.isoformat()}), written to {self.path}.")

@@ -1,7 +1,9 @@
 import os
 import subprocess
 import sys
+import tempfile
 import unittest
+from datetime import datetime, timezone
 from pathlib import Path
 
 import watchdog_test_support as support
@@ -48,9 +50,9 @@ class FromEnvTest(unittest.TestCase):
         self.assertEqual(config.slack_webhook_url, ENV["SLACK_WEBHOOK_URL"])
         self.assertEqual(config.det_metrics_token_path, Path("/run/determined-metrics/token"))
         self.assertEqual(config.alert_name, "IdleKillAlert")
-        self.assertEqual(config.alert_min, 0)
-        self.assertEqual(config.warning_max_age_minutes, 90)
-        self.assertEqual(config.warning_min_age_minutes, 30)
+        self.assertEqual(config.check_interval_minutes, 30)
+        self.assertEqual(config.warning_max_age_minutes, 45)
+        self.assertEqual(config.warning_min_age_minutes, 15)
         self.assertEqual(config.token_renew_hours, 48)
         self.assertEqual(
             config.grafana_headers, {"Authorization": "Bearer " + support.FAKE_GRAFANA_TOKEN}
@@ -94,6 +96,74 @@ class FromEnvTest(unittest.TestCase):
         )
 
 
+class ScheduleTest(unittest.TestCase):
+    def fire_times(self, config, start, count):
+        trigger = config.check_trigger(timezone.utc)
+        times = [trigger.get_next_fire_time(None, start)]
+        while len(times) < count:
+            times.append(trigger.get_next_fire_time(times[-1], times[-1]))
+        return times
+
+    def test_default_fires_at_00_and_30(self):
+        config = Config.from_env(ENV)
+        self.assertEqual(config.check_schedule, "*/30 * * * *")
+        utc = lambda h, m, s=0: datetime(2026, 10, 1, h, m, s, tzinfo=timezone.utc)
+        self.assertEqual(
+            self.fire_times(config, utc(10, 7, 12), 4),
+            [utc(10, 30), utc(11, 0), utc(11, 30), utc(12, 0)],
+        )
+        self.assertEqual(self.fire_times(config, utc(10, 30), 1), [utc(10, 30)])
+        self.assertEqual(self.fire_times(config, utc(10, 30, 1), 1), [utc(11, 0)])
+
+    def test_windows_derived_from_the_interval(self):
+        for schedule, expected in [
+            ("*/30 * * * *", (30, 45, 15)),
+            ("0 * * * *", (60, 90, 30)),  # the hourly version's values
+            ("*/10 * * * *", (10, 15, 5)),
+            ("15,45 * * * *", (30, 45, 15)),
+        ]:
+            with self.subTest(schedule=schedule):
+                config = Config.from_env(dict(ENV, WATCHDOG_SCHEDULE=schedule))
+                self.assertEqual(config.check_schedule, schedule)
+                self.assertEqual(
+                    (config.check_interval_minutes, config.warning_max_age_minutes,
+                     config.warning_min_age_minutes),
+                    expected,
+                )
+        # Built directly (as in the tests), the windows come from the default schedule.
+        with tempfile.TemporaryDirectory() as tmp:
+            config = support.make_config(tmp)
+        self.assertEqual(
+            (config.check_interval_minutes, config.warning_max_age_minutes,
+             config.warning_min_age_minutes),
+            (30, 45, 15),
+        )
+
+    def test_empty_schedule_is_the_default(self):
+        for value in ("", "  "):
+            with self.subTest(value=value):
+                config = Config.from_env(dict(ENV, WATCHDOG_SCHEDULE=value))
+                self.assertEqual(config.check_schedule, "*/30 * * * *")
+
+    def test_bad_schedule_is_refused(self):
+        for schedule, reason in [
+            ("*/30 * * *", "invalid crontab"),
+            ("every 30 minutes", "invalid crontab"),
+            ("61 * * * *", "invalid crontab"),
+            ("*/30 * * * * *", "invalid crontab"),
+            ("0 0 31 2 *", "never fires"),
+            ("*/45 * * * *", "does not fire at a fixed interval"),  # :00 and :45
+            ("*/7 * * * *", "does not fire at a fixed interval"),
+            ("0 9 * * 1-5", "does not fire at a fixed interval"),
+        ]:
+            with self.subTest(schedule=schedule):
+                with self.assertRaises(ConfigError) as ctx:
+                    Config.from_env(dict(ENV, WATCHDOG_SCHEDULE=schedule))
+                self.assertTrue(str(ctx.exception).startswith("WATCHDOG_SCHEDULE: "))
+                self.assertIn(reason, str(ctx.exception))
+                self.assertIn(repr(schedule), str(ctx.exception))
+
+
 class RedactionTest(unittest.TestCase):
     def test_str_and_repr_redact_secrets(self):
         config = Config.from_env(ENV)
@@ -135,6 +205,21 @@ class ImportWithoutEnvTest(unittest.TestCase):
         result = subprocess.run([sys.executable, "-c", code], env=env, capture_output=True, text=True)
         self.assertEqual(result.returncode, 2)
         self.assertIn("missing required environment variable(s): WATCHDOG_DEBUG", result.stderr)
+
+    def test_main_reports_bad_schedule(self):
+        code = (
+            "import sys; sys.dont_write_bytecode = True; sys.path.insert(0, %r); "
+            "import alert_response_handler_v02 as m; sys.exit(m.main())" % str(support.BUILD_DIR)
+        )
+        env = dict(ENV, PATH=os.environ.get("PATH", ""), PYTHONDONTWRITEBYTECODE="1",
+                   WATCHDOG_SCHEDULE="*/45 * * * *")
+        result = subprocess.run([sys.executable, "-c", code], env=env, capture_output=True, text=True)
+        self.assertEqual(result.returncode, 2)
+        self.assertEqual(
+            result.stderr.strip(),
+            "Configuration error: WATCHDOG_SCHEDULE: crontab '*/45 * * * *' does not fire at a "
+            "fixed interval",
+        )
 
 
 if __name__ == "__main__":

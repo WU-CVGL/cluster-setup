@@ -6,7 +6,8 @@ Determined API token that Prometheus uses for the `det-master` scrape fresh. Run
 
 ## What it does
 
-Every hour, at minute 0 (`alert_min` in `build/alert_config.py`), it:
+Every 30 minutes, at minutes 0 and 30 (crontab `*/30 * * * *`, see `WATCHDOG_SCHEDULE` in
+[Configuration](#configuration)), it:
 
 1. **Checks the Determined token** (see [Determined token](#determined-token-shared-with-prometheus)) and renews it if needed.
 2. **Fetches the firing alerts** from Grafana's Alertmanager API
@@ -19,9 +20,10 @@ Every hour, at minute 0 (`alert_min` in `build/alert_config.py`), it:
    `/api/v1/tasks/`: allocation `<shell or notebook id>.1` -> `containerId`). Both kinds are
    handled alike:
    - a shell or notebook that is idle for the first time gets a Slack **Warning**
-     ("Your container will be released in 60 minutes");
-   - one that was already warned at the previous check (at least 30 and at most 90 minutes
-     earlier, `warning_min_age_minutes` / `warning_max_age_minutes`) and is still idle is killed
+     ("Your container will be released in 30 minutes": one interval of the schedule);
+   - one that was already warned at the previous check (at least 15 and at most 45 minutes
+     earlier, `warning_min_age_minutes` / `warning_max_age_minutes`: half an interval and one and
+     a half) and is still idle is killed
      (`POST /api/v1/shells/<id>/kill` or `POST /api/v1/notebooks/<id>/kill`).
      It is reported as **Terminated** only if the kill succeeded; a failed kill is logged, not
      reported, and retried at the next check.
@@ -31,7 +33,7 @@ killed. Notebooks are policed because Determined gives a notebook's Jupyter toke
 and to admins, so nobody else can check or reclaim an idle notebook by hand. A CPU-only shell or
 notebook has no GPU metrics, so the alert never fires for it and it is never warned or killed.
 If the alert is not firing, or no idle container belongs to a shell or notebook, it only logs.
-Errors (Grafana/Determined/Slack unreachable, bad responses) are logged and the next hour tries
+Errors (Grafana/Determined/Slack unreachable, bad responses) are logged and the next check tries
 again; Slack delivery is best-effort and never stops the watchdog. The shell and notebook listings
 fail independently: if one of them fails, the check posts `det api miss` naming it and polices
 the other kind as usual. Tasks of the failed kind are neither warned nor killed in that check; the
@@ -39,36 +41,43 @@ ones warned before and still idle stay tracked, so the next check that lists the
 they are still idle, without a second warning. If the task listing fails, or both the shell and
 the notebook listings, the check posts `det api miss` and neither warns nor kills.
 The warning state (`data/file_info.json` + `data/localData/`) survives restarts. A warning older
-than 90 minutes (after downtime, or after an hour in which no shell or notebook was idle) is
+than 45 minutes (after downtime, or after a check at which no shell or notebook was idle) is
 ignored and that shell or notebook is warned again.
+
+The checks are scheduled with APScheduler (a cron trigger, in the container's local timezone: UTC,
+as the compose file sets no `TZ`). A check that starts more than 5 minutes late (host suspended or
+overloaded) is skipped and logged as `check missed`; a check never starts while the previous one
+is still running. Each step of a check has its own error handling, and an error that escapes a
+check is logged; neither stops the schedule.
 
 At start it runs the same token check once, **silently**: it only logs, so a restart or redeploy
 posts nothing to Slack (details in [Determined token](#determined-token-shared-with-prometheus)).
-If the watchdog starts during minute 0, the first hourly check follows immediately. If the
-previous container already ran that hour's check, the new one skips it: a check that comes less
-than 30 minutes (`warning_min_age_minutes`) after the previous saved one does nothing, so shells
-and notebooks warned seconds earlier still get the promised 60 minutes and are killed at the next
-hour. Starting outside minute 0 (the deploy recipes below wait for hh:01) avoids even that skipped
-check.
+A start never runs a check: the first one is the next fire time of the schedule (logged as
+`Check schedule: */30 * * * * (every 30 min); next check at ...`), so the watchdog can be
+restarted at any time. A check that comes less than 15 minutes (`warning_min_age_minutes`) after
+the previous saved one does nothing (e.g. right after `WATCHDOG_SCHEDULE` moved the check
+minutes), so the shells and notebooks warned by that one still get the full interval. A check that
+is running when the container stops finishes first if it takes less than Docker's stop timeout
+(10 s).
 
 ### Slack messages
 
 | Message | Sent by |
 | --- | --- |
-| **Warning** / **Terminated**: one field per shell or notebook, titled `[Shell] <description>` or `[JupyterLab] <description>`, with its user | hourly check: idle shells and notebooks warned / killed |
-| `Automatic update success ~` | hourly check that renewed the Determined token; a renewal after HTTP 401 |
-| `Automatic update FAILED ~ (<reason>)` | hourly check whose renewal failed (repeated every hour until it works); a failed renewal after HTTP 401 |
-| `Failed to fetch Grafana alert! Reason: empty response.` | hourly check: Grafana unreachable or bad answer |
-| `det api miss` / `need update api! (GET shells failed)` or `(GET notebooks failed)` | hourly check: that Determined listing failed; the other kind was still policed |
-| `det api miss` / `need update api!` | hourly check: the Determined task listing failed, or both the shell and the notebook listings |
+| **Warning** / **Terminated**: one field per shell or notebook, titled `[Shell] <description>` or `[JupyterLab] <description>`, with its user | check: idle shells and notebooks warned / killed |
+| `Automatic update success ~` | check that renewed the Determined token; a renewal after HTTP 401 |
+| `Automatic update FAILED ~ (<reason>)` | check whose renewal failed (repeated at every check until it works); a failed renewal after HTTP 401 |
+| `Failed to fetch Grafana alert! Reason: empty response.` | check: Grafana unreachable or bad answer |
+| `det api miss` / `need update api! (GET shells failed)` or `(GET notebooks failed)` | check: that Determined listing failed; the other kind was still policed |
+| `det api miss` / `need update api!` | check: the Determined task listing failed, or both the shell and the notebook listings |
 
 The start-up token check posts none of these, whatever its outcome. A token check that keeps the
 token posts nothing either, nor does a renewal whose new token has an expiry the watchdog cannot
-decode (it is only logged, and renewed at every hourly check). In debug mode the alert check also
-runs every ~20 s and everything goes to `SLACK_WEBHOOK_URL_DEBUG`. There is no weekly token
+decode (it is only logged, and renewed at every check). In debug mode the alert check also
+runs every 20 s and everything goes to `SLACK_WEBHOOK_URL_DEBUG`. There is no weekly token
 renewal any more: older versions logged in every Thursday (before PR #3 they also rewrote
 `prometheus.yml` and restarted Prometheus) and posted `Automatic update success ~` each time; now
-that message appears when an hourly check renews the token, roughly every 5 days.
+that message appears when a check renews the token, roughly every 5 days.
 
 ## Grafana alert
 
@@ -84,6 +93,10 @@ max by(container_id)((DCGM_FI_DEV_GPU_UTIL * on(gpu_uuid) group_left(container_i
 With fork 0.41.0 and later, `det_gpu_uuid_container_id` appears only
 `observability.task_mapping_delay` (default 5 minutes) after a shell or notebook starts, so with the
 15-minute pending period the alert fires no earlier than about 20 minutes after start.
+The watchdog warns at its first check after the alert fires (0 to 30 minutes later) and kills one
+interval (30 minutes) after the warning. So a shell or notebook is killed about 45 to 75 minutes
+after it goes idle (15 minutes pending, then 30 to 60 minutes), or about 50 to 80 minutes after its
+start if it is idle from the start.
 
 The rule lives only in Grafana's database (it is not in this repo): folder `test`, rule group
 `test1`, evaluated every minute. A is an instant query over the last 30 minutes, B reduces A to
@@ -122,6 +135,7 @@ SLACK_WEBHOOK_URL_DEBUG=https://hooks.slack.com/services/<secret>/<secret>
 | `GRAFANA_ALERT_NAME` | yes | name of the idle-GPU alert rule |
 | `SLACK_WEBHOOK_URL` | yes | Slack webhook used in production mode |
 | `SLACK_WEBHOOK_URL_DEBUG` | yes | Slack webhook used in debug mode |
+| `WATCHDOG_SCHEDULE` | no | crontab of the check (minute hour day month day-of-week, container's local timezone), default `*/30 * * * *`. It must fire at a fixed interval, or the watchdog exits with a configuration error; the warning text and the age windows (half an interval, one and a half) follow the interval |
 | `DETERMINED_METRICS_TOKEN_FILE` | no | token file in the container, default `/run/determined-metrics/token`; change it only together with the compose mounts and Prometheus' `credentials_file` |
 | `DATA_DIR` | no | data directory, default `/app/data` |
 | `DATA_DIR_DEBUG` | no | data directory in debug mode, default `/app/data/debug` |
@@ -163,50 +177,47 @@ Prometheus needs from this credential. In short:
 
   If it is missing when the stack starts, Docker creates it owned by root and the watchdog cannot
   write the token (the start-up check only logs `Determined token renewal FAILED (PermissionError
-  ...)`; every hourly check then posts `Automatic update FAILED ~ (PermissionError ...)`); running
+  ...)`; every check then posts `Automatic update FAILED ~ (PermissionError ...)`); running
   the same `install -d` command fixes the owner and mode of an existing directory.
-- The watchdog renews the token at start and at every hourly check when the file is missing or
+- The watchdog renews the token at start and at every check when the file is missing or
   unreadable, when its expiry cannot be decoded, or when it expires in less than 48 hours
   (Determined sessions last 7 days, so this is roughly every 5 days). A restart does **not** log in
   again while the token is still valid.
 - If Determined rejects the token before its expiry (e.g. the session was revoked), the watchdog
-  renews it: at start and at every hourly check it sends the file token to `GET /api/v1/me`, and
+  renews it: at start and at every check it sends the file token to `GET /api/v1/me`, and
   an HTTP 401 there triggers a new login (any other answer, or an unreachable master, keeps the
   token). This matters because a revoked token also breaks the `det-master` scrape, and with it
   the `GRAFANA_ALERT_NAME` alert (it needs `det_gpu_uuid_container_id`), so the watchdog would
   otherwise never query Determined and see the 401. When the alert does fire, an HTTP 401 on the
   watchdog's shell, notebook or task query also triggers one immediate login, a rewrite of the file and one
   retry of the query with the new session (also if the file cannot be written). Prometheus uses
-  the new token at its next scrape. To recover at once instead of at the next hourly check:
+  the new token at its next scrape. To recover at once instead of at the next check:
   `docker compose restart watchdog` (the start-up check renews it without a Slack message; the log
-  shows `Obtained new Determined token`; not during minute 0 of an hour, see
-  [What it does](#what-it-does)).
+  shows `Obtained new Determined token`).
 - A login counts as successful only if it returns HTTP 2xx with JSON containing a non-empty `token`
   without whitespace. The file is written only by `build/metrics_token.py`
   (`write_metrics_token`: temp file in the same directory, fsync, rename; mode `0600`; the token
   followed by a newline).
 - If the login fails, the old file is kept, a Slack warning ("Automatic update FAILED ~
-  (<reason>)") is sent and the next hourly check retries. A successful renewal posts "Automatic
-  update success ~". This holds for the hourly checks and for the renewals after an HTTP 401.
+  (<reason>)") is sent and the next check retries. A successful renewal posts "Automatic
+  update success ~". This holds for the checks and for the renewals after an HTTP 401.
 - **The start-up check is silent.** It keeps, renews or fails to renew the token by the same rules
-  as an hourly check (including the `/api/v1/me` probe), but only logs: `Determined token OK`,
+  as a check (including the `/api/v1/me` probe), but only logs: `Determined token OK`,
   `Obtained new Determined token`, or `Determined token renewal FAILED (...) ... [start-up check:
   not posted to Slack]`. So a restart or redeploy never posts "Automatic update success ~"; read
   `docker compose logs watchdog` instead. A failed start-up renewal is still pending (the file is
-  still missing, expiring or rejected, or the write is still owed), so the next hourly check
-  retries it and posts the outcome as usual; that check runs at minute 0, immediately if the
-  watchdog started during minute 0.
+  still missing, expiring or rejected, or the write is still owed), so the next check
+  retries it and posts the outcome as usual.
 - If the login works but the file cannot be written (disk full, directory owner or mode changed),
   the old file is kept and the same warning is sent (only logged at start), but the watchdog uses
-  the new session for its own calls. The next hourly checks retry only the write, without logging
+  the new session for its own calls. The next checks retry only the write, without logging
   in again (each failed retry sends the warning again; the successful one is only logged), unless
   that session itself needs renewal or the file was replaced by hand in the meantime (then the
   file's token is used).
 - A token placed in the file by hand (see `../prometheus/README.md`) is kept while its expiry can
   be decoded and is more than 48 hours away; otherwise the watchdog replaces it at start with a
   session of `DET_USERNAME`.
-- To force a new token, from `services/` (not during minute 0 of an hour, see
-  [What it does](#what-it-does)):
+- To force a new token, from `services/`:
   - the session was revoked and the `det-master` scrape is down, `.env` unchanged:
     `docker compose restart watchdog` (the start-up check gets HTTP 401 from `/api/v1/me` and
     logs in again, without a Slack message: check the log for `Obtained new Determined token`);
@@ -225,7 +236,7 @@ Prometheus needs from this credential. In short:
     again (only logged). If the log shows `Determined token renewal FAILED`, run
     `mv "$d/token.prev" "$d/token"` right away, so that Prometheus keeps the old, still valid
     token, and fix `.env`. Otherwise (`Obtained new Determined token`), run `rm "$d/token.prev"`.
-    Restore `token.prev` only right after that `FAILED` line, never later: a later hourly check
+    Restore `token.prev` only right after that `FAILED` line, never later: a later check
     may already have written a new token. If only `Renewing the Determined token: ...` is shown
     yet (a login can take up to 70 s to time out), run the last line again a minute later.
   - after editing any other variable in `determined-watchdog/.env`: only
@@ -256,18 +267,18 @@ Prometheus needs from this credential. In short:
 - The directories themselves (`data/`, `data/localData/`, and `data/debug/` in debug mode) must be
   writable by uid 1000 (the container user): `file_info.json` and the records are written to a temp
   file in the same directory and then renamed, so a writable `file_info.json` alone is not enough.
-  Otherwise the hourly check logs a `PermissionError` after warning, `file_info.json` never advances,
-  and idle shells and notebooks are warned every hour but never killed. Fix:
+  Otherwise the check logs a `PermissionError` after warning, `file_info.json` never advances,
+  and idle shells and notebooks are warned at every check but never killed. Fix:
   `sudo chown -R 1000:1000 ~/ws/cluster-setup/services/determined-watchdog/data`.
 
 ## Debug mode
 
 With `WATCHDOG_DEBUG=1` the watchdog uses `DATA_DIR_DEBUG` and `SLACK_WEBHOOK_URL_DEBUG`, does not
-@-mention users, runs the alert check every ~20 s in addition to the hourly one, and never kills
+@-mention users, runs the alert check every 20 s in addition to the scheduled checks, and never kills
 anything: instead of `POST .../kill` it only `GET`s the shell or notebook (`/api/v1/shells/<id>`
 or `/api/v1/notebooks/<id>`) and reports it as "Terminated".
-The 30-minute minimum between a warning and its kill (`warning_min_age_minutes`) does not apply in
-debug mode, so the dry-run "Terminated" follows at the next check, ~20 s after the warning.
+The 15-minute minimum between a warning and its kill (`warning_min_age_minutes`) does not apply in
+debug mode, so the dry-run "Terminated" follows at the next check, 20 s after the warning.
 Put a `User.json` into `data/debug/` first (the check fails without it).
 
 ## Deploy / update
@@ -285,17 +296,17 @@ grep -iE '^WATCHDOG_DEBUG=' determined-watchdog/.env  # must be 0 (production) o
 stat -c '%u:%g %a %n' determined-watchdog/data determined-watchdog/data/localData  # 1000:1000, see Data directory
 docker tag "$(docker inspect -f '{{.Image}}' services-watchdog-1)" determined-watchdog:previous  # rollback copy
 docker compose build watchdog                     # a plain 'up -d' does not rebuild the watchdog image
-[ "$(date +%M)" != 00 ] || sleep 60               # never (re)start it during minute 0 of an hour, see What it does
 docker compose up -d watchdog
-sleep 30; docker compose logs watchdog | grep -E 'Determined token|is_debug|base_path'
+sleep 30; docker compose logs watchdog | grep -E 'Determined token|is_debug|base_path|Check schedule'
 ```
 
-The last command must show `is_debug: False`, `base_path: /app/data` and `Determined token OK (expires
-at ...)` or `Obtained new Determined token`. The start-up check is silent, so an update posts
+The last command must show `is_debug: False`, `base_path: /app/data`, `Determined token OK (expires
+at ...)` or `Obtained new Determined token`, and `Check schedule: */30 * * * * (every 30 min); next
+check at ...`. The start-up check is silent, so an update posts
 nothing to Slack. The token file is `token` in `DET_METRICS_SECRETS_DIR` from `services/.env`
 (live: `/home/cvgladmin/.local/share/cluster-setup-monitoring/secrets`; default
 `prometheus/secrets/`); it must be owned by uid 1000 with mode `0600`, in a directory with mode
-`0700`. Rollback (not during minute 0 of an hour either):
+`0700`. Rollback:
 `docker tag determined-watchdog:previous determined-watchdog:latest && docker compose up -d --no-build --force-recreate watchdog`.
 
 If the same update changed `prometheus/prometheus.yml` or `prometheus/rules/`, check them before
@@ -319,11 +330,12 @@ too (no kills, debug webhook). Set any value other than `0` or `1` to `0` before
 
 ## Tests
 
-Unit tests (stdlib `unittest`, need `requests`) live in `tests/` and are not part of the image;
-neither are the two tests in `build/`: `test_metrics_token.py`, the regression test of the token
-writer (stdlib only), and `test_startup_refresh.py`, the silent start-up check (start-up success
-and failure post nothing, hourly renewals notify, no duplicate right after start, a failed
-start-up renewal is retried and notified by the next hourly check; needs `requests`). From
+Unit tests (stdlib `unittest`, need `requests` and `APScheduler`) live in `tests/` and are not part
+of the image; neither are the two tests in `build/`: `test_metrics_token.py`, the regression test
+of the token writer (stdlib only), and `test_startup_refresh.py`, the silent start-up check
+(start-up success and failure post nothing, renewals at a check notify, no duplicate right after
+start, a failed start-up renewal is retried and notified by the next check; needs `requests` and
+`APScheduler`). From
 `services/`:
 
 ```sh
@@ -335,5 +347,5 @@ docker run --rm -v "$PWD/determined-watchdog:/w:ro" -w /w/build determined-watch
 (cd determined-watchdog/build && python3 -B -m unittest test_metrics_token.py)  # stdlib only
 ```
 
-or, with `requests` installed locally: `python3 -B -m unittest discover -s determined-watchdog/tests`
+or, with `requests` and `APScheduler` (`build/requirements.txt`) installed locally: `python3 -B -m unittest discover -s determined-watchdog/tests`
 and `(cd determined-watchdog/build && python3 -B -m unittest test_startup_refresh.py)`.

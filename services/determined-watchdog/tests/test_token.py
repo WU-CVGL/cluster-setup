@@ -205,7 +205,7 @@ class EnsureTokenTest(unittest.TestCase):
 
     ME = ("GET", "/api/v1/me")
 
-    def test_revoked_file_token_is_renewed_at_the_hourly_check(self):
+    def test_revoked_file_token_is_renewed_at_a_check(self):
         current = support.token_expiring_in(timedelta(days=5), now=NOW)
         new = support.token_expiring_in(timedelta(days=7), now=NOW)
         self.path.write_text(current)
@@ -221,7 +221,7 @@ class EnsureTokenTest(unittest.TestCase):
         self.assertEqual(self.path.read_text(), new + "\n")
         self.assertEqual(self.manager.token, new)
         self.assertNotIn(current, out)
-        # The 401 path keeps notifying at the hourly check.
+        # The 401 path keeps notifying at a check.
         self.assertEqual(self.slack_texts(), [("notification", "Automatic update success ~\n")])
 
     def test_probe_answer_other_than_401_keeps_the_token(self):
@@ -496,7 +496,7 @@ class EnsureTokenTest(unittest.TestCase):
         self.assertEqual(self.path.read_text(), new + "\n")
         self.assertEqual(self.slack_texts(), [])
 
-    def test_silent_check_failed_login_posts_nothing_then_hourly_check_notifies(self):
+    def test_silent_check_failed_login_posts_nothing_then_next_check_notifies(self):
         old = support.token_expiring_in(timedelta(hours=10), now=NOW)
         new = support.token_expiring_in(timedelta(days=7), now=NOW)
         self.path.write_text(old)
@@ -504,12 +504,12 @@ class EnsureTokenTest(unittest.TestCase):
         ok, out = self.ensure(notify=False)
         self.assertFalse(ok)
         self.assertIn("renewal FAILED", out)
-        self.assertIn("retrying at the next hourly check", out)
+        self.assertIn("retrying at the next check", out)
         self.assertIn("not posted to Slack", out)
         self.assertEqual(self.manager.token, old)
         self.assertEqual(self.slack_texts(), [])
 
-        ok, out = self.ensure()  # the next hourly check retries and notifies
+        ok, out = self.ensure()  # the next check retries and notifies
         self.assertFalse(ok)
         self.assertEqual(len(self.stub.requests_to(*self.LOGIN)), 2)
         self.assertEqual([t[0] for t in self.slack_texts()], ["ERROR"])
@@ -521,7 +521,7 @@ class EnsureTokenTest(unittest.TestCase):
             self.slack_texts()[1:], [("notification", "Automatic update success ~\n")]
         )
 
-    def test_silent_check_failed_write_posts_nothing_then_hourly_retry_notifies(self):
+    def test_silent_check_failed_write_posts_nothing_then_next_retry_notifies(self):
         old = support.token_expiring_in(timedelta(hours=10), now=NOW)
         new = support.token_expiring_in(timedelta(days=7), now=NOW)
         self.path.write_text(old + "\n")
@@ -537,7 +537,7 @@ class EnsureTokenTest(unittest.TestCase):
             self.assertFalse(ok)
             self.assertEqual(self.slack_texts(), [])
 
-            ok, out = self.ensure()  # the hourly write retry notifies
+            ok, out = self.ensure()  # the write retry at the next check notifies
             self.assertFalse(ok)
             self.assertEqual([t[0] for t in self.slack_texts()], ["ERROR"])
         self.assertEqual(len(self.stub.requests_to(*self.LOGIN)), 1)  # no new login
@@ -563,7 +563,7 @@ class EnsureTokenTest(unittest.TestCase):
         self.assertTrue(ok)
         self.assertEqual(self.path.read_text(), "v2.public.opaque-format\n")
         self.assertEqual(self.manager.token, "v2.public.opaque-format")
-        self.assertIn("renewed at every hourly check", out)
+        self.assertIn("renewed at every check", out)
         self.assertEqual(self.slack_texts(), [])
 
 

@@ -182,7 +182,7 @@ class DataProcessor:
     def load_last_output(self, alert_type, file_info_path, now=None):
         """Shells and notebooks warned in the previous check ({} if there is no usable record).
 
-        A record older than config.warning_max_age_minutes (after downtime, or after an hour
+        A record older than config.warning_max_age_minutes (after downtime, or after an interval
         in which no task was idle and nothing was saved), dated in the future, or without a
         readable created_at does not count: those tasks are warned again, not killed.
         """

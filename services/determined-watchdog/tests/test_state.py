@@ -80,7 +80,7 @@ class StateMachineTest(unittest.TestCase):
             grafana_web=self.stub.url,
             slack_webhook_url=self.stub.url + "hook",
             # These tests run consecutive checks seconds apart; the minimum interval between
-            # a warning and its kill is tested by the test_minimum_warning_age_* tests.
+            # a warning and its kill is tested by the tests that call real_min_age().
             warning_min_age_minutes=0,
         )
         base = Path(self.config.base_path)
@@ -181,10 +181,22 @@ class StateMachineTest(unittest.TestCase):
     def stamp(delta):
         return (datetime.now() + delta).strftime(CREATED_AT_FORMAT)
 
+    def real_min_age(self):
+        """Use the minimum warning age derived from the default 30-minute schedule (15 min)."""
+        self.config.warning_min_age_minutes = None
+        self.config.__post_init__()
+        self.assertEqual(self.config.warning_min_age_minutes, 15)
+
+    def test_default_windows(self):
+        self.assertEqual(
+            (self.config.check_interval_minutes, self.config.warning_max_age_minutes),
+            (30, 45),
+        )
+
     def test_stale_warning_warns_again(self):
-        # Hour 1: warned. Hour 2: shell active, nothing saved. Hour 3: idle again.
+        # Check 1: warned. Check 2: shell active, nothing saved. Check 3: idle again.
         app = self.warn_shell_a()
-        self.set_warning_created_at(self.stamp(-timedelta(hours=2, minutes=1)))
+        self.set_warning_created_at(self.stamp(-timedelta(minutes=61)))
         self.stub.routes[ALERTS] = (200, [])
         self.check(app)
         self.assertEqual(self.slack(), [])
@@ -193,7 +205,7 @@ class StateMachineTest(unittest.TestCase):
         out = self.check(app)
         self.assertEqual(self.kills(), [])
         self.assertEqual(self.slack(), [("Warning", ["<@U0ALICE>"])])
-        self.assertIn("older than 90 min", out)
+        self.assertIn("older than 45 min", out)
 
         # The new warning counts at the next check.
         self.check(app)
@@ -225,33 +237,44 @@ class StateMachineTest(unittest.TestCase):
         self.assertEqual(self.slack(), [("Warning", ["<@U0ALICE>"])])
         self.assertIn("in the future", out)
 
-    def test_minimum_warning_age_skips_a_check_right_after_a_restart(self):
-        self.config.warning_min_age_minutes = 30
+    def test_warning_older_than_45_minutes_warns_again(self):
+        # e.g. a check missed while the watchdog was down: the warning is two intervals old.
         app = self.warn_shell_a()
-        app = self.start_app()  # e.g. the container restarted at hh:00:30
+        for minutes in (46, 59, 60):
+            with self.subTest(minutes=minutes):
+                self.set_warning_created_at(self.stamp(-timedelta(minutes=minutes)))
+                out = self.check(app)
+                self.assertEqual(self.kills(), [])
+                self.assertEqual(self.slack(), [("Warning", ["<@U0ALICE>"])])
+                self.assertIn("older than 45 min", out)
+
+    def test_minimum_warning_age_skips_a_check_right_after_the_previous_one(self):
+        self.real_min_age()
+        app = self.warn_shell_a()
+        app = self.start_app()  # e.g. a second check seconds after the first one
         out = self.check(app)
         self.assertIn("skipping this check", out)
         self.assertEqual(self.kills(), [])
         self.assertEqual(self.slack(), [])
         self.assertEqual(self.stub.requests_to(*SHELLS), [])
 
-        self.set_warning_created_at(self.stamp(-timedelta(minutes=60)))  # the next hour
+        self.set_warning_created_at(self.stamp(-timedelta(minutes=30)))  # the next check
         self.check(app)
         self.assertEqual(self.kills(), ["/api/v1/shells/shell-a/kill"])
         self.assertEqual(self.slack(), [("Terminated", ["<@U0ALICE>"])])
 
     def test_minimum_warning_age_allows_a_kill_after_it(self):
-        self.config.warning_min_age_minutes = 30
+        self.real_min_age()
         app = self.warn_shell_a()
-        self.set_warning_created_at(self.stamp(-timedelta(minutes=31)))
+        self.set_warning_created_at(self.stamp(-timedelta(minutes=16)))
         self.check(app)
         self.assertEqual(self.kills(), ["/api/v1/shells/shell-a/kill"])
 
     def test_minimum_warning_age_skips_every_check_within_it(self):
-        # e.g. a restart ~1 min after the minute-0 check: the interval is 30 minutes, not seconds.
-        self.config.warning_min_age_minutes = 30
+        # e.g. a check soon after a changed schedule: the minimum is 15 minutes, not seconds.
+        self.real_min_age()
         app = self.warn_shell_a()
-        for minutes in (1, 20, 29):
+        for minutes in (1, 10, 14):
             with self.subTest(minutes=minutes):
                 self.set_warning_created_at(self.stamp(-timedelta(minutes=minutes)))
                 out = self.check(self.start_app())
@@ -262,7 +285,7 @@ class StateMachineTest(unittest.TestCase):
 
     def test_minimum_warning_age_with_the_watchdog_clock(self):
         # created_at and the age checks use the same injectable clock (app.now).
-        self.config.warning_min_age_minutes = 30
+        self.real_min_age()
         self.shells = {"shell-a": ("c-a", "alice")}
         self.set_idle("shell-a")
         self.stub.routes[kill_route("shell-a")] = (200, {})
@@ -275,12 +298,12 @@ class StateMachineTest(unittest.TestCase):
         item = json.loads(Path(self.config.file_info_path).read_text())["alert_local_item"][0]
         self.assertEqual(item["created_at"], "2026-09-28 10:00:05")
 
-        app = self.start_app()  # restarted during the same minute 0
+        app = self.start_app()  # a second check 40 s later
         app.now = lambda: hour + timedelta(seconds=40)
         self.assertIn("skipping this check", self.check(app))
         self.assertEqual((self.kills(), self.slack()), ([], []))
 
-        app.now = lambda: hour + timedelta(hours=1)  # the next hourly check
+        app.now = lambda: hour + timedelta(minutes=30)  # the next check
         self.check(app)
         self.assertEqual(self.kills(), ["/api/v1/shells/shell-a/kill"])
         self.assertEqual(self.slack(), [("Terminated", ["<@U0ALICE>"])])
@@ -288,7 +311,7 @@ class StateMachineTest(unittest.TestCase):
     def test_debug_mode_is_not_held_back_by_the_minimum_warning_age(self):
         # Debug mode checks every ~20 s: the next check dry-runs the kill of the shell just warned.
         self.config.is_debug = True
-        self.config.warning_min_age_minutes = 30
+        self.real_min_age()
         self.shells = {"shell-a": ("c-a", "alice")}
         self.set_idle("shell-a")
         self.stub.routes[("GET", "/api/v1/shells/shell-a")] = (200, {"shell": {}})
@@ -301,12 +324,17 @@ class StateMachineTest(unittest.TestCase):
         self.assertEqual(len(self.stub.requests_to("GET", "/api/v1/shells/shell-a")), 1)
         self.assertEqual(self.slack(), [("Terminated", ["alice"])])
 
-    def test_warning_59_minutes_old_kills(self):
-        app = self.warn_shell_a()
-        self.set_warning_created_at(self.stamp(-timedelta(minutes=59)))
-        self.check(app)
-        self.assertEqual(self.kills(), ["/api/v1/shells/shell-a/kill"])
-        self.assertEqual(self.slack(), [("Terminated", ["<@U0ALICE>"])])
+    def test_warning_29_to_31_minutes_old_kills(self):
+        # The next check after the warning comes one interval (30 min) later, give or take.
+        for minutes in (29, 30, 31):
+            with self.subTest(minutes=minutes):
+                self.config.warning_min_age_minutes = 0  # warn right after the previous kill
+                app = self.warn_shell_a()
+                self.real_min_age()
+                self.set_warning_created_at(self.stamp(-timedelta(minutes=minutes)))
+                self.check(app)
+                self.assertEqual(self.kills(), ["/api/v1/shells/shell-a/kill"])
+                self.assertEqual(self.slack(), [("Terminated", ["<@U0ALICE>"])])
 
     def test_saved_record_has_device_count(self):
         self.shells = {"shell-a": ("c-a", "alice")}
@@ -337,7 +365,7 @@ class StateMachineTest(unittest.TestCase):
         self.assertEqual(self.slack(), [("Terminated", ["<@U0ALICE>"])])  # b failed: not reported
         self.assertIn("Kill FAILED for shell shell-b", out)
 
-        # Next hour: b is still tracked, so the kill is retried (no second warning).
+        # Next check: b is still tracked, so the kill is retried (no second warning).
         self.stub.routes[kill_route("shell-b")] = (200, {})
         self.set_idle("shell-b")
         self.check(app)
@@ -443,7 +471,7 @@ class StateMachineTest(unittest.TestCase):
         self.assertIn("Determined rejected the token", out)
         self.assertNotIn(new_token, out)
 
-        self.check(app)  # next hour: the new token is used directly, the kill goes through
+        self.check(app)  # next check: the new token is used directly, the kill goes through
         self.assertEqual(self.stub.requests_to(*LOGIN), [])
         self.assertEqual(self.kills(), ["/api/v1/shells/shell-a/kill"])
         auth = self.stub.requests_to(*kill_route("shell-a"))[0]["headers"]["Authorization"]
@@ -478,19 +506,19 @@ class StateMachineTest(unittest.TestCase):
         self.assertEqual(self.slack(), [("Warning", ["notification"]), ("Warning", ["det api miss"])])
         self.assertEqual(self.kills(), [])
 
-    def hourly(self, app):
-        """One full hourly cycle: the token check, then the alert check."""
+    def cycle(self, app):
+        """One full check cycle: the token check, then the alert check."""
         self.stub.requests.clear()
         out = io.StringIO()
         with redirect_stdout(out):
-            app.hourly_cycle()
+            app.check_cycle()
         return out.getvalue()
 
     def shells_auth(self):
         return [r["headers"].get("Authorization") for r in self.stub.requests_to(*SHELLS)]
 
     def rejected_token_with_unwritable_file(self, also_accepted=()):
-        """Hour 1: the file token is rejected (401), the login works, the file cannot be replaced.
+        """Check 1: the file token is rejected (401), the login works, the file cannot be replaced.
 
         Returns (app, old_token, new_token); replacing the token file still fails
         afterwards (stop self.replace_patch to let it succeed again). Determined
@@ -520,7 +548,7 @@ class StateMachineTest(unittest.TestCase):
         self.replace_patch = mock.patch("metrics_token.os.replace", side_effect=replace)
         self.replace_patch.start()
         self.addCleanup(mock.patch.stopall)
-        out = self.hourly(app)
+        out = self.cycle(app)
         self.assertEqual(len(self.stub.requests_to(*LOGIN)), 1)
         # Retried once, with the new session although it could not be written.
         self.assertEqual(self.shells_auth(), ["Bearer " + old_token, "Bearer " + new_token])
@@ -538,9 +566,9 @@ class StateMachineTest(unittest.TestCase):
     def test_rejected_token_with_failing_write_uses_the_new_session(self):
         app, old_token, new_token = self.rejected_token_with_unwritable_file()
 
-        # Hour 2, the file still cannot be replaced: no new login, the file token is
+        # Check 2, the file still cannot be replaced: no new login, the file token is
         # not taken back, the kill goes through with the new session.
-        out = self.hourly(app)
+        out = self.cycle(app)
         self.assertEqual(self.stub.requests_to(*LOGIN), [])
         self.assertEqual(self.shells_auth(), ["Bearer " + new_token])
         self.assertEqual(self.kills(), ["/api/v1/shells/shell-a/kill"])
@@ -552,10 +580,10 @@ class StateMachineTest(unittest.TestCase):
         self.assertEqual(self.file_text(), old_token + "\n")
         self.assertNotIn(new_token, out)
 
-        # Hour 3, writable again: the same session is written, still without a login.
+        # Check 3, writable again: the same session is written, still without a login.
         self.replace_patch.stop()
         self.stub.routes[ALERTS] = (200, [])
-        out = self.hourly(app)
+        out = self.cycle(app)
         self.assertEqual(self.stub.requests_to(*LOGIN), [])
         self.assertEqual(self.file_text(), new_token + "\n")
         self.assertEqual(self.slack(), [])
@@ -563,8 +591,8 @@ class StateMachineTest(unittest.TestCase):
         self.assertIsNone(app.token_manager._unwritten)
         self.assertNotIn(new_token, out)
 
-        # Hour 4: an ordinary check of the (now written) file token.
-        self.hourly(app)
+        # Check 4: an ordinary check of the (now written) file token.
+        self.cycle(app)
         self.assertEqual(self.stub.requests_to(*LOGIN), [])
         self.assertEqual(app.token_manager.token, new_token)
 
@@ -574,10 +602,10 @@ class StateMachineTest(unittest.TestCase):
             also_accepted=(hand_token,)
         )
 
-        # An admin places a token by hand (see ../prometheus/README.md) before hour 2.
+        # An admin places a token by hand (see ../prometheus/README.md) before check 2.
         Path(self.config.det_metrics_token_path).write_text(hand_token + "\n")
 
-        out = self.hourly(app)
+        out = self.cycle(app)
         self.assertEqual(self.stub.requests_to(*LOGIN), [])
         self.assertEqual(app.token_manager.token, hand_token)
         self.assertEqual(self.shells_auth(), ["Bearer " + hand_token])
@@ -650,7 +678,7 @@ class StateMachineTest(unittest.TestCase):
             {k: v["kind"] for k, v in record.items()}, {"shell-a": "shell", "nb-b": "notebook"}
         )
 
-        # Next hour: both still idle and nb-c newly idle: one kill per endpoint, one new warning.
+        # Next check: both still idle and nb-c newly idle: one kill per endpoint, one new warning.
         self.set_idle("shell-a", "nb-b", "nb-c")
         self.check(app)
         self.assertEqual(
@@ -680,14 +708,14 @@ class StateMachineTest(unittest.TestCase):
 
     def test_warning_saved_before_notebooks_were_policed_still_kills(self):
         # The upgrade restarts the watchdog between a warning and its kill.
-        self.config.warning_min_age_minutes = 30
+        self.real_min_age()
         self.shells = {"shell-a": ("c-a", "alice")}
         self.notebooks = {"nb-b": ("c-nb", "bob")}
         self.write_shell_only_state(
             {"shell-a": {"container_id": "c-a", "description": "Shell (shell-a)", "username": "alice",
                          "startTime": "2026-09-28T00:00:00Z", "device_count": 2,
                          "devices": [{"id": 0}, {"id": 1}]}},
-            self.stamp(-timedelta(minutes=60)),
+            self.stamp(-timedelta(minutes=30)),
         )
         self.set_idle("shell-a", "nb-b")
         self.stub.routes[kill_route("shell-a")] = (200, {})
@@ -715,7 +743,7 @@ class StateMachineTest(unittest.TestCase):
         self.assertIn("Kill FAILED for notebook nb-b", out)
         self.assertEqual(self.saved_record()["nb-b"]["kind"], "notebook")
 
-        # Next hour: still tracked, so the kill is retried (no second warning).
+        # Next check: still tracked, so the kill is retried (no second warning).
         self.stub.routes[notebook_kill_route("nb-b")] = (200, {})
         self.check(app)
         self.assertEqual(self.kills(), ["/api/v1/notebooks/nb-b/kill"])
@@ -741,7 +769,7 @@ class StateMachineTest(unittest.TestCase):
 
     def test_debug_mode_notebook_kill_is_a_dry_run(self):
         self.config.is_debug = True
-        self.config.warning_min_age_minutes = 30
+        self.real_min_age()
         self.notebooks = {"nb-a": ("c-na", "alice")}
         self.set_idle("nb-a")
         self.stub.routes[("GET", "/api/v1/notebooks/nb-a")] = (200, {"notebook": {}, "config": {}})
@@ -828,9 +856,9 @@ class StateMachineTest(unittest.TestCase):
         self.assertEqual(self.slack(), [("Terminated", ["<@U0ALICE>"])])
 
     def test_unchecked_warnings_are_saved_when_nothing_else_is_idle(self):
-        # Real timing: without a new record, the next check would find the warning 2 h old,
+        # Real timing: without a new record, the next check would find the warning 60 min old,
         # too old to count, and warn the notebook again instead of killing it.
-        self.config.warning_min_age_minutes = 30
+        self.real_min_age()
         self.notebooks = {"nb-a": ("c-na", "alice")}
         self.set_idle("nb-a")
         self.stub.routes[notebook_kill_route("nb-a")] = (200, {})
@@ -842,16 +870,16 @@ class StateMachineTest(unittest.TestCase):
 
         notebooks_route = self.stub.routes[NOTEBOOKS]
         self.stub.routes[NOTEBOOKS] = (500, "boom")
-        app.now = lambda: hour + timedelta(hours=1)
+        app.now = lambda: hour + timedelta(minutes=30)
         self.check(app)
         self.assertEqual(self.kills(), [])
         self.assertEqual(self.slack(), [("Warning", ["det api miss"])])
         item = json.loads(Path(self.config.file_info_path).read_text())["alert_local_item"][0]
-        self.assertEqual(item["created_at"], "2026-09-28 11:00:05")
+        self.assertEqual(item["created_at"], "2026-09-28 10:30:05")
         self.assertEqual(list(self.saved_record()), ["nb-a"])
 
         self.stub.routes[NOTEBOOKS] = notebooks_route
-        app.now = lambda: hour + timedelta(hours=2)
+        app.now = lambda: hour + timedelta(minutes=60)
         self.check(app)
         self.assertEqual(self.kills(), ["/api/v1/notebooks/nb-a/kill"])
         self.assertEqual(self.slack(), [("Terminated", ["<@U0ALICE>"])])
@@ -927,7 +955,7 @@ class StateMachineTest(unittest.TestCase):
         old_entry = {"container_id": "c-a", "description": "Shell (shell-a)", "username": "alice",
                      "startTime": "2026-09-28T00:00:00Z", "device_count": 2,
                      "devices": [{"id": 0}, {"id": 1}]}
-        self.write_shell_only_state({"shell-a": old_entry}, self.stamp(-timedelta(minutes=60)))
+        self.write_shell_only_state({"shell-a": old_entry}, self.stamp(-timedelta(minutes=30)))
         self.set_idle("shell-a", "nb-b")
         self.stub.routes[kill_route("shell-a")] = (200, {})
         self.stub.routes[notebook_kill_route("nb-b")] = (200, {})
