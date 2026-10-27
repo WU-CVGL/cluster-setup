@@ -80,19 +80,38 @@ The same built upstream cuBLAS benchmark also checked every output for three squ
 
 On the same physical canary GPU, the read-only RM getter changed `fmla32` from half-rate (`1`) to full-rate (`0`). No Xid or NVIDIA assertion appeared during the tests. The FP8 issue probe times instructions without a numerical output comparison; the numerical checks above cover FP16/BF16 and the PyTorch TF32 path. These are short serial tests, not simultaneous node throughput or an extended production stability test. Workload gains depend on shape, math mode and power/thermal limits.
 
+### Additional deployments on 615.71.09
+
+`cvgl-node05` subsequently passed the same eight-card unlock boot checks on kernel `6.8.0-138-generic` and NVIDIA `615.71.09`; its FP16/FP32 instruction median was 333.40 TFLOP/s. The matched tables above retain their original 610.57.04 measurements.
+
+`cvgl-node06` (pool `128c256t_1536_4090`) was tested with eight RTX 4090 24 GB cards, and `cvgl-node07` (pool `128c256t_1536_4090_48`) with eight modified 48 GB cards. Both used kernel `6.8.0-138-generic` and NVIDIA `615.71.09`. Each node's clean baseline and unlocked run retained the same kernel, driver, pinned Ada source, binaries, image, GPU UUIDs, 450 W caps and serial benchmark parameters. All eight cards on each node unlocked after an OS reboot, with full-rate post-FLR readbacks before NVIDIA initialization and unchanged NVIDIA module hashes.
+
+| Host | Operation | Before | After | Change |
+| --- | --- | ---: | ---: | ---: |
+| cvgl-node06 | FP16 input, FP32 accumulation | 165.38 | 180.21 | +8.96% |
+| cvgl-node06 | BF16 input, FP32 accumulation | 150.44 | 151.24 | +0.53% |
+| cvgl-node06 | TF32 | 88.23 | 144.57 | +63.86% |
+| cvgl-node06 | FP16 / FP32 instruction probe | 165.40 | 330.45 | +99.79% |
+| cvgl-node07 | FP16 input, FP32 accumulation | 162.73 | 176.92 | +8.72% |
+| cvgl-node07 | BF16 input, FP32 accumulation | 149.83 | 150.26 | +0.28% |
+| cvgl-node07 | TF32 | 89.57 | 140.35 | +56.69% |
+| cvgl-node07 | FP16 / FP32 instruction probe | 167.15 | 334.85 | +100.33% |
+
+Values are median TFLOP/s across eight GPUs, using the aggregation methods above. Each phase passed 24 PyTorch GEMM checks, 48 seeded numerical cases and 48 upstream cuBLAS shape/card checks. No Xid or NVIDIA assertion appeared. The upstream single-device RM getter could not allocate its RM device on the tested multi-GPU 615 setup; the boot readbacks and per-card instruction measurements provided the unlock evidence instead.
+
 ### Ada installation and boot checks
 
 Use the [backup procedure](#installation) before installing anything. Build the two DEBs locally from the pinned Ada commit and keep the firmware input SHA-256 checks enabled. On this Jammy host, Python 3.10 built the firmware successfully. The existing DKMS package supplied `dh_dkms` and its debhelper sequence but not the newer `dh-sequence-dkms` dependency declaration; the build bypassed that declaration only after verifying those helpers and confirming it was the sole unmet build dependency. `make test-full` passed its firmware transaction tests; three optional offline decoder tests were skipped because PyCryptodome was absent.
 
-Install the Ada `gpu-unlock-firmware_1.1.1_all.deb` and `gpu-unlock-dkms_1.1.1_all.deb`, then use the same [early-loading installer](./examples/gpu_unlock/install_early_initramfs.sh) and image-order verification below. cvgl-node05's exact opt-in is:
+Install the Ada `gpu-unlock-firmware_1.1.1_all.deb` and `gpu-unlock-dkms_1.1.1_all.deb`, then use the same [early-loading installer](./examples/gpu_unlock/install_early_initramfs.sh) and image-order verification below. Build each node's target list from its own PCI addresses. cvgl-node05's exact opt-in is:
 
 ```text
 gpu_unlock.targets=0000:01:00.0,0000:23:00.0,0000:41:00.0,0000:61:00.0,0000:81:00.0,0000:a1:00.0,0000:c1:00.0,0000:e1:00.0
 ```
 
-Retain `amd_iommu=on iommu=pt` and verify that GRUB still selects the baseline kernel. Ada 1.1.1 declares **nine** firmware files; verify the complete paths under `gpu-unlock/610.43.03/` in the extracted initramfs against the installed assets. The ordinary NVIDIA driver also has files with some of the same basenames, so basename-only matching is insufficient. Verify all existing NVIDIA module hashes in the actual image before booting.
+Retain `amd_iommu=on iommu=pt` and verify that GRUB still selects the baseline kernel. Ada 1.1.1 declares **nine** firmware files; verify the complete paths under `gpu-unlock/610.43.03/` in the extracted initramfs against the installed assets. The ordinary NVIDIA driver also has files with some of the same basenames, so basename-only matching is insufficient. Verify existing NVIDIA module hashes on the root filesystem and, where included, in the actual initramfs before booting.
 
-Upstream recommends fresh card firmware state for first activation. All eight cvgl-node05 cards accepted the state after this ordinary OS reboot; this single result does not establish warm-reboot behavior for other boards. If the module refuses an already initialized WPR2 state, do not retry the firmware transaction live. Use an OS shutdown and confirmed power-off before starting the machine again through BMC.
+Upstream recommends fresh card firmware state for first activation. All eight cards on each tested Ada node accepted the state after an ordinary OS reboot; these results do not establish warm-reboot behavior for other boards. If the module refuses an already initialized WPR2 state, do not retry the firmware transaction live. Use an OS shutdown and confirmed power-off before starting the machine again through BMC.
 
 Require all eight target-specific unlock completions and post-FLR selector checks before NVIDIA initialization, eight healthy cards on the original driver, unchanged power limits, and no new Xid/assert errors. Repeat the identical binaries, image, GPU UUID set and test parameters into separate after files. The [upstream RM getter](https://github.com/JustAResearcher/gpu-unlock-ada/blob/d28c485418c3d9d034cd4bac19200bc33dd3453b/tools/read_sm_rates.py) assumes device minor 0: cvgl-node05 used the GPU actually assigned that minor as the single-device canary, while all eight cards received the compute and correctness tests.
 
@@ -100,7 +119,7 @@ The [rollback procedure](#rollback) also applies to the Ada packages; restore a 
 
 ## Initramfs ordering on Ubuntu 22.04
 
-The tested `initramfs-tools` version, `0.140ubuntu13.5`, supports `/usr/share/initramfs-tools/modules.d/`. However, `init-top/udev` triggers device discovery before `load_modules`. Because NVIDIA modules are already in the initramfs, listing `gpu_unlock` in `modules.d` alone does not guarantee that it runs first.
+The tested `initramfs-tools` version, `0.140ubuntu13.5`, supports `/usr/share/initramfs-tools/modules.d/`. However, `init-top/udev` triggers device discovery before `load_modules`. When NVIDIA modules are in the initramfs, listing `gpu_unlock` in `modules.d` alone does not guarantee that it runs first.
 
 The [early-loading installer](./examples/gpu_unlock/install_early_initramfs.sh) supplies:
 
@@ -120,7 +139,7 @@ framebuffer
 console_setup
 ```
 
-Inspect the generated image itself. Changing only a generated udev script's `PREREQS` in a build hook was insufficient: Jammy's ordering code reads the original source scripts when generating `ORDER`.
+Inspect the generated image itself. Some nodes omit `framebuffer` and console setup; the required ordering is still `gpu-unlock-early` before `udev`. Changing only a generated udev script's `PREREQS` in a build hook was insufficient: Jammy's ordering code reads the original source scripts when generating `ORDER`.
 
 ## Installation
 
@@ -179,7 +198,7 @@ modinfo -F firmware gpu_unlock
 sudo lsinitramfs "/boot/initrd.img-$unlock_kernel" | grep -E 'gpu_unlock\.ko|gpu-unlock/|nvidia.*\.ko'
 ```
 
-Confirm `gpu-unlock-early` precedes `udev`, which precedes `framebuffer`; every firmware file reported by `modinfo` must be present: five for the RTX 3090 package and nine for Ada. Confirm the existing NVIDIA modules remain unchanged in the generated image. Repeat this image verification whenever rebuilding the initramfs for this integration.
+Confirm `gpu-unlock-early` precedes `udev`, and that `framebuffer`, if present, follows `udev`; every firmware file reported by `modinfo` must be present: five for the RTX 3090 package and nine for Ada. Confirm the existing NVIDIA modules remain unchanged wherever they are loaded: some nodes load them from the root filesystem and omit them from the initramfs. Repeat this image verification whenever rebuilding the initramfs for this integration.
 
 Use an OS reboot:
 
