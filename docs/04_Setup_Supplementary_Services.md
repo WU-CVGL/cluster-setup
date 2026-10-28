@@ -240,11 +240,11 @@ nas.cvgl.lab:/mnt/Peter/SupplementaryServices/harbor/database   /srv/nfs/var/har
 
 #### Provided configuration and patch
 
-You can use the provided [`harbor.yml`](../services/harbor/harbor.yml) to install [Harbor](https://github.com/goharbor/harbor/releases/tag/v2.15.2) and switch to NFS by replacing `/srv/nfs/var/harbor/data/database` to `/srv/nfs/var/harbor/database` :
+You can use the provided [`harbor.yml`](../services/harbor/harbor.yml) to install [Harbor](https://github.com/goharbor/harbor/releases/tag/v2.15.4) and switch to NFS by replacing `/srv/nfs/var/harbor/data/database` to `/srv/nfs/var/harbor/database` :
 
 ```bash
 cd <project_root>/services/harbor
-tar -xvzf /path/to/harbor-offline-installer-v2.15.2.tgz    # current version (harbor.yml has _version: 2.15.0)
+tar -xvzf /path/to/harbor-offline-installer-v2.15.4.tgz    # current version (harbor.yml has _version: 2.15.0)
 mv harbor installer && cd installer
 cp ../harbor.yml .
 sudo bash ./install.sh
@@ -252,6 +252,21 @@ sudo docker compose down
 sudo sed -i 's/\/srv\/nfs\/var\/harbor\/data\/database/\/srv\/nfs\/var\/harbor\/database/g' docker-compose.yml
 sudo docker compose up -d
 ```
+
+To upgrade within the same minor version (the same `_version` in `harbor.yml`), run `prepare` instead of `install.sh`: `install.sh` starts Harbor before the database path is switched to NFS. In `services/harbor`, with the new release extracted to `<new>`:
+
+```bash
+sudo sh -c 'docker exec harbor-db pg_dumpall -U postgres > /root/harbor-db.sql'   # backup; also keep harbor.yml, docker-compose.yml and common/
+sudo docker load -i <new>/harbor.v<version>.tar.gz
+sudo docker compose down
+sudo cp <new>/{prepare,common.sh,harbor.yml.tmpl,install.sh,LICENSE} .
+sudo ./prepare
+sudo sed -i 's/\/srv\/nfs\/var\/harbor\/data\/database/\/srv\/nfs\/var\/harbor\/database/g' docker-compose.yml
+grep -n postgresql/data docker-compose.yml   # must show /srv/nfs/var/harbor/database
+sudo docker compose up -d
+```
+
+harbor-core applies database schema migrations at start. A new minor version needs the `migrate` step of Harbor's [upgrade guide](https://goharbor.io/docs/main/administration/upgrade/) for `harbor.yml` first.
 
 Current settings:
 
