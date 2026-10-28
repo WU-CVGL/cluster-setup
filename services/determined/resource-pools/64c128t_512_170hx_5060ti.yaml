@@ -1,6 +1,5 @@
-# Dynamic resource pool of s8030. Restricted to administrators and lzzhao before it was created, with
+# Dynamic resource pool of s8030. Restricted before it was created, with
 #   det resource-pool access set --mode restricted 64c128t_512_170hx_5060ti
-#   det resource-pool access grant 64c128t_512_170hx_5060ti lzzhao
 # and created with
 #   det resource-pool create 64c128t_512_170hx_5060ti.yaml --idempotency-key create-64c128t_512_170hx_5060ti-20261028
 # The master's database holds the live spec (det resource-pool list-dynamic --json) and the
