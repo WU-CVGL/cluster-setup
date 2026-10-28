@@ -32,11 +32,11 @@
     - [Prevent Docker and VPN IP address conflicts](#prevent-docker-and-vpn-ip-address-conflicts)
     - [Security Related Rules](#security-related-rules)
   - [Set up hosts](#set-up-hosts)
-  - [Setup Open Source Mirrors \& nvidia-docker](#setup-open-source-mirrors--nvidia-docker)
+  - [Setup Open Source Mirrors](#setup-open-source-mirrors)
     - [APT](#apt)
     - [Python PyPI (pip)](#python-pypi-pip)
   - [Install Docker-CE](#install-docker-ce)
-  - [Install Nvidia-docker](#install-nvidia-docker)
+  - [Install the NVIDIA Container Toolkit](#install-the-nvidia-container-toolkit)
   - [Configure a Proxy for Docker](#configure-a-proxy-for-docker)
   - [Install Determined AI Systemwide](#install-determined-ai-systemwide)
     - [Pypi cryptography \& pyOpenSSL dependency conflict](#pypi-cryptography--pyopenssl-dependency-conflict)
@@ -455,7 +455,7 @@ Reference: [Fixing Docker and VPN IP Address Conflicts](https://www.lullabot.com
 
 [link to hosts file](../services/system-configurations/etc/hosts)
 
-## Setup Open Source Mirrors & nvidia-docker
+## Setup Open Source Mirrors
 
 ### APT
 
@@ -506,7 +506,7 @@ sudo wget https://cvgl.lab/cvgl.crt --no-check-certificate
 sudo systemctl restart docker
 ```
 
-## Install Nvidia-docker
+## Install the NVIDIA Container Toolkit
 
 > https://docs.nvidia.com/datacenter/cloud-native/container-toolkit/install-guide.html
 
@@ -516,9 +516,13 @@ proxychains -q curl -fsSL https://nvidia.github.io/libnvidia-container/gpgkey | 
     sed 's#deb https://#deb [signed-by=/usr/share/keyrings/nvidia-container-toolkit-keyring.gpg] https://#g' | \
     sudo tee /etc/apt/sources.list.d/nvidia-container-toolkit.list
 sudo apt-get update
-sudo apt-get install -y nvidia-docker2
+sudo apt-get install -y nvidia-container-toolkit
+sudo nvidia-ctk runtime configure --runtime=docker
 sudo systemctl restart docker
+docker info --format '{{json .Runtimes}}' | grep -o '"nvidia"'   # must print "nvidia"
 ```
+
+`nvidia-ctk runtime configure` registers the `nvidia` runtime in `/etc/docker/daemon.json` without making it the default. The Determined agent starts every CUDA task with that runtime, so a node without it cannot run GPU tasks.
 
 > Note: `proxychains -q` sends curl through the cluster proxy, since *github.io* is often blocked; set up proxychains first as in [chapter 00](00_Network_Proxy.md#proxychains).
 
@@ -529,13 +533,13 @@ Docker pulls images from Docker Hub, which is blocked from the campus network, t
 
 ## Install Determined AI Systemwide
 
-The cluster runs our fork, [WU-CVGL/determined](https://github.com/WU-CVGL/determined), version `0.42.1`. Install the `det` CLI from the fork's release wheel, with the same version as the master (the WebUI shows it, or `det master info`):
+The cluster runs our fork, [WU-CVGL/determined](https://github.com/WU-CVGL/determined), version `0.42.3`. Install the `det` CLI from the fork's release wheel, with the same version as the master (the WebUI shows it, or `det master info`):
 
 ```sh
-DET_VERSION=0.42.1
+DET_VERSION=0.42.3
 sudo pip install -U pip
 sudo pip install -U "https://github.com/WU-CVGL/determined/releases/download/$DET_VERSION/determined-$DET_VERSION-py3-none-any.whl"
-det --version     # must show 0.42.1
+det --version     # must show 0.42.3
 ```
 
 Do not `pip install determined` from PyPI: that is the upstream package, and its `det deploy local` starts the upstream images. If the node cannot reach GitHub directly, add `--proxy http://192.168.233.8:59889` (the cluster proxy, see [chapter 00](00_Network_Proxy.md#pip-and-git)) to the `pip install` of the wheel. Details: the fork's [installation and deployment guide](https://github.com/WU-CVGL/determined/blob/main/docs/maintenance/distribution.md).
