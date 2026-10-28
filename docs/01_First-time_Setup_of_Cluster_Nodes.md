@@ -518,7 +518,10 @@ proxychains -q curl -fsSL https://nvidia.github.io/libnvidia-container/gpgkey | 
 sudo apt-get update
 sudo apt-get install -y nvidia-docker2
 sudo systemctl restart docker
+docker info --format '{{json .Runtimes}}' | grep -o '"nvidia"'   # must print "nvidia"
 ```
+
+`nvidia-docker2` registers the `nvidia` runtime in `/etc/docker/daemon.json` without making it the default. The Determined agent starts every CUDA task with that runtime, so a node without it cannot run GPU tasks.
 
 > Note: `proxychains -q` sends curl through the cluster proxy, since *github.io* is often blocked; set up proxychains first as in [chapter 00](00_Network_Proxy.md#proxychains).
 
@@ -529,13 +532,13 @@ Docker pulls images from Docker Hub, which is blocked from the campus network, t
 
 ## Install Determined AI Systemwide
 
-The cluster runs our fork, [WU-CVGL/determined](https://github.com/WU-CVGL/determined), version `0.42.1`. Install the `det` CLI from the fork's release wheel, with the same version as the master (the WebUI shows it, or `det master info`):
+The cluster runs our fork, [WU-CVGL/determined](https://github.com/WU-CVGL/determined), version `0.42.2`. Install the `det` CLI from the fork's release wheel, with the same version as the master (the WebUI shows it, or `det master info`):
 
 ```sh
-DET_VERSION=0.42.1
+DET_VERSION=0.42.2
 sudo pip install -U pip
 sudo pip install -U "https://github.com/WU-CVGL/determined/releases/download/$DET_VERSION/determined-$DET_VERSION-py3-none-any.whl"
-det --version     # must show 0.42.1
+det --version     # must show 0.42.2
 ```
 
 Do not `pip install determined` from PyPI: that is the upstream package, and its `det deploy local` starts the upstream images. If the node cannot reach GitHub directly, add `--proxy http://192.168.233.8:59889` (the cluster proxy, see [chapter 00](00_Network_Proxy.md#pip-and-git)) to the `pip install` of the wheel. Details: the fork's [installation and deployment guide](https://github.com/WU-CVGL/determined/blob/main/docs/maintenance/distribution.md).

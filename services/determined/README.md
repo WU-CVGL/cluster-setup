@@ -1,6 +1,6 @@
 # Determined Configuration Files
 
-The cluster runs our fork, [WU-CVGL/determined](https://github.com/WU-CVGL/determined), version `0.42.1`, with its images `ghcr.io/wu-cvgl/determined-master` and `ghcr.io/wu-cvgl/determined-agent`. Install the fork's `det` CLI first (see [docs/01](../../docs/01_First-time_Setup_of_Cluster_Nodes.md#install-determined-ai-systemwide)). Keep the CLI, the master and all agents on the same version. The fork has no version gate, so mixed versions work during a rolling agent upgrade; the fork's [hot upgrade guide](https://github.com/WU-CVGL/determined/blob/main/docs/maintenance/hot-upgrade.md) says which mixes were tested.
+The cluster runs our fork, [WU-CVGL/determined](https://github.com/WU-CVGL/determined), version `0.42.2`, with its images `ghcr.io/wu-cvgl/determined-master` and `ghcr.io/wu-cvgl/determined-agent`. Install the fork's `det` CLI first (see [docs/01](../../docs/01_First-time_Setup_of_Cluster_Nodes.md#install-determined-ai-systemwide)). Keep the CLI, the master and all agents on the same version. The fork has no version gate, so mixed versions work during a rolling agent upgrade; the fork's [hot upgrade guide](https://github.com/WU-CVGL/determined/blob/main/docs/maintenance/hot-upgrade.md) says which mixes were tested.
 
 - [Configuration file](../system-configurations/etc/determined/master.yaml): a copy of the master's `master.yaml`, without secrets.
 
