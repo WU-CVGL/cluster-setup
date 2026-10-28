@@ -1,6 +1,5 @@
-# Dynamic resource pool. Restricted to administrators and lzzhao before it was created, with
+# Dynamic resource pool. Restricted before it was created, with
 #   det resource-pool access set --mode restricted 64c128t_1024_170hx_64
-#   det resource-pool access grant 64c128t_1024_170hx_64 lzzhao
 # and created with
 #   det resource-pool create 64c128t_1024_170hx_64.yaml --idempotency-key create-64c128t_1024_170hx_64-20261008
 # The master's database holds the live spec (det resource-pool list-dynamic --json) and the
