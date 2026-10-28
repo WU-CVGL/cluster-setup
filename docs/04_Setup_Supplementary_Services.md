@@ -95,7 +95,9 @@ The certificates will be stored in `/etc/ssl/private`.
     CN  = cvgl.lab
 
     [root_ca]
-    basicConstraints    = critical, CA:true
+    basicConstraints     = critical, CA:true
+    keyUsage             = critical, keyCertSign, cRLSign
+    subjectKeyIdentifier = hash
     ```
 
 5) Generate CA certificate
@@ -108,6 +110,10 @@ The certificates will be stored in `/etc/ssl/private`.
 6) Create `Server.ext`
 
     ```conf
+    basicConstraints = critical, CA:FALSE
+    subjectKeyIdentifier = hash
+    authorityKeyIdentifier = keyid
+    keyUsage = critical, digitalSignature, keyEncipherment
     extendedKeyUsage = serverAuth
     subjectAltName = @alt_names
 
@@ -123,11 +129,19 @@ The certificates will be stored in `/etc/ssl/private`.
     openssl req -newkey rsa:2048 -keyout Server.pvk -out Server.req -subj /CN=cvgl.lab
 
     # Sign the server's certificate using CA
-    openssl x509 -req -CA CA.cer -CAkey CA.pvk -in Server.req -out Server.cer -days 10000 -extfile Server.ext -set_serial 0x1111
+    openssl x509 -req -CA CA.cer -CAkey CA.pvk -in Server.req -out Server.cer -days 3650 -sha256 -extfile Server.ext -set_serial 0x$(openssl rand -hex 16)
 
     # If private key has passphrase encryption, generate an unencrypted private key for NGINX
     openssl rsa -in Server.pvk -out Server-unsecure.pvk
     ```
+
+8) Check the chain in strict mode, as Python 3.13 and later verify it:
+
+    ```bash
+    openssl verify -x509_strict -CAfile CA.cer Server.cer   # Server.cer: OK
+    ```
+
+    A CA certificate without these extensions can be re-signed with the same key and subject (`openssl x509 -x509toreq -in CA.cer -signkey CA.pvk -out CA.req`, then `openssl x509 -req -in CA.req -signkey CA.pvk -extfile <the root_ca extensions> -days <days> -sha256 -out CA.cer`). Clients that trust the old CA certificate keep verifying certificates it signs in normal mode; strict clients need the new one.
 
 ### Configure NGINX
 
