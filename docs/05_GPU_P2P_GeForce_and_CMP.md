@@ -50,7 +50,7 @@ The CMP 170HX, a mining card with the A100's GA100 chip, has no P2P either. **cm
 
 This guide covers P2P over PCIe BAR1 on the four card types of this cluster listed below; other GeForce and CMP models were not tested. "24 GB cards" means the RTX 3090 and the RTX 4090 24 GB, "48 GB cards" the modded RTX 4090 48 GB.
 
-We deploy one branch of our fork on every node with GeForce cards: [`610.57.04-p2p-48g`](https://github.com/LingzheZhao/open-gpu-kernel-modules/tree/610.57.04-p2p-48g). It works for all three GeForce card types; the Method 3 code stays dormant where VRAM fits into BAR1. The CMP 170HX node runs the branch [`g292/p2p-bar1-v0.5`](https://github.com/LingzheZhao/cmpunlocker/tree/g292/p2p-bar1-v0.5) of our cmpunlocker fork: upstream cmpunlocker v0.5 with BAR1 P2P.
+Select the fork branch matching the installed userspace driver: [`615.71.09-p2p-48g`](https://github.com/LingzheZhao/open-gpu-kernel-modules/tree/615.71.09-p2p-48g) for 615.71.09 or [`610.57.04-p2p-48g`](https://github.com/LingzheZhao/open-gpu-kernel-modules/tree/610.57.04-p2p-48g) for 610.57.04. Both include Method 3, which stays dormant where VRAM fits into BAR1. The CMP 170HX node runs the branch [`g292/p2p-bar1-v0.5`](https://github.com/LingzheZhao/cmpunlocker/tree/g292/p2p-bar1-v0.5) of our cmpunlocker fork: upstream cmpunlocker v0.5 with BAR1 P2P.
 
 The sections from [How it works](#how-it-works) to [Rollback](#rollback) cover the GeForce cards. The CMP 170HX needs its own kernel, installer and PCIe settings; its sections start at [CMP 170HX](#cmp-170hx).
 
@@ -61,7 +61,7 @@ The sections from [How it works](#how-it-works) to [Rollback](#rollback) cover t
 | RTX 4090 48 GB (modded) | Ada (`sm_89`) | 48 GiB | 32 GiB | dynamic BAR1: each shared allocation is mapped on demand | 7 |
 | CMP 170HX | Ampere GA100 (`sm_80`) | 64 GiB with cmpunlocker (8 GB stock) | 64 GiB with the kernel patches | static BAR1, forced: all of VRAM is mapped once | g292 |
 
-Placeholders: `<agent>` Determined agent ID, `<K>` kernel release (`uname -r`), `<N>` driver branch (e.g. `610`), `<version>` full driver version (e.g. `610.57.04`), `<revision>` Ubuntu package revision, `<gcc>` major version of the compiler the kernel was built with, `<fork>` absolute path of the built fork tree, `<image>` CUDA + PyTorch image.
+Placeholders: `<agent>` Determined agent ID, `<K>` kernel release (`uname -r`), `<N>` driver branch (e.g. `615`), `<version>` full driver version (e.g. `615.71.09`), `<revision>` Ubuntu package revision, `<gcc>` major version of the compiler the kernel was built with, `<fork>` absolute path of the built fork tree, `<image>` CUDA + PyTorch image.
 
 ## Results summary
 
@@ -109,7 +109,7 @@ sleep 60; nvidia-smi -i 0 -q -d MEMORY | grep -A 3 BAR1; docker stop bar1-hold
 
 ### What our fork changes
 
-[LingzheZhao/open-gpu-kernel-modules](https://github.com/LingzheZhao/open-gpu-kernel-modules) has two branches on top of aikitoria's `610.57.04-p2p-v3`: `610.57.04-p2p-fixes` (the general fixes below, a candidate for upstream) and `610.57.04-p2p-48g` (those fixes plus Method 3, deployed everywhere). Compared with aikitoria v3 and duanyll's port:
+[LingzheZhao/open-gpu-kernel-modules](https://github.com/LingzheZhao/open-gpu-kernel-modules) has two branches on top of aikitoria's `610.57.04-p2p-v3`: `610.57.04-p2p-fixes` (the general fixes below, a candidate for upstream) and `610.57.04-p2p-48g` (those fixes plus Method 3). The `615.71.09-p2p-48g` branch carries these fixes and Method 3 onto aikitoria's `615.71.09-p2p`. Compared with aikitoria v3 and duanyll's port:
 
 - **No false P2P.** When BAR1 P2P is not possible for a pair, the driver reports no P2P instead of advertising it and failing at the first peer mapping (NCCL crashed on the 48 GB cards).
 - **Managed memory is safe.** Cross-GPU `cudaMallocManaged` no longer faults the GPUs or corrupts memory ([below](#managed-memory-uvm)).
@@ -144,7 +144,7 @@ Our fork adds the `nvidia_uvm` module parameter `uvm_bar1_p2p_managed` (set in `
 - [ ] **BIOS**: Above 4G Decoding and Resizable BAR on; the host bridge windows must fit a 32 GiB BAR1 per GPU (the maximum on all three card types).
 - [ ] **Secure Boot** off (or sign the modules yourself).
 - [ ] **`unattended-upgrades` purged** ([docs/01](01_First-time_Setup_of_Cluster_Nodes.md#disable-unattended-updates)): it installs new kernels, which then boot without the P2P modules, and driver updates that break the version match. The install script refuses and `verify.sh` fails while it is installed.
-- [ ] **Driver**: Ubuntu's `nvidia-driver-<N>-open` at **exactly** the version of the fork branch (`610.57.04`). The closed driver cannot be patched.
+- [ ] **Driver**: Ubuntu's `nvidia-driver-<N>-open` at **exactly** the version of the selected fork branch (e.g. `615.71.09`). The closed driver cannot be patched.
 - [ ] **Build tools**: `linux-headers-<K>`, and the C and C++ compilers of the version the kernel was built with (`cat /proc/version`), e.g. `gcc-12` and `g++-12`: part of the driver is C++.
 - [ ] **One card type per node** (RTX 3090, RTX 4090 24 GB or RTX 4090 48 GB): do not mix. The tests build for GPU0's compute capability only, and P2P between an RTX 3090 and an RTX 4090 was not tested.
 - [ ] **PCIe links**: every GPU at full width under load (`nvidia-smi --query-gpu=index,pcie.link.width.current,pcie.link.width.max --format=csv -lms 500` while a job runs).
@@ -701,7 +701,7 @@ ACS redirect off (`acs-redir.sh off` on all 16 bridges above the GPUs: 4 root po
 - aikitoria P2P branches: <https://github.com/aikitoria/open-gpu-kernel-modules>
 - duanyll Method 3 fork: <https://github.com/duanyll/open-gpu-kernel-modules> (branches `*-p2p-48g`)
 - duanyll blog, "48G 4090 P2P" (Chinese): <https://github.com/duanyll/duanyll.com-hexo/blob/master/source/_posts/tech/2026-7-13-4090-48G-P2P.md>
-- Our fork: <https://github.com/LingzheZhao/open-gpu-kernel-modules>, branches [`610.57.04-p2p-48g`](https://github.com/LingzheZhao/open-gpu-kernel-modules/tree/610.57.04-p2p-48g) and [`610.57.04-p2p-fixes`](https://github.com/LingzheZhao/open-gpu-kernel-modules/tree/610.57.04-p2p-fixes)
+- Our fork: <https://github.com/LingzheZhao/open-gpu-kernel-modules>, branches [`615.71.09-p2p-48g`](https://github.com/LingzheZhao/open-gpu-kernel-modules/tree/615.71.09-p2p-48g), [`610.57.04-p2p-48g`](https://github.com/LingzheZhao/open-gpu-kernel-modules/tree/610.57.04-p2p-48g) and [`610.57.04-p2p-fixes`](https://github.com/LingzheZhao/open-gpu-kernel-modules/tree/610.57.04-p2p-fixes)
 - NCCL SHM/cuMem host bug: <https://github.com/NVIDIA/nccl/issues/2190>, proposed fix <https://github.com/NVIDIA/nccl/pull/2388>
 - cmpunlocker (upstream): <https://github.com/amoghmunikote/cmpunlocker>
 - bayley's cmpunlocker (BAR1 P2P and the kernel patches): <https://github.com/bayley/cmpunlocker>

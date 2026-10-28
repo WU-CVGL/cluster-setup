@@ -44,6 +44,7 @@
     - [Disable IPv6](#disable-ipv6)
     - [Configure RDMA](#configure-rdma)
   - [Do stress test](#do-stress-test)
+  - [GPU tensor unlock](#gpu-tensor-unlock)
   - [Maintainance: Upgrade APT packages \& `Determined AI`](#maintainance-upgrade-apt-packages--determined-ai)
 - [Common References](#common-references)
   - [Cluster Management System](#cluster-management-system)
@@ -618,6 +619,10 @@ Then reboot.
 ## Do stress test
 
 > https://lambdalabs.com/blog/perform-gpu-and-cpu-stress-testing-on-linux
+
+## GPU tensor unlock
+
+For RTX 3090 and RTX 4090 tensor unlock installation, boot verification, benchmarking and rollback, see [GPU Tensor Unlock](./07_GPU_Unlock.md).
 
 ## Maintainance: Upgrade APT packages & `Determined AI`
 
