@@ -104,7 +104,7 @@ This works only when the old master starts against the migrated database with th
 
 ## Agents
 
-Every GPU node runs one agent container, `det-agent-<hostname>`, started with `docker run`. Its hostname (`cvgl-node01` to `cvgl-node08`) is the agent ID. `<master ip>` is the master's address (`DET_MASTER` in the login node's `/etc/environment`), `<pool>` the node's pool from the table below:
+Every GPU node runs one agent container, `det-agent-<hostname>`, started with `docker run`. Its hostname (`cvgl-node01` to `cvgl-node08`, and `s8030`) is the agent ID. `<master ip>` is the master's address (`DET_MASTER` in the login node's `/etc/environment`), `<pool>` the node's pool from the table below:
 
 ```bash
 docker run -d --name det-agent-<hostname> --hostname <hostname> --network host --restart unless-stopped --init \
@@ -115,6 +115,8 @@ docker run -d --name det-agent-<hostname> --hostname <hostname> --network host -
 ```
 
 `--gpus 'all,"capabilities=gpu,utility"'` passes all GPUs; to leave one out of the slots see [Leaving out a faulty GPU](#leaving-out-a-faulty-gpu). Docker rejects `--gpus '"all,capabilities=gpu,utility"'` (`unexpected key 'all,capabilities'`), and `--gpus '"capabilities=gpu,utility"'` (no `all`, no `device=`) gives the container only one GPU. Check the slots with `det agent list` or `docker logs det-agent-<hostname>` ("detected compute devices").
+
+s8030 is not on the cluster network: it sits behind its own NAT gateway, which campus hosts see as 10.13.95.101. It reaches the master at `10.0.1.66` (`DET_MASTER_HOST=10.0.1.66`), and the NAS servers at their campus addresses: its `/etc/hosts` maps `nas.cvgl.lab` to `10.0.1.70` and `nas2.cvgl.lab` to `10.0.1.89`, and the NFS shares that the nodes mount list `10.13.95.101` in their hosts. Its Docker daemon pulls through `http://10.0.1.68:59889`. The master cannot reach task ports behind the gateway, so shells, notebooks, TensorBoards and `proxy_ports` fail there (`proxy error: dial tcp 10.13.95.101:<port>: connect: connection refused` in the master log); commands, experiments and generic tasks run. Forwarding TCP 32768-60999, the range Docker publishes task ports from, from the gateway to s8030 would let the master in.
 
 `det deploy local agent-up <master ip> --agent-resource-pool=<pool>`, with the CLI of the same version, starts the same container with all GPUs; it cannot take a GPU list.
 
@@ -140,6 +142,7 @@ Start the new container with the same settings (`docker run` above, with the old
 | `128c256t_1536_4090_48` | 2x AMD Epyc 9554, 1536 GB RAM, RTX 4090 48G | node07 |
 | `128c256t_1536_6000Ada` | 2x AMD Epyc 9554, 1536 GB RAM, RTX 6000 Ada | node08 |
 | `64c128t_1024_170hx_64` | AMD Epyc 7J13, 1024 GB RAM, CMP 170HX | none; [restricted](#pool-access) to administrators and lzzhao |
+| `64c128t_512_170hx_5060ti` | AMD Epyc 7J13, 512 GB RAM, 3x CMP 170HX and 2x RTX 5060 Ti | s8030; [restricted](#pool-access) to administrators and lzzhao |
 | `temp` | none | none (for temporary use) |
 
 All of them are dynamic pools ([Dynamic resource pools](#dynamic-resource-pools)). The master also has the built-in `default` pool, which is static and empty: an agent without `DET_RESOURCE_POOL` joins it. Tasks that name no pool run in the default pools set in `master.yaml`: `48c96t_512_3090` with GPUs, `128c256t_1536_4090` without.
@@ -210,6 +213,7 @@ The spec of each pool is kept in [`resource-pools/`](resource-pools/); the datab
 - [`128c256t_1536_4090_48`](resource-pools/128c256t_1536_4090_48.yaml)
 - [`128c256t_1536_6000Ada`](resource-pools/128c256t_1536_6000Ada.yaml)
 - [`64c128t_1024_170hx_64`](resource-pools/64c128t_1024_170hx_64.yaml)
+- [`64c128t_512_170hx_5060ti`](resource-pools/64c128t_512_170hx_5060ti.yaml)
 - [`temp`](resource-pools/temp.yaml)
 
 ## Pool access
