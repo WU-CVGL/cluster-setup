@@ -1,4 +1,4 @@
-FROM nginx:alpine
+FROM nginx:1.30.6-alpine
 
 RUN sed -i 's/dl-cdn.alpinelinux.org/mirrors.bfsu.edu.cn/g' /etc/apk/repositories &&\
     apk update && apk add bash curl
