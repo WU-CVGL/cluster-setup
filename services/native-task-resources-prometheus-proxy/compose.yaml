@@ -1,6 +1,6 @@
 services:
   task-resources-proxy:
-    image: nginx@sha256:3923f8de8d2214b9490e68fd6ae63ea604deddd166df2755b788bef04848b9bc
+    image: nginx:1.30.6-alpine@sha256:47928bf67eb62a1863cb08d9ecb52d3e704304ba614eaee17884204677702951
     pull_policy: never
     container_name: native-task-resources-prometheus-proxy
     restart: unless-stopped

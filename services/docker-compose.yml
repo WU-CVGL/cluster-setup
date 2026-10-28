@@ -435,7 +435,7 @@ services:
       - nextcloud-redis
 
   nextcloud-nginx:
-    image: nginx:alpine
+    image: nginx:1.30.6-alpine
     restart: always
     networks:
       - nextcloud
