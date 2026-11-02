@@ -23,6 +23,10 @@ scrape_configs:
         regex: 'cvglloginnode\.lan'
         target_label: node
         replacement: login.cvgl.lab
+      - source_labels: [instance]
+        regex: 's8030:[0-9]+'
+        target_label: node
+        replacement: s8030
     static_configs:
       - targets:
           - "cvglcorevm.lan:9100"
@@ -36,6 +40,9 @@ scrape_configs:
           - "cvgl-node06.lan:9100"
           - "cvgl-node07.lan:9100"
           - "cvgl-node08.lan:9100"
+      - targets: ["10.0.1.66:19100"]
+        labels:
+          instance: s8030:9100
   - job_name: "cadvisor"
     relabel_configs:
       - target_label: det_cluster
@@ -48,6 +55,10 @@ scrape_configs:
         regex: 'cvglloginnode\.lan'
         target_label: node
         replacement: login.cvgl.lab
+      - source_labels: [instance]
+        regex: 's8030:[0-9]+'
+        target_label: node
+        replacement: s8030
     metric_relabel_configs:
       - source_labels: [id]
         regex: '.*/docker/([0-9a-f]{64})'
@@ -69,6 +80,9 @@ scrape_configs:
           - "cvgl-node06.lan:9080"
           - "cvgl-node07.lan:9080"
           - "cvgl-node08.lan:9080"
+      - targets: ["10.0.1.66:19080"]
+        labels:
+          instance: s8030:9080
   - job_name: "dcgm"
     relabel_configs:
       - target_label: det_cluster
@@ -81,6 +95,10 @@ scrape_configs:
         regex: 'cvglloginnode\.lan'
         target_label: node
         replacement: login.cvgl.lab
+      - source_labels: [instance]
+        regex: 's8030:[0-9]+'
+        target_label: node
+        replacement: s8030
     honor_timestamps: true
     scrape_interval: 15s
     scrape_timeout: 5s
@@ -94,6 +112,9 @@ scrape_configs:
           - "cvgl-node06.lan:9400"
           - "cvgl-node07.lan:9400"
           - "cvgl-node08.lan:9400"
+      - targets: ["10.0.1.66:19400"]
+        labels:
+          instance: s8030:9400
     metrics_path: /metrics
     scheme: http
     follow_redirects: true

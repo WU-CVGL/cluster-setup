@@ -30,9 +30,8 @@
 # which `xid!=""` filters out. Never alert on DCGM_FI_DEV_XID_ERRORS: it holds the last code
 # until another code arrives or the exporter restarts, so an alert on it never resolves.
 #
-# Expected GPUs per node: 8 (every GPU node has 8 GPUs, see the hardware tables in the
-# top-level README.md). It is the threshold of rule `gpu-missing` below. For a node that
-# runs with fewer GPUs on purpose, add a Grafana silence for that node (README.md, 7.4).
+# Expected GPUs: s8030 has 5; the other GPU nodes have 8. The gpu-missing query
+# returns the deficit only while its exporter is up; exporter-down is a separate rule.
 
 apiVersion: 1
 
@@ -315,9 +314,17 @@ groups:
               refId: A
               editorMode: code
               expr: >-
-                count by (node) (count by (node, gpu_uuid) (DCGM_FI_DEV_GPU_TEMP{job="dcgm"}))
-                or on (node)
-                (max by (node) (up{job="dcgm"} == 1) * 0)
+                (
+                  (max by (node) (up{job="dcgm",node!="s8030"} == 1) * 0 + 8)
+                  or
+                  (max by (node) (up{job="dcgm",node="s8030"} == 1) * 0 + 5)
+                )
+                - on (node)
+                (
+                  count by (node) (count by (node, gpu_uuid) (DCGM_FI_DEV_GPU_TEMP{job="dcgm"}))
+                  or on (node)
+                  (max by (node) (up{job="dcgm"} == 1) * 0)
+                )
               instant: true
               range: false
               intervalMs: 1000
@@ -346,8 +353,8 @@ groups:
               expression: B
               conditions:
                 - evaluator:
-                    type: lt
-                    params: [8]
+                    type: gt
+                    params: [0]
               datasource:
                 type: __expr__
                 uid: __expr__
@@ -360,10 +367,11 @@ groups:
         labels:
           severity: critical
         annotations:
-          summary: Only {{ printf "%.0f" $values.B.Value }} of 8 GPUs report on {{ $labels.node }}
+          summary: Missing {{ printf "%.0f" $values.B.Value }} GPU(s) on {{ $labels.node }}
           description: >-
-            DCGM-Exporter on {{ $labels.node }} reports {{ printf "%.0f" $values.B.Value }} GPUs
-            instead of 8 for 5 minutes. A GPU that fell off the bus (XID 79) or failed to initialise
+            DCGM-Exporter on {{ $labels.node }} reports {{ printf "%.0f" $values.B.Value }} fewer GPUs
+            than expected for 5 minutes (5 on s8030, 8 on other GPU nodes). A GPU that fell off the bus
+            (XID 79) or failed to initialise
             disappears from DCGM. Check `nvidia-smi -L` and `sudo dmesg -T | grep -i -e xid -e nvrm`
             on the node. If the node runs with fewer GPUs on purpose, silence this alert for it.
           dashboard_url: https://grafana.cvgl.lab/d/Oxed_c6Wz/?var-instance={{ $labels.node }}:9400

@@ -213,6 +213,8 @@ On every node that needs to be monitored, copy the whole [`node-exporter`](./nod
 docker compose up -d --force-recreate --remove-orphans
 ```
 
+Set `EXPORTER_LISTEN_ADDRESS` in the node-exporter project’s `.env` to bind its ports to a specific interface; it defaults to `0.0.0.0`. s8030 binds to its WireGuard address and uses the [core exporter proxy](s8030-monitoring-proxy/) for Prometheus access.
+
 On VMs without a GPU, start only `docker compose up -d node-exporter` (Prometheus scrapes cAdvisor and DCGM-Exporter only on the GPU nodes).
 
 - **Images:** all three images come from `harbor.cvgl.lab`, so every machine that runs them, VMs included, must trust the Harbor certificate first ([docs/04](../docs/04_Setup_Supplementary_Services.md#post-installation)). Harbor holds the same images as the upstream registries (`library/prom/node-exporter` is `prom/node-exporter`, `nvidia/k8s/dcgm-exporter` is `nvcr.io/nvidia/k8s/dcgm-exporter`), so no machine needs Docker Hub, `nvcr.io` or the outbound proxy to pull them.
@@ -251,12 +253,12 @@ Grafana provisions the GPU health alerts from [`grafana/provisioning/alerting/gp
 | GPU XID error (hardware or driver) | a GPU reported an XID other than 13, 31, 43 and 45 in DCGM-Exporter's 5-minute window; unknown codes included | none | `slack-gpu-critical` |
 | GPU XID error (application) | a GPU reported XID 13, 31, 43 or 45 (usually caused by the user's job: illegal memory access, page fault, killed job) | none | `slack-gpu-app` |
 | DCGM-Exporter down | Prometheus cannot scrape DCGM-Exporter on a node | 5 min | `slack-gpu-critical` |
-| GPUs missing from DCGM | fewer than 8 GPUs (distinct `gpu_uuid`) report on a node, or none while its exporter is up | 5 min | `slack-gpu-critical` |
+| GPUs missing from DCGM | fewer than the expected GPUs (distinct `gpu_uuid`) report while the exporter is up | 5 min | `slack-gpu-critical` |
 
 - **Messages:** one Slack message per rule and node. Labels: `node`, `gpu`, `gpu_uuid`, `modelName`, `xid` (where they apply) and `severity` (`critical`, or `info` for application XIDs). Annotations: a summary with a short meaning of the common XID codes, what to check on the node, the NVIDIA XID catalog and a dashboard link with the node preselected. A firing alert is repeated every 4 hours (application XIDs: 12 hours), and a resolved message follows when it clears. An XID alert clears 5 to 10 minutes after the last XID of that code, when it leaves the exporter's window.
 - **XID source:** the rules read `DCGM_EXP_XID_ERRORS_COUNT` (XIDs per GPU and code in the last 5 minutes). `DCGM_FI_DEV_XID_ERRORS` (the last code, kept until another code arrives or the exporter restarts) is shown on the dashboard only: an alert on it would never resolve.
 - **Not covered:** XIDs that happen while DCGM-Exporter is down or restarting are never seen. When Prometheus cannot be queried, the rules keep their last state (`KeepLast`) and send nothing, so a Prometheus outage does not alert here. No data (no XID, or no exporter counters yet) is normal (`OK`).
-- **Expected GPU count:** 8, the GPU count of every GPU node, is the threshold of `GPUs missing from DCGM` in the alerting file. For a node that runs with fewer GPUs on purpose, or a node in maintenance (it also raises `DCGM-Exporter down`), add a silence in Grafana (Alerting > Silences) with the matcher `node=cvgl-nodeXX.lan`.
+- **Expected GPU count:** 5 on s8030 and 8 on the other GPU nodes. `GPUs missing from DCGM` reports the positive difference between expected and observed GPUs. For a node that runs with fewer GPUs on purpose, or a node in maintenance (it also raises `DCGM-Exporter down`), add a silence in Grafana (Alerting > Silences) with the matcher `node=cvgl-nodeXX.lan`.
 - **Watchdog and IdleKillAlert:** the watchdog acts only on the alert named `GRAFANA_ALERT_NAME` (`IdleKillAlert`, kept in Grafana's database, folder `test`), so these alerts never warn or kill anything. The file routes each rule with its own contact point (`notification_settings`) and has no `policies` section, so the default notification policy and IdleKillAlert are left as they are.
 - **Editing:** provisioned rules and contact points are read-only in the UI; change the file. Grafana replaces `$NAME` in the file with environment variables, except in annotations and queries (rules in the file header). Anonymous viewers can read rules and annotations: never put a secret there.
 
