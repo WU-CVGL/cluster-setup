@@ -50,13 +50,13 @@ SCHEDULE_SAMPLE_START = datetime(2026, 1, 1, tzinfo=timezone.utc)
 # (connect, read) timeout in seconds, used for every HTTP request.
 HTTP_TIMEOUT = (10, 60)
 
-# Kinds of Determined task that the watchdog polices, with their Slack labels. The kind is
-# saved as "kind" in the warning records; records written before notebooks were policed have
-# no "kind" and only hold shells (TASK_KIND_DEFAULT).
+# Kinds of Determined task that the watchdog polices, with their Slack labels: shells only
+# (Determined 0.43.0 has no notebooks). The kind is saved as "kind" in the warning records;
+# records without "kind" hold shells (TASK_KIND_DEFAULT). Entries of other kinds in a record
+# saved by an earlier version are never killed.
 TASK_KIND_SHELL = "shell"
-TASK_KIND_NOTEBOOK = "notebook"
 TASK_KIND_DEFAULT = TASK_KIND_SHELL
-TASK_KIND_LABELS = {TASK_KIND_SHELL: "Shell", TASK_KIND_NOTEBOOK: "JupyterLab"}
+TASK_KIND_LABELS = {TASK_KIND_SHELL: "Shell"}
 
 REDACTED = "<redacted>"
 _SECRET = {"secret": True}
@@ -141,7 +141,7 @@ class Config:
     # Minutes between two checks: the time from a warning to its kill.
     check_interval_minutes: Optional[int] = None
     # A warning older than this (one interval plus half of one) no longer counts as the
-    # previous check; the shell or notebook is warned again.
+    # previous check; the shell is warned again.
     warning_max_age_minutes: Optional[int] = None
     # A check that runs sooner than this (half an interval) after the previous saved one is
     # skipped, so that the warnings that one sent still get a full interval.

@@ -52,10 +52,10 @@ class MessageNotifier:
         user_info,
         slack_webhook_url,
     ) -> bool:
-        """Warn about new idle shells and notebooks and report the ones that were terminated.
+        """Warn about new idle shells and report the ones that were terminated.
 
-        Each field's title names the kind ("[Shell] ..." or "[JupyterLab] ...") before the
-        description. Only non-empty attachments are sent; nothing is posted if both are empty.
+        Each field's title names the kind ("[Shell] ...") before the description. Only non-empty
+        attachments are sent; nothing is posted if both are empty.
         """
         try:
             attachments = []

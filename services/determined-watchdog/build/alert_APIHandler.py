@@ -7,7 +7,6 @@ import requests
 from alert_config import (
     HTTP_TIMEOUT,
     TASK_KIND_DEFAULT,
-    TASK_KIND_NOTEBOOK,
     TASK_KIND_SHELL,
     Config,
     log,
@@ -30,12 +29,10 @@ class APIHandler:
     def __init__(self, config: Config):
         self.config = config
         self.det_shell_api = urljoin(config.det_web, "api/v1/shells/")
-        self.det_notebook_api = urljoin(config.det_web, "api/v1/notebooks/")
         self.det_task_api = urljoin(config.det_web, "api/v1/tasks/")
         # Base URL of each policed kind: <base><id>/kill kills it, <base><id> gets it.
         self.det_kind_api = {
             TASK_KIND_SHELL: self.det_shell_api,
-            TASK_KIND_NOTEBOOK: self.det_notebook_api,
         }
         self.grafana_alert_api = urljoin(
             config.grafana_web,
@@ -107,33 +104,18 @@ class APIHandler:
             raise DetAPIError("GET shells: 'shells' is not a list")
         return data
 
-    def get_notebook_api_data(self, det_headers):
-        data = self._get_det_json(self.det_notebook_api, det_headers, "GET notebooks")
-        if not isinstance(data.get("notebooks") or [], list):
-            raise DetAPIError("GET notebooks: 'notebooks' is not a list")
-        return data
-
     def get_task_api_data(self, det_headers):
         data = self._get_det_json(self.det_task_api, det_headers, "GET tasks")
         if not isinstance(data.get("allocationIdToSummary") or {}, dict):
             raise DetAPIError("GET tasks: 'allocationIdToSummary' is not a map")
         return data
 
-    def parse_api_data(self, shell_api_data, task_api_data, notebook_api_data=None):
-        """Return {task_id: info} for the shells and notebooks that have a container.
-
-        info["kind"] is "shell" or "notebook". shell_api_data or notebook_api_data may be None
-        (that listing failed). A notebook's serviceAddress carries its Jupyter token: it is not
-        copied (info is logged and saved).
-        """
+    def parse_api_data(self, shell_api_data, task_api_data):
+        """Return {task_id: info} for the shells that have a container (info["kind"] "shell")."""
         result = {}
         summaries = task_api_data.get("allocationIdToSummary") or {}
-        for kind, tasks in (
-            (TASK_KIND_SHELL, (shell_api_data or {}).get("shells")),
-            (TASK_KIND_NOTEBOOK, (notebook_api_data or {}).get("notebooks")),
-        ):
-            for task in tasks or []:
-                self._add_task_container(result, kind, task, summaries)
+        for task in (shell_api_data or {}).get("shells") or []:
+            self._add_task_container(result, TASK_KIND_SHELL, task, summaries)
         return result
 
     def _add_task_container(self, result, kind, task, summaries):
@@ -141,8 +123,8 @@ class APIHandler:
         if task_id is None:
             return
 
-        ## container is null in shell_api / notebook_api. Retrieve from task_api:
-        ## shells and notebooks have one allocation, "<task id>.1"
+        ## container is null in shell_api. Retrieve from task_api:
+        ## shells have one allocation, "<task id>.1"
         task_data = summaries.get(f"{task_id}.1")
         if not task_data:
             return
@@ -216,7 +198,7 @@ class APIHandler:
         return container_ids
 
     def kill_container(self, task_id, det_header, debug, kind=TASK_KIND_DEFAULT) -> bool:
-        """Kill one shell or notebook; in debug mode only GET it (dry run). True on success."""
+        """Kill one shell; in debug mode only GET it (dry run). True on success."""
         base_api = self.det_kind_api.get(kind)
         if base_api is None:
             log(f"Cannot kill task {task_id}: unknown kind {kind!r}.")
@@ -246,7 +228,7 @@ class APIHandler:
         return True
 
     def kill_containers(self, tasks, debug, det_headers):
-        """Kill the given {task_id: info} shells and notebooks (by info["kind"], default shell).
+        """Kill the given {task_id: info} shells (by info["kind"], default shell).
 
         Returns (killed, failed), both {task_id: info}.
         """

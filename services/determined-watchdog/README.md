@@ -1,6 +1,6 @@
 # Determined watchdog
 
-Reclaims idle GPU shells and JupyterLab notebooks on the Determined cluster and keeps the
+Reclaims idle GPU shells on the Determined cluster and keeps the
 Determined API token that Prometheus uses for the `det-master` scrape fresh. Runs as the
 `watchdog` service in `services/docker-compose.yml` (image built from `build/`).
 
@@ -13,36 +13,30 @@ Every 30 minutes, at minutes 0 and 30 (crontab `*/30 * * * *`, see `WATCHDOG_SCH
 2. **Fetches the firing alerts** from Grafana's Alertmanager API
    (`/api/alertmanager/grafana/api/v2/alerts/?active=true&silenced=false&inhibited=false`).
    Silenced and inhibited alerts are ignored, so **a Grafana silence on
-   `IdleKillAlert{container_id="..."}` exempts that container** (shell or notebook) from being
+   `IdleKillAlert{container_id="..."}` exempts that container** from being
    killed.
 3. If the alert named `GRAFANA_ALERT_NAME` is firing, maps its `container_id` labels to Determined
-   **shells** and **JupyterLab notebooks** (`/api/v1/shells/` and `/api/v1/notebooks/`, plus
-   `/api/v1/tasks/`: allocation `<shell or notebook id>.1` -> `containerId`). Both kinds are
-   handled alike:
-   - a shell or notebook that is idle for the first time gets a Slack **Warning**
+   **shells** (`/api/v1/shells/`, plus `/api/v1/tasks/`: allocation `<shell id>.1` ->
+   `containerId`):
+   - a shell that is idle for the first time gets a Slack **Warning**
      ("Your container will be released in 30 minutes": one interval of the schedule);
    - one that was already warned at the previous check (at least 15 and at most 45 minutes
      earlier, `warning_min_age_minutes` / `warning_max_age_minutes`: half an interval and one and
      a half) and is still idle is killed
-     (`POST /api/v1/shells/<id>/kill` or `POST /api/v1/notebooks/<id>/kill`).
+     (`POST /api/v1/shells/<id>/kill`).
      It is reported as **Terminated** only if the kill succeeded; a failed kill is logged, not
      reported, and retried at the next check.
 
-Only shells and JupyterLab notebooks are policed: idle commands, TensorBoards and trials are never
-killed. Notebooks are policed because Determined gives a notebook's Jupyter token only to its owner
-and to admins, so nobody else can check or reclaim an idle notebook by hand. A CPU-only shell or
-notebook has no GPU metrics, so the alert never fires for it and it is never warned or killed.
-If the alert is not firing, or no idle container belongs to a shell or notebook, it only logs.
+Only shells are policed, with the JupyterLab and VS Code services they run: idle commands,
+TensorBoards and trials are never killed (Determined 0.43.0 has no notebooks). A CPU-only shell has
+no GPU metrics, so the alert never fires for it and it is never warned or killed.
+If the alert is not firing, or no idle container belongs to a shell, it only logs.
 Errors (Grafana/Determined/Slack unreachable, bad responses) are logged and the next check tries
-again; Slack delivery is best-effort and never stops the watchdog. The shell and notebook listings
-fail independently: if one of them fails, the check posts `det api miss` naming it and polices
-the other kind as usual. Tasks of the failed kind are neither warned nor killed in that check; the
-ones warned before and still idle stay tracked, so the next check that lists them kills them if
-they are still idle, without a second warning. If the task listing fails, or both the shell and
-the notebook listings, the check posts `det api miss` and neither warns nor kills.
+again; Slack delivery is best-effort and never stops the watchdog. If the shell or the task listing
+fails, the check posts `det api miss` and neither warns nor kills.
 The warning state (`data/file_info.json` + `data/localData/`) survives restarts. A warning older
-than 45 minutes (after downtime, or after a check at which no shell or notebook was idle) is
-ignored and that shell or notebook is warned again.
+than 45 minutes (after downtime, or after a check at which no shell was idle) is
+ignored and that shell is warned again.
 
 The checks are scheduled with APScheduler (a cron trigger, in the container's local timezone: UTC,
 as the compose file sets no `TZ`). A check that starts more than 5 minutes late (host suspended or
@@ -56,7 +50,7 @@ A start never runs a check: the first one is the next fire time of the schedule 
 `Check schedule: */30 * * * * (every 30 min); next check at ...`), so the watchdog can be
 restarted at any time. A check that comes less than 15 minutes (`warning_min_age_minutes`) after
 the previous saved one does nothing (e.g. right after `WATCHDOG_SCHEDULE` moved the check
-minutes), so the shells and notebooks warned by that one still get the full interval. A check that
+minutes), so the shells warned by that one still get the full interval. A check that
 is running when the container stops finishes first if it takes less than Docker's stop timeout
 (10 s).
 
@@ -64,12 +58,11 @@ is running when the container stops finishes first if it takes less than Docker'
 
 | Message | Sent by |
 | --- | --- |
-| **Warning** / **Terminated**: one field per shell or notebook, titled `[Shell] <description>` or `[JupyterLab] <description>`, with its user | check: idle shells and notebooks warned / killed |
+| **Warning** / **Terminated**: one field per shell, titled `[Shell] <description>`, with its user | check: idle shells warned / killed |
 | `Automatic update success ~` | check that renewed the Determined token; a renewal after HTTP 401 |
 | `Automatic update FAILED ~ (<reason>)` | check whose renewal failed (repeated at every check until it works); a failed renewal after HTTP 401 |
 | `Failed to fetch Grafana alert! Reason: empty response.` | check: Grafana unreachable or bad answer |
-| `det api miss` / `need update api! (GET shells failed)` or `(GET notebooks failed)` | check: that Determined listing failed; the other kind was still policed |
-| `det api miss` / `need update api!` | check: the Determined task listing failed, or both the shell and the notebook listings |
+| `det api miss` / `need update api!` | check: the Determined shell or task listing failed |
 
 The start-up token check posts none of these, whatever its outcome. A token check that keeps the
 token posts nothing either, nor does a renewal whose new token has an expiry the watchdog cannot
@@ -91,10 +84,10 @@ max by(container_id)((DCGM_FI_DEV_GPU_UTIL * on(gpu_uuid) group_left(container_i
 ```
 
 With fork 0.41.0 and later, `det_gpu_uuid_container_id` appears only
-`observability.task_mapping_delay` (default 5 minutes) after a shell or notebook starts, so with the
+`observability.task_mapping_delay` (default 5 minutes) after a shell starts, so with the
 15-minute pending period the alert fires no earlier than about 20 minutes after start.
 The watchdog warns at its first check after the alert fires (0 to 30 minutes later) and kills one
-interval (30 minutes) after the warning. So a shell or notebook is killed about 45 to 75 minutes
+interval (30 minutes) after the warning. So a shell is killed about 45 to 75 minutes
 after it goes idle (15 minutes pending, then 30 to 60 minutes), or about 50 to 80 minutes after its
 start if it is idle from the start.
 
@@ -189,7 +182,7 @@ Prometheus needs from this credential. In short:
   token). This matters because a revoked token also breaks the `det-master` scrape, and with it
   the `GRAFANA_ALERT_NAME` alert (it needs `det_gpu_uuid_container_id`), so the watchdog would
   otherwise never query Determined and see the 401. When the alert does fire, an HTTP 401 on the
-  watchdog's shell, notebook or task query also triggers one immediate login, a rewrite of the file and one
+  watchdog's shell or task query also triggers one immediate login, a rewrite of the file and one
   retry of the query with the new session (also if the file cannot be written). Prometheus uses
   the new token at its next scrape. To recover at once instead of at the next check:
   `docker compose restart watchdog` (the start-up check renews it without a Slack message; the log
@@ -256,27 +249,26 @@ Prometheus needs from this credential. In short:
   ```
 - `file_info.json`: points to the last saved warning list; kept across restarts, re-created only if
   missing or invalid.
-- `localData/YYYY-MM/YYYY-MM-DD/localData_<timestamp>.json`: the shells and notebooks warned at
-  each check (plus those whose kill failed, and the still idle ones warned before whose listing
-  failed in that check), keyed by task id; each entry records its `kind`
-  (`shell` or `notebook`). Warnings are matched by task id only, and the kill goes to the endpoint
-  of the kind under which Determined lists the task, so records written by versions that policed
-  only shells (entries without `kind`) still work: a shell warned before an upgrade is killed at
-  the next check.
+- `localData/YYYY-MM/YYYY-MM-DD/localData_<timestamp>.json`: the shells warned at each check
+  (plus those whose kill failed), keyed by task id; each entry records its `kind` (`shell`).
+  Warnings are matched by task id only, and the kill goes to the endpoint of the shell that
+  Determined lists, so a shell warned before an upgrade of the watchdog is killed at the next
+  check (also from a record without `kind`), and a notebook in a record of an earlier version is
+  dropped.
 - `debug/`: the same layout, used in debug mode.
 - The directories themselves (`data/`, `data/localData/`, and `data/debug/` in debug mode) must be
   writable by uid 1000 (the container user): `file_info.json` and the records are written to a temp
   file in the same directory and then renamed, so a writable `file_info.json` alone is not enough.
   Otherwise the check logs a `PermissionError` after warning, `file_info.json` never advances,
-  and idle shells and notebooks are warned at every check but never killed. Fix:
+  and idle shells are warned at every check but never killed. Fix:
   `sudo chown -R 1000:1000 ~/ws/cluster-setup/services/determined-watchdog/data`.
 
 ## Debug mode
 
 With `WATCHDOG_DEBUG=1` the watchdog uses `DATA_DIR_DEBUG` and `SLACK_WEBHOOK_URL_DEBUG`, does not
 @-mention users, runs the alert check every 20 s in addition to the scheduled checks, and never kills
-anything: instead of `POST .../kill` it only `GET`s the shell or notebook (`/api/v1/shells/<id>`
-or `/api/v1/notebooks/<id>`) and reports it as "Terminated".
+anything: instead of `POST .../kill` it only `GET`s the shell (`/api/v1/shells/<id>`) and reports
+it as "Terminated".
 The 15-minute minimum between a warning and its kill (`warning_min_age_minutes`) does not apply in
 debug mode, so the dry-run "Terminated" follows at the next check, 20 s after the warning.
 Put a `User.json` into `data/debug/` first (the check fails without it).
