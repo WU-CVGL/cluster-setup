@@ -1,6 +1,6 @@
 # Determined Configuration Files
 
-The cluster runs our fork, [WU-CVGL/determined](https://github.com/WU-CVGL/determined), version `0.42.4`, with its images `ghcr.io/wu-cvgl/determined-master` and `ghcr.io/wu-cvgl/determined-agent`. Install the fork's `det` CLI first (see [docs/01](../../docs/01_First-time_Setup_of_Cluster_Nodes.md#install-determined-ai-systemwide)). Keep the CLI on the master's version. Agents stay on an older release when a release changes only the master or the WebUI, as the fork's [distribution guide](https://github.com/WU-CVGL/determined/blob/main/docs/maintenance/distribution.md) states for each version (0.42.4: agents on 0.42.2). The fork has no version gate, so mixed versions work during a rolling agent upgrade; the fork's [hot upgrade guide](https://github.com/WU-CVGL/determined/blob/main/docs/maintenance/hot-upgrade.md) says which mixes were tested.
+The cluster runs our fork, [WU-CVGL/determined](https://github.com/WU-CVGL/determined), version `0.43.0`, with its images `ghcr.io/wu-cvgl/determined-master` and `ghcr.io/wu-cvgl/determined-agent`. Install the fork's `det` CLI first (see [docs/01](../../docs/01_First-time_Setup_of_Cluster_Nodes.md#install-determined-ai-systemwide)). Keep the CLI on the master's version. Agents stay on an older release when a release changes only the master or the WebUI, as the fork's [distribution guide](https://github.com/WU-CVGL/determined/blob/main/docs/maintenance/distribution.md) states for each version (0.43.0: agents on 0.42.2, unchanged since). The fork has no version gate, so mixed versions work during a rolling agent upgrade; the fork's [hot upgrade guide](https://github.com/WU-CVGL/determined/blob/main/docs/maintenance/hot-upgrade.md) says which mixes were tested.
 
 - [Configuration file](../system-configurations/etc/determined/master.yaml): a copy of the master's `master.yaml`, without secrets.
 
@@ -13,6 +13,8 @@ Each master version has its own deploy directory `~/determined-deploy/<version>-
 - `master.yaml`: the configuration (the [copy in this repo](../system-configurations/etc/determined/master.yaml) has no secrets).
 - `master.env`: `DET_MASTER_HTTP_PORT`, `DET_DB_PASSWORD` and `DET_LOG_INFO`.
 
+The code-server tarballs that the master serves to the shells' `vscode` service (`interactive.code_server` in `master.yaml`) are in `~/determined-deploy/code-server/`, shared by all versions and mounted at `/srv/determined/code-server`. Copy the release's `code-server-<version>-linux-amd64.tar.gz` there; the master checks it against `sha256` and downloads a missing one. The shells keep code-server in the shared cache `/datasets/determined-cache/code-server` (mode 1777 on the datasets share), which `task_container_defaults.bind_mounts` mounts at `/var/cache/determined/code-server` in every task container, so one copy serves all users.
+
 Start the master from it, with the image pinned by its digest (`docker images --digests ghcr.io/wu-cvgl/determined-master` after the pull):
 
 ```bash
@@ -21,6 +23,7 @@ docker run -d --name determined-master-<version> --restart unless-stopped \
     --network determined_default -p 8080:8080 --env-file $D/master.env \
     -v /shared/determined_shared_fs:/determined_shared_fs \
     -v $D/master.yaml:/etc/determined/master.yaml:ro \
+    -v ~/determined-deploy/code-server:/srv/determined/code-server \
     ghcr.io/wu-cvgl/determined-master@<digest> --config-file /etc/determined/master.yaml
 ```
 
@@ -87,6 +90,8 @@ The master and the agents can be replaced while tasks run (hot upgrade) when the
 6. Check `det master info` (the new version), `det agent list` (every agent back), `det resource-pool list-dynamic` (every pool `Ready`) and the running tasks.
 7. Replace the agents, one node at a time ([Agents](#agents)).
 
+0.43.0 removes notebooks and runs two database migrations: end the notebooks and take the dump first ([Backups](#backups)); the upgrade deletes the notebook records with their logs. Create `~/determined-deploy/code-server/` with the tarball and the shared cache ([Master](#master)) before the new master starts.
+
 Time without a master: agents exit after about 145 s and Docker restarts them; once the master is back they reconnect and reattach their running task containers. Tasks that write output are killed after about 11 minutes without a master. Keep every master outage, also a restart after a configuration change, well under ten minutes.
 
 ### Rollback
@@ -102,6 +107,12 @@ docker start determined-master-<old version>
 
 This works only when the old master starts against the migrated database with the `master.yaml` of its own deploy directory. The preconditions are in the fork's [hot upgrade](https://github.com/WU-CVGL/determined/blob/main/docs/maintenance/hot-upgrade.md) and [dynamic resource pools](https://github.com/WU-CVGL/determined/blob/main/docs/maintenance/dynamic-pools.md) guides. In particular, the old `master.yaml` must not define a pool that is now a dynamic pool (after a pool conversion, remove the pools from it too, in place), and must not have settings that only the new version knows. Otherwise roll back cold: stop the agents and the master, restore the backup, and start the previous version.
 
+A rollback from 0.43.0 is a restore: stop the 0.43.0 master, restore the dump taken before the upgrade, and start the 0.42.5 master. A 0.42.5 master refuses a `master.yaml` with the `interactive` section: remove it. With the master stopped, the restore drops and recreates the database, so that no 0.43.0 object stays:
+
+```bash
+docker exec -i determined_determined-db_1 bash -c 'dropdb -U postgres determined && createdb -U postgres determined && pg_restore -U postgres -d determined --no-owner' < ~/determined-deploy/backups/determined-<old version>-<yyyymmdd>.dump
+```
+
 ## Agents
 
 Every GPU node runs one agent container, `det-agent-<hostname>`, started with `docker run`. Its hostname (`cvgl-node01` to `cvgl-node08`, and `s8030`) is the agent ID. `<master ip>` is the master's address (`DET_MASTER` in the login node's `/etc/environment`), `<pool>` the node's pool from the table below:
@@ -116,7 +127,7 @@ docker run -d --name det-agent-<hostname> --hostname <hostname> --network host -
 
 `--gpus 'all,"capabilities=gpu,utility"'` passes all GPUs; to leave one out of the slots see [Leaving out a faulty GPU](#leaving-out-a-faulty-gpu). Docker rejects `--gpus '"all,capabilities=gpu,utility"'` (`unexpected key 'all,capabilities'`), and `--gpus '"capabilities=gpu,utility"'` (no `all`, no `device=`) gives the container only one GPU. Check the slots with `det agent list` or `docker logs det-agent-<hostname>` ("detected compute devices").
 
-s8030 is not on the cluster network: it sits behind its own NAT gateway, which campus hosts see as 10.13.95.101. A WireGuard tunnel to core, the master's host, gives it an address the master can reach: `wg0` is `172.30.233.1` on core (UDP port 51820) and `172.30.233.2` on s8030, each `AllowedIPs` lists only the other end, and s8030 keeps the tunnel open with `PersistentKeepalive = 25` (`/etc/wireguard/wg0.conf` on both, `wg-quick@wg0` enabled; the private keys are in `/etc/wireguard/wg0.key`). Its agent connects with `DET_MASTER_HOST=172.30.233.1`, so the master reaches task ports through the tunnel and shells, notebooks, TensorBoards and `proxy_ports` work. A task that sets `http_proxy`/`https_proxy` must list `172.30.233.1` in `no_proxy`, or it cannot reach the master. s8030 reaches the NAS servers at their campus addresses: its `/etc/hosts` maps `nas.cvgl.lab` to `10.0.1.70` and `nas2.cvgl.lab` to `10.0.1.89`, and the NFS shares that the nodes mount list `10.13.95.101` in their hosts. Its Docker daemon pulls through `http://10.0.1.68:59889`.
+s8030 is not on the cluster network: it sits behind its own NAT gateway, which campus hosts see as 10.13.95.101. A WireGuard tunnel to core, the master's host, gives it an address the master can reach: `wg0` is `172.30.233.1` on core (UDP port 51820) and `172.30.233.2` on s8030, each `AllowedIPs` lists only the other end, and s8030 keeps the tunnel open with `PersistentKeepalive = 25` (`/etc/wireguard/wg0.conf` on both, `wg-quick@wg0` enabled; the private keys are in `/etc/wireguard/wg0.key`). Its agent connects with `DET_MASTER_HOST=172.30.233.1`, so the master reaches task ports through the tunnel and shells, TensorBoards and `proxy_ports` work. A task that sets `http_proxy`/`https_proxy` must list `172.30.233.1` in `no_proxy`, or it cannot reach the master. s8030 reaches the NAS servers at their campus addresses: its `/etc/hosts` maps `nas.cvgl.lab` to `10.0.1.70` and `nas2.cvgl.lab` to `10.0.1.89`, and the NFS shares that the nodes mount list `10.13.95.101` in their hosts. Its Docker daemon pulls through `http://10.0.1.68:59889`.
 
 `det deploy local agent-up <master ip> --agent-resource-pool=<pool>`, with the CLI of the same version, starts the same container with all GPUs; it cannot take a GPU list.
 
