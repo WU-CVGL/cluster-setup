@@ -21,7 +21,7 @@
     - [Add a resource pool](#add-a-resource-pool)
     - [Task resource monitoring](#task-resource-monitoring)
 
-The cluster runs our fork of Determined, [WU-CVGL/determined](https://github.com/WU-CVGL/determined) (version `0.42.4`): the `det` CLI, the master image `ghcr.io/wu-cvgl/determined-master` and the agent image `ghcr.io/wu-cvgl/determined-agent` all come from its releases. The upstream documentation linked below still describes the concepts and the configuration.
+The cluster runs our fork of Determined, [WU-CVGL/determined](https://github.com/WU-CVGL/determined) (version `0.43.0`): the `det` CLI, the master image `ghcr.io/wu-cvgl/determined-master` and the agent image `ghcr.io/wu-cvgl/determined-agent` all come from its releases. The upstream documentation linked below still describes the concepts and the configuration.
 
 ## Deploy a Determined AI Single-Node Cluster
 
@@ -41,14 +41,11 @@ After a successful deployment, you can test the task submiting workflow:
 
 ![Diagram of submitting task](images/03_task-diagram.svg)
 
-Interactive jupyter notebook task
+Interactive work runs in shells: a shell runs JupyterLab and VS Code in the browser as services next to its SSH server. Start one with **Launch Interactive Task** in the WebUI or `det shell start`, and open a service on the task page or with `det task open <id> jupyter` or `det task open <id> vscode`. The fork has no notebooks.
 
-> https://docs.determined.ai/latest/interfaces/notebooks.html
+> https://github.com/WU-CVGL/determined/blob/main/docs/tools/cli/commands-and-shells.rst
+> https://github.com/WU-CVGL/determined/blob/main/docs/integrations/ide/vscode.rst
 > https://docs.determined.ai/latest/reference/reference-interface/job-config-reference.html
-
-Shell task for VSCode and PyCharm, etc.
-
-> https://docs.determined.ai/latest/interfaces/commands-and-shells.html
 
 ## Scale to multi-node: configure NFS export & NFS client
 
@@ -135,10 +132,10 @@ On a node that is rarely idle (long-running tasks, interactive sessions on the l
 
 ### Installation
 
-Install the CLI of our fork, in the version of the master (`0.42.4`); see [Install Determined AI Systemwide](./01_First-time_Setup_of_Cluster_Nodes.md#install-determined-ai-systemwide) for the nodes:
+Install the CLI of our fork, in the version of the master (`0.43.0`); see [Install Determined AI Systemwide](./01_First-time_Setup_of_Cluster_Nodes.md#install-determined-ai-systemwide) for the nodes:
 
 ```bash
-pip install -U "https://github.com/WU-CVGL/determined/releases/download/0.42.4/determined-0.42.4-py3-none-any.whl"
+pip install -U "https://github.com/WU-CVGL/determined/releases/download/0.43.0/determined-0.43.0-py3-none-any.whl"
 ```
 
 Not `pip install determined`: that is the upstream package.

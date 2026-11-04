@@ -9,6 +9,11 @@ task_container_defaults:
     - IPC_LOCK
   environment_variables:
     - NVIDIA_DRIVER_CAPABILITIES=all
+  ## The shared code-server cache of the shells' vscode service (fork 0.43.0): one copy for all
+  ## users, mode 1777 on the datasets share.
+  bind_mounts:
+    - host_path: /datasets/determined-cache/code-server
+      container_path: /var/cache/determined/code-server
 
 ## Resource manager configuration. Defaults to using the agent resource manager.
 ## default_gpu_resource_pool and default_cpu_resource_pool are the older names of
@@ -70,6 +75,16 @@ integrations:
   task_resources:
     prometheus_url: http://10.0.1.68:19090
     det_cluster: cvgl
+
+## The code-server release that the master serves to the shells' vscode service (fork 0.43.0).
+## The master serves the tarball in dir if its checksum matches and downloads a missing one; dir is
+## the host directory ~/determined-deploy/code-server, bind-mounted into the master container.
+interactive:
+  code_server:
+    version: 4.144.0
+    dir: /srv/determined/code-server
+    sha256:
+      amd64: 710f749c40a0f3d0ab3be09c0de65314e5c2907cc50646f5fbc0f24c0e8fba2d
 
 ## Configure whether we collect anonymous information about the usage of
 ## Determined.

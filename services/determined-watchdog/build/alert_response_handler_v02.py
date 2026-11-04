@@ -13,8 +13,6 @@ from apscheduler.triggers.interval import IntervalTrigger
 
 from alert_config import (
     TASK_KIND_DEFAULT,
-    TASK_KIND_NOTEBOOK,
-    TASK_KIND_SHELL,
     Config,
     ConfigError,
     log,
@@ -162,9 +160,8 @@ class MainApplication:
         )
 
     def fetch_det_data(self):
-        """Return (shell_api_data, notebook_api_data, task_api_data, det_headers).
+        """Return (shell_api_data, task_api_data, det_headers).
 
-        shell_api_data or notebook_api_data is None if that listing failed (see _get_det_data).
         If Determined rejects the token in use with HTTP 401 (e.g. the session was
         revoked before its expiry), log in again once and, if that yields a different
         token (even one that could not be written to the token file), retry once.
@@ -186,35 +183,16 @@ class MainApplication:
         return self._get_det_data(det_headers)
 
     def _get_det_data(self, det_headers):
-        # The shell and notebook listings fail independently: a failure other than HTTP 401
-        # only leaves that kind out of this check (None). The task listing is required (both
-        # kinds need it for the container mapping), and so is at least one of the two others.
-        # HTTP 401 always raises, so that fetch_det_data renews the token and retries.
-        listings, errors = [], []
-        for kind, get_api_data in (
-            (TASK_KIND_SHELL, self.api_handler.get_shell_api_data),
-            (TASK_KIND_NOTEBOOK, self.api_handler.get_notebook_api_data),
-        ):
-            try:
-                listings.append(get_api_data(det_headers))
-            except DetAPIError as e:
-                if e.status_code == 401:
-                    raise
-                log(f"Determined API error: {e}; no {kind} is warned or killed in this check.")
-                listings.append(None)
-                errors.append(str(e))
-        if len(errors) == len(listings):
-            raise DetAPIError("; ".join(errors))
-        shell_api_data, notebook_api_data = listings
+        # The shell listing and the task listing (for the container mapping) are both
+        # required; any failure raises, HTTP 401 so that fetch_det_data renews the token.
         return (
-            shell_api_data,
-            notebook_api_data,
+            self.api_handler.get_shell_api_data(det_headers),
             self.api_handler.get_task_api_data(det_headers),
             det_headers,
         )
 
     def handle_alert_data_v3(self, alert_container_ids):
-        """Warn about newly idle shells and notebooks; kill the ones warned in the previous check."""
+        """Warn about newly idle shells; kill the ones warned in the previous check."""
         if not alert_container_ids:
             log("no alert_container_ids.")
             return
@@ -241,7 +219,7 @@ class MainApplication:
             return
 
         try:
-            shell_api_data, notebook_api_data, task_api_data, det_headers = self.fetch_det_data()
+            shell_api_data, task_api_data, det_headers = self.fetch_det_data()
         except DetAPIError as e:
             log(f"Determined API error: {e}")
             self.message_notifier.send_slack_warning(
@@ -251,50 +229,25 @@ class MainApplication:
             )
             return
 
-        failed_kinds = [
-            kind
-            for kind, api_data in (
-                (TASK_KIND_SHELL, shell_api_data),
-                (TASK_KIND_NOTEBOOK, notebook_api_data),
-            )
-            if api_data is None
-        ]
-        if failed_kinds:
-            # The listing's name only: an error text may echo the response body.
-            failed_listings = ", ".join(f"GET {kind}s" for kind in failed_kinds)
-            self.message_notifier.send_slack_warning(
-                "det api miss",
-                f"need update api! ({failed_listings} failed)",
-                self.config.slack_webhook_url,
-            )
-
-        det_container_ids = self.api_handler.parse_api_data(
-            shell_api_data, task_api_data, notebook_api_data
-        )
+        det_container_ids = self.api_handler.parse_api_data(shell_api_data, task_api_data)
         idle_container_ids = alert_container_ids[self.config.alert_name]
 
-        # 解析API数据: {task_id: info} of the idle shells and notebooks
+        # 解析API数据: {task_id: info} of the idle shells
         new_data = self.DataProcessor.filter_container_by_id(
             idle_container_ids, det_container_ids
         )
 
-        # 获取上次保存的last_output: tasks warned in the previous check
-        # (at most config.warning_max_age_minutes ago). Matched by task id only: the kind
-        # used for a kill comes from new_data, so records without "kind" (written before
-        # notebooks were policed, shells only) still work.
-        old_data = {}
-        if new_data or failed_kinds:
-            old_data = self.DataProcessor.load_last_output(
-                self.config.alert_name, self.config.file_info_path, self.now()
-            )
-        # A kind whose listing failed is neither killed nor warned again in this check; its
-        # warned tasks that are still idle stay tracked, so the next check can kill them.
-        unchecked = self.DataProcessor.find_unchecked_alerts(
-            old_data, failed_kinds, idle_container_ids
-        )
-        if not new_data and not unchecked:
+        if not new_data:
             log(f"'{alert_container_ids}' not found in det_container_ids: {det_container_ids}.")
             return
+
+        # 获取上次保存的last_output: tasks warned in the previous check
+        # (at most config.warning_max_age_minutes ago). Matched by task id only: the kind
+        # used for a kill comes from new_data, so records without "kind" still work, and
+        # notebooks in a record of an earlier version are dropped.
+        old_data = self.DataProcessor.load_last_output(
+            self.config.alert_name, self.config.file_info_path, self.now()
+        )
 
         user_file_path = f"{self.config.base_path}/User.json"
         user_data = self.DataProcessor.read_user_info(user_file_path)
@@ -323,10 +276,9 @@ class MainApplication:
             self.config.slack_webhook_url,
         )
 
-        # Tracked for the next check: new warnings, failed kills and the unchecked warnings.
+        # Tracked for the next check: new warnings and failed kills.
         tracked = dict(new_alerts)
         tracked.update(failed)
-        tracked.update(unchecked)
         info = self.DataProcessor.save_json_file(
             tracked,
             self.config.base_path,

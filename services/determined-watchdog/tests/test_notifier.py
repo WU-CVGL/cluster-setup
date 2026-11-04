@@ -17,10 +17,6 @@ WARN = {"shell-a": {"kind": "shell", "container_id": "c-a", "username": "alice",
                     "description": "Shell (a)"}}
 KILLED = {"shell-b": {"kind": "shell", "container_id": "c-b", "username": "bob",
                       "description": "Shell (b)"}}
-NB_WARN = {"nb-c": {"kind": "notebook", "container_id": "c-c", "username": "alice",
-                    "description": "JupyterLab (c)"}}
-NB_KILLED = {"nb-d": {"kind": "notebook", "container_id": "c-d", "username": "bob",
-                      "description": "my analysis"}}
 
 
 class SlackFailureTest(unittest.TestCase):
@@ -133,37 +129,8 @@ class SlackMessageFormatTest(unittest.TestCase):
             att["fields"], [{"value": "bob", "title": "[Shell] Shell (b)\n", "short": True}]
         )
 
-    def test_notebooks_are_labelled_jupyterlab(self):
-        self.assertTrue(self.notify(NB_WARN, NB_KILLED))
-        warning, terminated = self.posted()[0]["attachments"]
-        self.assertEqual(
-            warning["fields"],
-            [{"value": "<@U0ALICE>", "title": "[JupyterLab] JupyterLab (c)\n", "short": True}],
-        )
-        self.assertEqual(
-            terminated["fields"],
-            [{"value": "bob", "title": "[JupyterLab] my analysis\n", "short": True}],
-        )
-        # Same layout as for shells: only the field titles name the kind.
-        self.assertEqual(
-            [(a["title"], a["color"], a["footer"]) for a in (warning, terminated)],
-            [("Warning", "warning",
-              "Your container will be released in 30 minutes. Please check your task!!!"),
-             ("Terminated", "good", "These GPU containers have been released")],
-        )
-
-    def test_mixed_shells_and_notebooks_share_one_attachment(self):
-        self.assertTrue(self.notify(dict(WARN, **NB_WARN), dict(KILLED, **NB_KILLED)))
-        titles = [
-            (a["title"], [f["title"] for f in a["fields"]]) for a in self.posted()[0]["attachments"]
-        ]
-        self.assertEqual(titles, [
-            ("Warning", ["[Shell] Shell (a)\n", "[JupyterLab] JupyterLab (c)\n"]),
-            ("Terminated", ["[Shell] Shell (b)\n", "[JupyterLab] my analysis\n"]),
-        ])
-
     def test_entry_without_kind_is_a_shell(self):
-        # Entries saved before notebooks were policed have no "kind".
+        # Entries saved by older versions may have no "kind".
         old = {"shell-a": {"container_id": "c-a", "username": "alice", "description": "Shell (a)"}}
         self.assertTrue(self.notify({}, old))
         self.assertEqual(
