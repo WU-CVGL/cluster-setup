@@ -7,5 +7,5 @@
 #   det resource-pool update 64c128t_1024_170hx_64 64c128t_1024_170hx_64.yaml
 # (replaces the whole spec; effective at the next master restart). Never add it to master.yaml.
 pool_name: 64c128t_1024_170hx_64
-description: "AMD EPYC 7J13 64c128t CPU; 1024GB RAM; 8x NVIDIA CMP 170HX GPU."
+description: "AMD EPYC 7J13 64c128t 2.55-3.5GHz CPU; 1024GB RAM; 8x NVIDIA CMP 170HX GPU."
 agent_reconnect_wait: 10m
