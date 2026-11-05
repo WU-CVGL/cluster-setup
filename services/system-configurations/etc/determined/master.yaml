@@ -3,6 +3,13 @@
 ## network interface used by distributed (multi-machine) training is configurable.
 task_container_defaults:
   shm_size_bytes: 17179869184
+  ## The cluster's default task image (services/task-images/README.md): the fork's built-in
+  ## determinedai/pytorch-ngc-dev:0736b6d with TensorBoard 2.20.0 and a pip configuration without
+  ## its dead extra index. A task that sets environment.image is unaffected. No rocm entry: the
+  ## cluster has no ROCm agents.
+  image:
+    cpu: harbor.cvgl.lab/library/pytorch-ngc-dev:0736b6d-tb2.20.0
+    cuda: harbor.cvgl.lab/library/pytorch-ngc-dev:0736b6d-tb2.20.0
   network_mode: bridge
 #  dtrain_network_interface: <network interface name>
   add_capabilities:

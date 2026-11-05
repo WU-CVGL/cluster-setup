@@ -146,6 +146,8 @@ The master and the agents run as Docker containers started with `docker run`, no
 
 Its `task_container_defaults` apply to every task; a task's own settings override them (`environment_variables` by name). Among them, the `PIP_*` variables make the [PyPI cache](04_Setup_Supplementary_Services.md#pypi-cache) pip's default index and turn off the image's own pip configuration files; a task chooses another index with `PIP_INDEX_URL` in its `environment_variables` (empty for pypi.org). uv has no cluster default. Changes reach new tasks after a master restart ([Changing master.yaml](../services/determined/README.md#changing-masteryaml)).
 
+The default task image is also set there: `harbor.cvgl.lab/library/pytorch-ngc-dev:0736b6d-tb2.20.0`, the fork's built-in `determinedai/pytorch-ngc-dev:0736b6d` with TensorBoard 2.20.0 and a pip configuration without its dead extra index, built on the supplementary services VM and pushed to Harbor ([task images](../services/task-images/README.md)). To change it, build and push a new tag, set `task_container_defaults.image` (`cpu` and `cuda`) to it and restart the master; a task that sets `environment.image` keeps its own. The shell's `tensorboard` service installs nothing: a custom image needs TensorBoard 2.9 or newer for it.
+
 ## Conduct an experiment with `Determined AI`
 
 `Determined AI` provides a solution for creating a virtual environment with some computing resources (e.g., GPUs, memory, and CPUs).
@@ -184,7 +186,7 @@ bind_mounts:
   - host_path: /workspace/xxx/
     container_path: /run/determined/workdir/xxx/
 environment:
-    image: determinedai/environments:cuda-11.3-pytorch-1.10-tf-2.8-gpu-0.19.4
+    image: harbor.cvgl.lab/library/pytorch-ngc-dev:0736b6d-tb2.20.0
 ```
 
 These parameters configure the virtual environment, where
@@ -192,7 +194,7 @@ These parameters configure the virtual environment, where
 - `description`: Tag your task.
 - `resources`: The number of GPUs (i.e., `slots`) used to run the task.
 - `bind_mounts`: Mount your data and code into the docker container. `host_path` is the path of the physical machine, `container_path` is the path inside the container.
-- `environment`: The environment configuration of the docker container, in which `image` is `docker-image` that you uses.
+- `environment`: The environment configuration of the docker container, in which `image` is the Docker image to use (without it, the cluster's default task image).
 
 Above all, start the virtual environment:
 
