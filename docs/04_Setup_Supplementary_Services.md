@@ -63,8 +63,8 @@ The `proxpi` service of the [all-in-one configuration](#all-in-one) runs [proxpi
 
 | From | Index URL |
 | :--- | :--- |
-| The nodes (cluster network) | `http://192.168.233.8:5000/index/` |
-| Campus, the Determined tasks | `http://10.0.1.68:5000/index/` |
+| The nodes and the Determined tasks (100G LAN) | `http://192.168.233.8:5000/index/` |
+| Campus, and the tasks of pool `64c128t_512_170hx_5060ti` (its host is not on the LAN) | `http://10.0.1.68:5000/index/` |
 
 The index is plain HTTP, so pip needs the host as a trusted host. On a node:
 
@@ -80,7 +80,7 @@ In Determined tasks it is pip's default index: the master's [task container defa
 uv ignores pip's settings and has no cluster default; a lockfile made against pypi.org fails `uv sync --locked` with another index (`--frozen` works). To use the cache:
 
 ```bash
-export UV_DEFAULT_INDEX=http://10.0.1.68:5000/index/   # or: uv pip install --default-index <url> ...
+export UV_DEFAULT_INDEX=http://192.168.233.8:5000/index/   # or: uv pip install --default-index <url> ...
 ```
 
 ## SSL, HTTPS and reverse proxy

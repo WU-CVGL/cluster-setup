@@ -144,7 +144,7 @@ Not `pip install determined`: that is the upstream package.
 
 The master and the agents run as Docker containers started with `docker run`, not with `det deploy local`: see the [notes](../services/determined/README.md) ([Master](../services/determined/README.md#master), [Agents](../services/determined/README.md#agents)) and the [master configuration file](../services/system-configurations/etc/determined/master.yaml).
 
-Its `task_container_defaults` apply to every task; a task's own settings override them (`environment_variables` by name). Among them, the `PIP_*` variables make the [PyPI cache](04_Setup_Supplementary_Services.md#pypi-cache) pip's default index and turn off the image's own pip configuration files; a task chooses another index with `PIP_INDEX_URL` in its `environment_variables` (empty for pypi.org). uv has no cluster default. Changes reach new tasks after a master restart ([Changing master.yaml](../services/determined/README.md#changing-masteryaml)).
+Its `task_container_defaults` apply to every task; a task's own settings override them (`environment_variables` by name). Among them, the `PIP_*` variables make the [PyPI cache](04_Setup_Supplementary_Services.md#pypi-cache) pip's default index and turn off the image's own pip configuration files (the pool of a host outside the 100G LAN sets the cache's campus address in its own spec, `services/determined/resource-pools/`); a task chooses another index with `PIP_INDEX_URL` in its `environment_variables` (empty for pypi.org). uv has no cluster default. Changes reach new tasks after a master restart ([Changing master.yaml](../services/determined/README.md#changing-masteryaml)).
 
 ## Conduct an experiment with `Determined AI`
 

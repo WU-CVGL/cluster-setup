@@ -9,3 +9,14 @@
 pool_name: 64c128t_512_170hx_5060ti
 description: "AMD EPYC 7J13 64c128t 2.55-3.5GHz CPU; 512GB RAM; 3x NVIDIA CMP 170HX and 2x NVIDIA GeForce RTX 5060 Ti GPU."
 agent_reconnect_wait: 10m
+# A pool's own task_container_defaults start from built-in values for shm_size_bytes, network_mode
+# and preemption_timeout (the fork's dynamic-pools guide), so the master's are repeated here. The
+# host is not on the cluster's 100G LAN: pip reaches the PyPI cache at the VM's campus address.
+task_container_defaults:
+  shm_size_bytes: 17179869184
+  network_mode: bridge
+  add_capabilities:
+    - IPC_LOCK
+  environment_variables:
+    - PIP_INDEX_URL=http://10.0.1.68:5000/index/
+    - PIP_TRUSTED_HOST=10.0.1.68
