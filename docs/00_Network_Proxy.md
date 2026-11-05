@@ -184,7 +184,7 @@ curl google.com
 
 ### pip and git
 
-- `pip`: add `--proxy http://192.168.233.8:59889` for packages from GitHub (e.g. the [Determined wheel](01_First-time_Setup_of_Cluster_Nodes.md#install-determined-ai-systemwide)); PyPI itself works without it.
+- `pip`: add `--proxy http://192.168.233.8:59889` for packages from GitHub (e.g. the [Determined wheel](01_First-time_Setup_of_Cluster_Nodes.md#install-determined-ai-systemwide)); PyPI itself works without it, and so does the cluster's [PyPI cache](04_Setup_Supplementary_Services.md#pypi-cache), pip's default index in Determined tasks.
 - `git`: fetch GitHub over HTTPS through the proxy, for example on the supplementary services VM:
 
     ```sh

@@ -9,6 +9,16 @@ task_container_defaults:
     - IPC_LOCK
   environment_variables:
     - NVIDIA_DRIVER_CAPABILITIES=all
+    ## pip uses the cluster's PyPI cache on the supplementary services VM (docs/04, "PyPI cache")
+    ## at its address on the cluster's 100G LAN. The pool 64c128t_512_170hx_5060ti is not on that
+    ## network: its spec (services/determined/resource-pools/) sets the campus address instead.
+    ## PIP_CONFIG_FILE=/dev/null turns off the image's own pip configuration files (the default
+    ## image's dead extra index included); PIP_NO_CACHE_DIR=1 keeps the image's no-cache-dir.
+    ## A task's own environment_variables override these by name (an empty PIP_INDEX_URL= is pypi.org).
+    - PIP_INDEX_URL=http://192.168.233.8:5000/index/
+    - PIP_TRUSTED_HOST=192.168.233.8
+    - PIP_CONFIG_FILE=/dev/null
+    - PIP_NO_CACHE_DIR=1
   ## The shared code-server cache of the shells' vscode service (fork 0.43.0): one copy for all
   ## users, mode 1777 on the datasets share.
   bind_mounts:
@@ -73,7 +83,7 @@ retention_policy:
 ## Task resource monitoring in the WebUI (our fork): the Prometheus of the supplementary services VM.
 integrations:
   task_resources:
-    prometheus_url: http://10.0.1.68:19090
+    prometheus_url: http://192.168.233.8:19090
     det_cluster: cvgl
 
 ## The code-server release that the master serves to the shells' vscode service (fork 0.43.0).

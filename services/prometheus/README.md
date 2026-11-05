@@ -29,7 +29,7 @@ dashboard `det-task-resources`. Training code needs no change.
  recording rules (rules/determined-task-resources.yml): det:*_task:info and diagnostics
       |                                              |
       | GET /api/v1/query_range                      | Grafana datasource "Prometheus"
-      | via the proxy on 10.0.1.68:19090             |
+      | via the proxy on 192.168.233.8:19090             |
       v                                              v
  Determined master: integrations.task_resources     Grafana: det-task-resources dashboard
  WebUI Resources pages,
@@ -148,9 +148,9 @@ integrations:
   `--web.enable-lifecycle`, so anyone who reaches its port can also delete series or stop it: let
   only the master's address, or only `GET /api/v1/query_range`, through. Grafana's datasource
   proxy cannot stand in: its URL has a path.
-- **This cluster's path.** `prometheus_url` is `http://10.0.1.68:19090`, a bare origin. An NGINX
+- **This cluster's path.** `prometheus_url` is `http://192.168.233.8:19090`, a bare origin. An NGINX
   container, [`../native-task-resources-prometheus-proxy/`](../native-task-resources-prometheus-proxy/compose.yaml),
-  publishes port 19090 on 10.0.1.68 only. It passes `GET /api/v1/query_range` and `GET /-/ready`
+  publishes port 19090 on 192.168.233.8 (the 100G LAN) and 10.0.1.68 (campus) only. It passes `GET /api/v1/query_range` and `GET /-/ready`
   from the master's host (10.0.1.66) to `prometheus:9090` at the root path, without
   authentication or redirects. Other methods get 405, GETs from other clients 403, and other
   paths 404. The master's GPU health (recent critical XIDs, fork 0.41.1) goes the same way, and so
