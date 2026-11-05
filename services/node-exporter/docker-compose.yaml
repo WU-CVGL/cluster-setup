@@ -10,7 +10,7 @@ services:
       - /sys:/host/sys:ro
       - /:/rootfs:ro
     ports:
-      - "9100:9100"
+      - "${EXPORTER_LISTEN_ADDRESS:-0.0.0.0}:9100:9100"
     command:
       - '--path.procfs=/host/proc'
       - '--path.rootfs=/rootfs'
@@ -35,7 +35,7 @@ services:
     devices:
       - /dev/kmsg:/dev/kmsg
     ports:
-      - 9080:8080
+      - "${EXPORTER_LISTEN_ADDRESS:-0.0.0.0}:9080:8080"
 
   dcgm-exporter:
     image: harbor.cvgl.lab/nvidia/k8s/dcgm-exporter:4.6.1-4.8.4
@@ -47,7 +47,7 @@ services:
     volumes:
       - ./default-counters.csv:/etc/dcgm-exporter/default-counters.csv
     ports:
-      - 9400:9400
+      - "${EXPORTER_LISTEN_ADDRESS:-0.0.0.0}:9400:9400"
     deploy:
       resources:
         reservations:
