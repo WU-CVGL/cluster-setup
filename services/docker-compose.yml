@@ -95,6 +95,35 @@ services:
     volumes:
       - ./flare/app:/app
 
+  # PyPI cache for the nodes and the Determined tasks (services/proxpi/README.md).
+  # BFSU and pypi.org are reached directly, so the service gets no proxy variables.
+  # pypi.org is only the fallback for files BFSU lacks: an error from an extra index fails the
+  # whole project listing (HTTP 500), hence the connect and read timeouts.
+  # One process only: the cache is not shared between workers, so raise --threads, not workers.
+  proxpi:
+    image: epicwink/proxpi:1.3.1
+    restart: unless-stopped
+    command: ["--bind", "0.0.0.0:5000", "--threads", "16", "--no-control-socket"]
+    environment:
+      - PROXPI_INDEX_URL=https://mirrors.bfsu.edu.cn/pypi/web/simple/
+      - PROXPI_EXTRA_INDEX_URLS=https://pypi.org/simple/
+      # One TTL (seconds) per extra index URL.
+      - PROXPI_EXTRA_INDEX_TTLS=1800
+      - PROXPI_CONNECT_TIMEOUT=3.1
+      - PROXPI_READ_TIMEOUT=20
+      - PROXPI_CACHE_DIR=/var/cache/proxpi
+      # Bytes, an integer only (50 GiB): least-used files are evicted beyond it.
+      - PROXPI_CACHE_SIZE=53687091200
+    ports:
+      - "5000:5000"
+    volumes:
+      - ./proxpi/data:/var/cache/proxpi
+    healthcheck:
+      test: ["CMD", "wget", "-q", "-O", "/dev/null", "http://127.0.0.1:5000/health"]
+      interval: 1m
+      timeout: 10s
+      retries: 3
+
   xray-us-west-racknerd-12tb:
     image: teddysun/xray:latest
     restart: unless-stopped

@@ -6,6 +6,7 @@
   - [Contents](#contents)
   - [Introduction](#introduction)
   - [Proxy as a service](#proxy-as-a-service)
+  - [PyPI cache](#pypi-cache)
   - [SSL, HTTPS and reverse proxy](#ssl-https-and-reverse-proxy)
     - [Background knowledge](#background-knowledge)
     - [Create an SSL certificate](#create-an-ssl-certificate)
@@ -55,6 +56,32 @@ System Topology:
 ## Proxy as a service
 
 The HTTP/SOCKS5 proxies of the cluster run on this VM as the `xray-*` services of the [all-in-one configuration](#all-in-one), each with an exporter for the Grafana v2ray dashboard. [Chapter 00](00_Network_Proxy.md) describes them, the default proxy (`xray-usca5-bwh-sla-1tb`, HTTP `59889`, SOCKS5 `59880`), how to add one with [`create_xray_service.py`](../services/xray/scripts/README.md), and how the login node and the other machines use them (Docker daemon, environment variables, proxychains, pip, git).
+
+## PyPI cache
+
+The `proxpi` service of the [all-in-one configuration](#all-in-one) runs [proxpi](https://github.com/EpicWink/proxpi), a caching proxy of the PyPI simple index ([notes](../services/proxpi/README.md)). It serves the BFSU mirror, with PyPI as a fallback for files the mirror lacks, and keeps the downloaded files in `services/proxpi/data/` on the VM's disk, up to `PROXPI_CACHE_SIZE` (50 GiB; the least-used files go first). Both upstreams are reached without the proxy.
+
+| From | Index URL |
+| :--- | :--- |
+| The nodes (cluster network) | `http://192.168.233.8:5000/index/` |
+| Campus, the Determined tasks | `http://10.0.1.68:5000/index/` |
+
+The index is plain HTTP, so pip needs the host as a trusted host. On a node:
+
+```bash
+pip install --index-url http://192.168.233.8:5000/index/ --trusted-host 192.168.233.8 <package>
+# or as the default:
+pip config set global.index-url http://192.168.233.8:5000/index/
+pip config set global.trusted-host 192.168.233.8
+```
+
+In Determined tasks it is pip's default index: the master's [task container defaults](../services/system-configurations/etc/determined/master.yaml) set `PIP_INDEX_URL`, `PIP_TRUSTED_HOST`, `PIP_CONFIG_FILE=/dev/null` (the image's own pip configuration files no longer apply) and `PIP_NO_CACHE_DIR=1`. They use the campus address, which every pool reaches (the s8030 pool `64c128t_512_170hx_5060ti` is not on the cluster network). Inside a task, choose another index with `--index-url` or the task's `environment_variables` (an empty `PIP_INDEX_URL=` means pypi.org); `pip config set` fails there, as no configuration file is in use.
+
+uv ignores pip's settings and has no cluster default; a lockfile made against pypi.org fails `uv sync --locked` with another index (`--frozen` works). To use the cache:
+
+```bash
+export UV_DEFAULT_INDEX=http://10.0.1.68:5000/index/   # or: uv pip install --default-index <url> ...
+```
 
 ## SSL, HTTPS and reverse proxy
 

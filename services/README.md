@@ -63,6 +63,7 @@ We are currently offering these web services:
 - Prometheus ([Determined task resources](prometheus/README.md))
 - Prometheus proxy for the Determined master ([`native-task-resources-prometheus-proxy/`](native-task-resources-prometheus-proxy/compose.yaml), a compose project of its own)
 - Grafana image renderer (`grafana-renderer`)
+- [PyPI cache](proxpi/README.md) (`proxpi`, port `5000`: pip's default index in Determined tasks)
 - [Determined watchdog](determined-watchdog/README.md) (kills idle GPU shells and JupyterLab notebooks; renews the Determined token for Prometheus)
 - V2Ray Exporter
 - frp (server `frps`, host network)
