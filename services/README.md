@@ -61,7 +61,7 @@ We are currently offering these web services:
 
 - NGINX
 - Prometheus ([Determined task resources](prometheus/README.md))
-- Prometheus proxy for the Determined master ([`native-task-resources-prometheus-proxy/`](native-task-resources-prometheus-proxy/compose.yaml), a compose project of its own)
+- Prometheus proxy for the Determined master ([`task-resources-prometheus-proxy/`](task-resources-prometheus-proxy/compose.yaml), a compose project of its own)
 - Grafana image renderer (`grafana-renderer`)
 - [PyPI cache](proxpi/README.md) (`proxpi`, port `5000`: pip's default index in Determined tasks)
 - [Determined watchdog](determined-watchdog/README.md) (kills idle GPU shells and JupyterLab notebooks; renews the Determined token for Prometheus)
@@ -342,11 +342,11 @@ docker rm -f grafana-dryrun
 
 ##### 7.5. Determined task resources
 
-Prometheus joins the exporters' samples to Determined tasks and allocations with the recording rules in [`prometheus/rules/`](prometheus/rules/determined-task-resources.yml). The master's native **Resources** pages and its `GET /api/v1/tasks/{task_id}/resources` API (enabled by `integrations.task_resources` in [`master.yaml`](system-configurations/etc/determined/master.yaml)) and the Grafana dashboard `det-task-resources` read them. The master reads Prometheus at `http://10.0.1.68:19090`, through [its own proxy](native-task-resources-prometheus-proxy/compose.yaml) that lets only the master's host in (see [the cluster's path](prometheus/README.md#connecting-the-determined-master)). How the pieces connect, the names the fork's master relies on, connecting the master, end-to-end checks and troubleshooting: [Determined task resources](prometheus/README.md).
+Prometheus joins the exporters' samples to Determined tasks and allocations with the recording rules in [`prometheus/rules/`](prometheus/rules/determined-task-resources.yml). The master's **Resources** pages and its `GET /api/v1/tasks/{task_id}/resources` API (enabled by `integrations.task_resources` in [`master.yaml`](system-configurations/etc/determined/master.yaml)) and the Grafana dashboard `det-task-resources` read them. The master reads Prometheus at `http://10.0.1.68:19090`, through [its own proxy](task-resources-prometheus-proxy/compose.yaml) that lets only the master's host in (see [the cluster's path](prometheus/README.md#connecting-the-determined-master)). How the pieces connect, the names the fork's master relies on, connecting the master, end-to-end checks and troubleshooting: [Determined task resources](prometheus/README.md).
 
 ## Notes
 
-Determined-AI's [det-state-metrics](https://gpu.cvgl.lab/prom/det-state-metrics) (to view it in your browser you need to log in to https://gpu.cvgl.lab first) relates tasks to containers and GPUs, but the [official document](https://docs.determined.ai/latest/integrations/prometheus/prometheus.html) and [repo](https://github.com/determined-ai/works-with-determined) do not join it with `cAdvisor` and `dcgm-exporter`. Our [recording rules](prometheus/rules/determined-task-resources.yml) do, for the master's native Resources pages and the Grafana dashboard `det-task-resources` (see [7.5](#75-determined-task-resources)).
+Determined-AI's [det-state-metrics](https://gpu.cvgl.lab/prom/det-state-metrics) (to view it in your browser you need to log in to https://gpu.cvgl.lab first) relates tasks to containers and GPUs, but the [official document](https://docs.determined.ai/latest/integrations/prometheus/prometheus.html) and [repo](https://github.com/determined-ai/works-with-determined) do not join it with `cAdvisor` and `dcgm-exporter`. Our [recording rules](prometheus/rules/determined-task-resources.yml) do, for the master's Resources pages and the Grafana dashboard `det-task-resources` (see [7.5](#75-determined-task-resources)).
 
 From fork 0.41.0 a task's allocation, container, runtime container and GPU mappings appear there `observability.task_mapping_delay` (default 5 minutes) after its allocation starts and are removed when it stops; shorter allocations never appear. See [Determined task resources](prometheus/README.md#task-dashboard-and-permissions).
 

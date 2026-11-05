@@ -1,7 +1,7 @@
 # Determined task resources
 
 Prometheus joins the hardware samples of the node exporters to Determined's task and allocation
-identities. Two consumers read the result: the Determined master's native **Resources** pages and
+identities. Two consumers read the result: the Determined master's **Resources** pages and
 REST API (our fork, [WU-CVGL/determined](https://github.com/WU-CVGL/determined)), and the Grafana
 dashboard `det-task-resources`. Training code needs no change.
 
@@ -149,7 +149,7 @@ integrations:
   only the master's address, or only `GET /api/v1/query_range`, through. Grafana's datasource
   proxy cannot stand in: its URL has a path.
 - **This cluster's path.** `prometheus_url` is `http://192.168.233.8:19090`, a bare origin. An NGINX
-  container, [`../native-task-resources-prometheus-proxy/`](../native-task-resources-prometheus-proxy/compose.yaml),
+  container, [`../task-resources-prometheus-proxy/`](../task-resources-prometheus-proxy/compose.yaml),
   publishes port 19090 on 192.168.233.8 (the 100G LAN) and 10.0.1.68 (campus) only. It passes `GET /api/v1/query_range` and `GET /-/ready`
   from the master's host (10.0.1.66) to `prometheus:9090` at the root path, without
   authentication or redirects. Other methods get 405, GETs from other clients 403, and other
@@ -169,7 +169,7 @@ the REST API: `GET /api/v1/task-resources/capability` (`{"enabled": true}`) and
 `allocationId=<allocation>`. Both need a Determined login, and a task's series need permission to
 read that task; an unknown task and a task the user may not read both get 404. The master's limits
 per request (range, points, step, timeout, concurrent requests) and the response format are in the
-fork's [native task resources guide](https://github.com/WU-CVGL/determined/blob/main/docs/integrations/observability/native-task-resources.rst).
+fork's [task resources guide](https://github.com/WU-CVGL/determined/blob/main/docs/integrations/observability/task-resources.rst).
 
 `integrations.grafana_task_resources` (`dashboard_url` with `/d/det-task-resources/` and at most an
 `orgId` query, and `det_cluster`) instead adds an external **Task Resources** link to the Grafana
@@ -262,7 +262,7 @@ q() { docker compose exec -T prometheus promtool query instant http://localhost:
 
 | Symptom | Likely link |
 | :--- | :--- |
-| No **View Resources**; the page says "Native resource monitoring is not enabled for this cluster." | `integrations.task_resources` missing, or the master not restarted after adding it (the capability answers `"enabled": false`) |
+| No **View Resources**; the page says "Task resource monitoring is not enabled for this cluster." | `integrations.task_resources` missing, or the master not restarted after adding it (the capability answers `"enabled": false`) |
 | The master does not start; the error names `task_resources` | only one key set, or `prometheus_url` is not a bare origin |
 | "Resource metrics could not be loaded. Please retry." (WebUI: HTTP 502; REST API: HTTP 503 with "task resource metrics are unavailable") | the master gets no `200` from `query_range` within 10 seconds: Prometheus down or unreachable from the master, a redirect, or authentication in front of it (check 4). "... are invalid" instead: the rules return series without the task's `task_id` or `det_cluster` |
 | "Resource monitoring is busy. Please retry shortly." (WebUI and REST API: HTTP 503 with "task resource query capacity exhausted") | the master's concurrent resource requests are all in use; retry |
@@ -317,5 +317,5 @@ unchanged until the copy is checked, and never run two Prometheus processes on o
 References: [Prometheus configuration](https://prometheus.io/docs/prometheus/latest/configuration/configuration/),
 [rule tests](https://prometheus.io/docs/prometheus/latest/configuration/unit_testing_rules/),
 [Grafana URL variables](https://grafana.com/docs/grafana/latest/dashboards/build-dashboards/create-dashboard-url-variables/),
-fork guides for [native task resources](https://github.com/WU-CVGL/determined/blob/main/docs/integrations/observability/native-task-resources.rst)
+fork guides for [task resources](https://github.com/WU-CVGL/determined/blob/main/docs/integrations/observability/task-resources.rst)
 and the [Grafana link](https://github.com/WU-CVGL/determined/blob/main/docs/integrations/observability/grafana-task-resources.rst).
