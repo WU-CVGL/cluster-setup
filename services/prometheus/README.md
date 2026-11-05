@@ -1,7 +1,7 @@
 # Determined task resources
 
 Prometheus joins the hardware samples of the node exporters to Determined's task and allocation
-identities. Two consumers read the result: the Determined master's native **Resources** pages and
+identities. Two consumers read the result: the Determined master's **Resources** pages and
 REST API (our fork, [WU-CVGL/determined](https://github.com/WU-CVGL/determined)), and the Grafana
 dashboard `det-task-resources`. Training code needs no change.
 
