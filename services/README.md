@@ -61,7 +61,7 @@ We are currently offering these web services:
 
 - NGINX
 - Prometheus ([Determined task resources](prometheus/README.md))
-- Prometheus proxy for the Determined master ([`native-task-resources-prometheus-proxy/`](native-task-resources-prometheus-proxy/compose.yaml), a compose project of its own)
+- Prometheus proxy for the Determined master ([`task-resources-prometheus-proxy/`](task-resources-prometheus-proxy/compose.yaml), a compose project of its own)
 - Grafana image renderer (`grafana-renderer`)
 - [PyPI cache](proxpi/README.md) (`proxpi`, port `5000`: pip's default index in Determined tasks)
 - [Determined watchdog](determined-watchdog/README.md) (kills idle GPU shells and JupyterLab notebooks; renews the Determined token for Prometheus)
@@ -342,7 +342,7 @@ docker rm -f grafana-dryrun
 
 ##### 7.5. Determined task resources
 
-Prometheus joins the exporters' samples to Determined tasks and allocations with the recording rules in [`prometheus/rules/`](prometheus/rules/determined-task-resources.yml). The master's native **Resources** pages and its `GET /api/v1/tasks/{task_id}/resources` API (enabled by `integrations.task_resources` in [`master.yaml`](system-configurations/etc/determined/master.yaml)) and the Grafana dashboard `det-task-resources` read them. The master reads Prometheus at `http://10.0.1.68:19090`, through [its own proxy](native-task-resources-prometheus-proxy/compose.yaml) that lets only the master's host in (see [the cluster's path](prometheus/README.md#connecting-the-determined-master)). How the pieces connect, the names the fork's master relies on, connecting the master, end-to-end checks and troubleshooting: [Determined task resources](prometheus/README.md).
+Prometheus joins the exporters' samples to Determined tasks and allocations with the recording rules in [`prometheus/rules/`](prometheus/rules/determined-task-resources.yml). The master's native **Resources** pages and its `GET /api/v1/tasks/{task_id}/resources` API (enabled by `integrations.task_resources` in [`master.yaml`](system-configurations/etc/determined/master.yaml)) and the Grafana dashboard `det-task-resources` read them. The master reads Prometheus at `http://10.0.1.68:19090`, through [its own proxy](task-resources-prometheus-proxy/compose.yaml) that lets only the master's host in (see [the cluster's path](prometheus/README.md#connecting-the-determined-master)). How the pieces connect, the names the fork's master relies on, connecting the master, end-to-end checks and troubleshooting: [Determined task resources](prometheus/README.md).
 
 ## Notes
 
