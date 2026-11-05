@@ -169,7 +169,7 @@ the REST API: `GET /api/v1/task-resources/capability` (`{"enabled": true}`) and
 `allocationId=<allocation>`. Both need a Determined login, and a task's series need permission to
 read that task; an unknown task and a task the user may not read both get 404. The master's limits
 per request (range, points, step, timeout, concurrent requests) and the response format are in the
-fork's [native task resources guide](https://github.com/WU-CVGL/determined/blob/main/docs/integrations/observability/native-task-resources.rst).
+fork's [task resources guide](https://github.com/WU-CVGL/determined/blob/main/docs/integrations/observability/task-resources.rst).
 
 `integrations.grafana_task_resources` (`dashboard_url` with `/d/det-task-resources/` and at most an
 `orgId` query, and `det_cluster`) instead adds an external **Task Resources** link to the Grafana
@@ -317,5 +317,5 @@ unchanged until the copy is checked, and never run two Prometheus processes on o
 References: [Prometheus configuration](https://prometheus.io/docs/prometheus/latest/configuration/configuration/),
 [rule tests](https://prometheus.io/docs/prometheus/latest/configuration/unit_testing_rules/),
 [Grafana URL variables](https://grafana.com/docs/grafana/latest/dashboards/build-dashboards/create-dashboard-url-variables/),
-fork guides for [native task resources](https://github.com/WU-CVGL/determined/blob/main/docs/integrations/observability/native-task-resources.rst)
+fork guides for [task resources](https://github.com/WU-CVGL/determined/blob/main/docs/integrations/observability/task-resources.rst)
 and the [Grafana link](https://github.com/WU-CVGL/determined/blob/main/docs/integrations/observability/grafana-task-resources.rst).
