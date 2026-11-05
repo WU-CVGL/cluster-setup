@@ -262,7 +262,7 @@ q() { docker compose exec -T prometheus promtool query instant http://localhost:
 
 | Symptom | Likely link |
 | :--- | :--- |
-| No **View Resources**; the page says "Native resource monitoring is not enabled for this cluster." | `integrations.task_resources` missing, or the master not restarted after adding it (the capability answers `"enabled": false`) |
+| No **View Resources**; the page says "Task resource monitoring is not enabled for this cluster." | `integrations.task_resources` missing, or the master not restarted after adding it (the capability answers `"enabled": false`) |
 | The master does not start; the error names `task_resources` | only one key set, or `prometheus_url` is not a bare origin |
 | "Resource metrics could not be loaded. Please retry." (WebUI: HTTP 502; REST API: HTTP 503 with "task resource metrics are unavailable") | the master gets no `200` from `query_range` within 10 seconds: Prometheus down or unreachable from the master, a redirect, or authentication in front of it (check 4). "... are invalid" instead: the rules return series without the task's `task_id` or `det_cluster` |
 | "Resource monitoring is busy. Please retry shortly." (WebUI and REST API: HTTP 503 with "task resource query capacity exhausted") | the master's concurrent resource requests are all in use; retry |
