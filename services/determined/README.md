@@ -1,6 +1,6 @@
 # Determined Configuration Files
 
-The cluster runs our fork, [WU-CVGL/determined](https://github.com/WU-CVGL/determined), version `0.43.1`, with its images `ghcr.io/wu-cvgl/determined-master` and `ghcr.io/wu-cvgl/determined-agent`. Install the fork's `det` CLI first (see [docs/01](../../docs/01_First-time_Setup_of_Cluster_Nodes.md#install-determined-ai-systemwide)). Keep the CLI on the master's version. Agents stay on an older release when a release changes only the master or the WebUI, as the fork's [distribution guide](https://github.com/WU-CVGL/determined/blob/main/docs/maintenance/distribution.md) states for each version (0.43.0: agents on 0.42.2, unchanged since). The fork has no version gate, so mixed versions work during a rolling agent upgrade; the fork's [hot upgrade guide](https://github.com/WU-CVGL/determined/blob/main/docs/maintenance/hot-upgrade.md) says which mixes were tested.
+The cluster runs our fork, [WU-CVGL/determined](https://github.com/WU-CVGL/determined), version `0.44.0`, with its images `ghcr.io/wu-cvgl/determined-master` and `ghcr.io/wu-cvgl/determined-agent`. Install the fork's `det` CLI first (see [docs/01](../../docs/01_First-time_Setup_of_Cluster_Nodes.md#install-determined-ai-systemwide)). Keep the CLI on the master's version. Agents stay on an older release when a release changes only the master or the WebUI, as the fork's [distribution guide](https://github.com/WU-CVGL/determined/blob/main/docs/maintenance/distribution.md) states for each version (0.43.0: agents on 0.42.2, unchanged since). The fork has no version gate, so mixed versions work during a rolling agent upgrade; the fork's [hot upgrade guide](https://github.com/WU-CVGL/determined/blob/main/docs/maintenance/hot-upgrade.md) says which mixes were tested.
 
 - [Configuration file](../system-configurations/etc/determined/master.yaml): a copy of the master's `master.yaml`, without secrets.
 
@@ -94,6 +94,8 @@ The master and the agents can be replaced while tasks run (hot upgrade) when the
 
 0.43.1 has no migration, and agents stay on their version. It puts the TensorBoard task behind the master proxy's token: TensorBoard tasks that are running or queued at the upgrade keep their old TensorBoard, without the token, until they end. Before the swap, list every user's with `det tensorboard list --all` and kill them; their owners start them again afterwards, and the event data is untouched. The new `master.yaml` also sets the cluster's default task image, pip's cache variables and the Prometheus address on the cluster LAN ([Configuration file](../system-configurations/etc/determined/master.yaml)).
 
+0.44.0 removes the TensorBoard task type and runs seven database migrations, and agents stay on 0.42.2. The upgrade deletes the TensorBoard task records with their logs, not their event files. Before step 1 replaces the 0.43.1 CLI, kill as an administrator every task that `det tensorboard list --all` lists, until it shows each one as `TERMINATED`; then take the dump ([Backups](#backups)). Remove `tensorboard_timeout` from the new `master.yaml`: the 0.44.0 master does not start with it. The migrations run before the master accepts agents and count toward the outage; the master then rebuilds the cluster usage history and keeps the earlier aggregates in `resource_aggregates_legacy`. A TensorBoard task still running at the swap keeps its container with no record in Determined: find and kill such containers on every agent host as the fork's [distribution guide](https://github.com/WU-CVGL/determined/blob/main/docs/maintenance/distribution.md) shows. Allocations from before the upgrade count as GPUs on the user pages only when their task container recorded GPUs; classify the rest with the administrator statements in the fork's [historical cluster usage guide](https://github.com/WU-CVGL/determined/blob/main/docs/manage/historical-cluster-usage-data.rst#user-pages).
+
 Time without a master: agents exit after about 145 s and Docker restarts them; once the master is back they reconnect and reattach their running task containers. Tasks that write output are killed after about 11 minutes without a master. Keep every master outage, also a restart after a configuration change, well under ten minutes.
 
 ### Rollback
@@ -116,6 +118,8 @@ docker exec -i determined_determined-db_1 bash -c 'dropdb -U postgres determined
 ```
 
 A rollback from 0.43.1 to 0.43.0 is the binary swap above. First end the TensorBoard tasks and the shells with the `tensorboard` service that started under 0.43.1: a 0.43.0 master does not send their token.
+
+A rollback from 0.44.0 is a restore, as from 0.43.0: stop the 0.44.0 master, restore the dump taken before the upgrade with the command above, start the 0.43.1 master and put the 0.43.1 CLI back on the login node. Agents stay. A 0.43.1 master on the upgraded database without the restore cannot start a shell with JupyterLab and does not enforce job privacy. Roll back further only from the restored 0.43.1.
 
 ## Agents
 
