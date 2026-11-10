@@ -27,9 +27,9 @@ Every 30 minutes, at minutes 0 and 30 (crontab `*/30 * * * *`, see `WATCHDOG_SCH
      It is reported as **Terminated** only if the kill succeeded; a failed kill is logged, not
      reported, and retried at the next check.
 
-Only shells are policed, with the JupyterLab and VS Code services they run: idle commands,
-TensorBoards and trials are never killed (Determined 0.43.0 has no notebooks). A CPU-only shell has
-no GPU metrics, so the alert never fires for it and it is never warned or killed.
+Only shells are policed, with the JupyterLab and VS Code services they run: idle commands and
+trials are never killed (Determined 0.43.0 has no notebooks). A CPU-only shell, such as a TensorBoard
+viewing session, has no GPU metrics, so the alert never fires for it and it is never warned or killed.
 If the alert is not firing, or no idle container belongs to a shell, it only logs.
 Errors (Grafana/Determined/Slack unreachable, bad responses) are logged and the next check tries
 again; Slack delivery is best-effort and never stops the watchdog. If the shell or the task listing

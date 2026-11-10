@@ -254,8 +254,8 @@ q() { docker compose exec -T prometheus promtool query instant http://localhost:
 6. **GPU legend** (fork 0.41.0 and later). On **View Resources** of a trial, notebook or shell
    with GPUs, the legend reads `GPU 0`, `GPU 1`, ... (the numbering of `nvidia-smi` inside the
    container). Hovering shows the host GPU index and UUID, which match
-   `nvidia-smi --query-gpu=index,uuid --format=csv` on that node. Commands, TensorBoards and
-   generic tasks record no GPU list, so their legend shows the start of the GPU UUID. Earlier
+   `nvidia-smi --query-gpu=index,uuid --format=csv` on that node. Commands and generic tasks
+   record no GPU list, so their legend shows the start of the GPU UUID. Earlier
    releases label each GPU series `<allocation> · <node> · <GPU UUID>`; compare that UUID instead.
 
 ## Troubleshooting
