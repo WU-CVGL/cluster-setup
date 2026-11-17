@@ -184,8 +184,8 @@ msgstr "正在应用，受影响的入口会重启。"
 
 msgid ""
 "Nothing to change: the account was already in that state. The entries "
-"restarted for other requests of the same batch."
-msgstr "无需变更：账号已处于该状态。入口因同一批次的其他请求而重启。"
+"restarted to apply other changes."
+msgstr "无需变更：账号已处于该状态。入口为应用其他变更而重启。"
 
 msgid ""
 "Nothing to change: the account was already in that state. Nothing restarted."

@@ -85,8 +85,8 @@ def describe(row, now=None):
                  "may still work.") if revoke else _("Being applied; the affected entries restart.")
     if row.state == "applied":
         if row.changed is False and row.restarted:
-            return _("Nothing to change: the account was already in that state. The entries restarted for other "
-                     "requests of the same batch.")
+            return _("Nothing to change: the account was already in that state. The entries restarted to apply "
+                     "other changes.")
         if row.changed is False:
             return _("Nothing to change: the account was already in that state. Nothing restarted.")
         return _("Applied and verified.")

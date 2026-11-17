@@ -263,8 +263,8 @@ class LifecycleTest(PortalTestCase):
             ("enable", {"status": "applied", "changed": False, "restarted": []}, "applied",
              "Nothing to change: the account was already in that state. Nothing restarted."),
             ("enable", {"status": "applied", "changed": False, "restarted": ["xray-ha"]}, "applied",
-             "Nothing to change: the account was already in that state. The entries restarted for other requests "
-             "of the same batch."),
+             "Nothing to change: the account was already in that state. The entries restarted to apply other "
+             "changes."),
             ("disable", {"status": "failed", "stage": "test", "error": "xray-ha/config/config.json: bad",
                          "restored": True}, "failed", "the previous state is back: the account is unchanged and the "
                                                        "old access still works."),
