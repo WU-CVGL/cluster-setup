@@ -33,7 +33,7 @@
                 "timeout": 300,
                 "users": [
                     {
-                        "user": "USERNAME",
+                        "user": "RENDER:proxy_accounts.py",
                         "pass": "PASSWORD"
                     }
                 ]
@@ -47,12 +47,7 @@
             "settings": {
                 "auth": "password",
                 "udp": true,
-                "users": [
-                    {
-                        "user": "USERNAME",
-                        "pass": "PASSWORD"
-                    }
-                ]
+                "users": []
             },
             "tag": "socks_IN"
         },

@@ -112,15 +112,15 @@ docker compose restart grafana             # load the new dashboard providers
 
 The pool is explicit, and [`create_xray_service.py`](../services/xray/scripts/README.md) does not add new lines to it. To add a line, give it a SOCKS outbound whose tag starts with `pool-`, as the others have, and set the `pool` label of its probe targets to `ha-general` in [`prometheus.yml`](../services/prometheus/prometheus.yml).
 
-Move clients to the HA entry only after the new ports work from where they are used: run `curl -x http://<user>:<password>@192.168.233.8:30889 https://www.google.com/generate_204 -w '%{http_code}\n'` on a node and the same with `10.0.1.68` on the login node, then the same with `socks5h://` and port `30089`. Then move one kind of client at a time: environment variables, `pip` and `git` first, then the [Docker daemons](#docker-daemon-with-an-account), one drained node at a time, keeping `NO_PROXY` as it is. While the lines keep their own entries without accounts, moving a client back is changing the URL back.
+Move clients to the HA entry only after its ports work from where they are used: run `curl -x http://<user>:<password>@192.168.233.8:30889 https://www.google.com/generate_204 -w '%{http_code}\n'` on a node and the same with `10.0.1.68` on the login node, then the same with `socks5h://` and port `30089`. Then move one kind of client at a time: environment variables, `pip` and `git` first, then the [Docker daemons](#docker-daemon-with-an-account), one drained node at a time, keeping `NO_PROXY` as it is. While the lines keep their own entries without accounts, moving a client back is changing the URL back.
 
 ## Accounts
 
-Every cluster user has one proxy account, named after their cluster username. Accounts whose names start with `svc-` are service accounts: `svc-docker-<node>` for the Docker daemon of a node, `svc-monitor` for the [probes](#proxy-availability) and `svc-ha` for the HA entry's connections to the lines.
+Every cluster user has one proxy account, named after their cluster username; an admin creates it and hands out the password. Accounts whose names start with `svc-` are service accounts: `svc-docker-<node>` (`<node>` is the node's hostname) for the Docker daemon of a node, `svc-monitor` for the [probes](#proxy-availability) and `svc-ha` for the HA entry's connections to the lines.
 
 ### Manage accounts
 
-The accounts live in one file on the VM, `services/proxy-accounts/accounts.json` (mode `0600`, not in git). Admins change it with [`proxy_accounts.py`](../services/xray/scripts/README.md#代理账号-proxy_accountspy), and `render` writes every configuration that holds passwords from it: the HA entry's, the probes' and, once the lines require accounts, the lines'. Nothing else holds a copy to keep in step.
+The accounts live in one file on the VM, `services/proxy-accounts/accounts.json` (mode `0600`, not in git). Admins change it with [`proxy_accounts.py`](../services/xray/scripts/README.md#代理账号-proxy_accountspy), and `render` writes every configuration that holds passwords from it: the HA entry's, the probes' and, once the lines require accounts, the lines'. On the VM, nothing else holds a copy. Outside it, users keep their own passwords and each node keeps its Docker daemon's in `proxy.env`: after `rotate svc-docker-<node>`, update that file and restart Docker on the drained node ([Docker daemon with an account](#docker-daemon-with-an-account)).
 
 ```sh
 cd ~/ws/cluster-setup/services
@@ -142,7 +142,7 @@ Passwords are random and are printed only by `add` and `rotate` with `--show`; g
 | HTTP | `http://<user>:<password>@192.168.233.8:30889` |
 | SOCKS5 | `socks5h://<user>:<password>@192.168.233.8:30089` |
 
-From the campus network (the login node), use `10.0.1.68`. `socks5h` lets the proxy resolve names. In a URL, a password with characters other than letters, digits and `-._~` must be percent-encoded, for example with `python3 -c 'import sys, urllib.parse; print(urllib.parse.quote(sys.argv[1], safe=""))' '<password>'`; the passwords that `proxy_accounts.py` makes need no encoding. For example:
+From the campus network (the login node), use `10.0.1.68`. `socks5h` lets the proxy resolve names. The passwords contain only URL-safe characters, so they go into the URL as they are. For example:
 
 ```bash
 export http_proxy=http://<user>:<password>@192.168.233.8:30889
@@ -154,42 +154,42 @@ export https_proxy=$http_proxy HTTP_PROXY=$http_proxy HTTPS_PROXY=$http_proxy
 
 ### Docker daemon with an account
 
-The Docker daemon of a node uses the account `svc-docker-<node>`, for example `svc-docker-node01`. Keep its URL in a file only root can read, not in the drop-in itself: every user of the node can see a drop-in's `Environment=` lines with `systemctl show docker`.
+The Docker daemon of a node uses the account `svc-docker-<node>`, for example `svc-docker-cvgl-node01`. Keep its URL in a file only root can read, not in the drop-in itself: every user of the node can see a drop-in's `Environment=` lines with `systemctl show docker`.
 
 ```sh
-sudo install -m 600 /dev/null /etc/systemd/system/docker.service.d/proxy.env
+sudo install -D -m 600 /dev/null /etc/systemd/system/docker.service.d/proxy.env
 sudoedit /etc/systemd/system/docker.service.d/proxy.env
 ```
 
 ```conf
-HTTP_PROXY=http://svc-docker-node01:<password>@192.168.233.8:30889
-HTTPS_PROXY=http://svc-docker-node01:<password>@192.168.233.8:30889
+HTTP_PROXY=http://svc-docker-cvgl-node01:<password>@192.168.233.8:30889
+HTTPS_PROXY=http://svc-docker-cvgl-node01:<password>@192.168.233.8:30889
 NO_PROXY=localhost,127.0.0.1,nvcr.io,aliyuncs.com,cvgl.lab,harbor.cvgl.lab,10.0.1.68,192.168.233.8
 ```
 
-and in `/etc/systemd/system/docker.service.d/proxy.conf`:
+and replace the contents of `/etc/systemd/system/docker.service.d/proxy.conf`, including any `Environment=` proxy lines, with:
 
 ```conf
 [Service]
 EnvironmentFile=/etc/systemd/system/docker.service.d/proxy.env
 ```
 
-systemd reads an `EnvironmentFile` as written. In an `Environment=` line, `%` starts a specifier, so a percent-encoded password there needs each `%` written as `%%`. Then reload and restart Docker on the drained node as in [Docker daemon](#docker-daemon).
+Then reload and restart Docker on the drained node as in steps 3 and 4 of [Docker daemon](#docker-daemon).
 
 ### Usage
 
 The **Proxy Usage** dashboard in Grafana shows the traffic per user, per service account and per line, to everyone who can open Grafana.
 
-- **Users** are counted where they enter the proxies: at the HA entry, and at a line's own entry when they use it directly and it requires accounts. The HA entry reaches the lines as `svc-ha`, so traffic it relays is counted once for the user, at the HA entry, and for `svc-ha` at the line, never twice for the user. There is no per-user breakdown by line.
+- **Users** are counted where they enter the proxies: at the HA entry, and at a line's own entry when they use it directly and it requires accounts. The HA entry reaches the lines as `svc-ha`, so traffic it relays is counted once for the user, at the HA entry, and for `svc-ha` at the line, never twice for the user. User figures include traffic to private and Chinese destinations; traffic through a line's own entry without an account is counted under no user. There is no per-user breakdown by line.
 - **Service accounts** are shown apart from users.
 - **Lines** show each line's traffic to its upstream server, whichever entry it came through. Traffic that goes out directly (private and Chinese destinations) is not included.
 - **HA entry throughput** is all traffic of the entry's two ports.
 
-The totals are the increase between the samples Prometheus holds for the selected range. Xray's counters restart from zero when Xray restarts, as after every account change. Traffic after the last scrape before a restart is not counted, and neither is a user's traffic up to their first scrape after a restart when the range starts after that restart. Prometheus keeps 30 days of samples (`--storage.tsdb.retention.time` in `docker-compose.yml`), which bounds the range.
+The totals are Prometheus `increase()` over the selected range, extrapolated to the range edges, so a total over a range only a few scrapes long reads high. Xray's counters restart from zero when Xray restarts, as after every account change, and an account's counter appears only at its first use after that. Not counted: traffic after the last scrape before a restart, and an account's traffic up to its first scrape when the range holds no earlier sample of it (a new account, or a range that starts after a restart). Prometheus keeps 30 days of samples (`--storage.tsdb.retention.time` in `docker-compose.yml`), which bounds the range.
 
 ### Accounts on the lines
 
-The lines' own entries stay without accounts until no client uses them without one; otherwise a client still on a line breaks. Requiring accounts there is a rollout step:
+By default the lines' own entries (the *raw* entries, hence `raw-auth`) require no account. Turn accounts on there only once every client of a line sends one, because a client without one is refused:
 
 1. Move the clients to the HA entry with their accounts, and the Docker daemons to their `svc-docker-<node>` accounts, one drained node at a time. A client that keeps using a line directly can add its account to the line's URL beforehand: a line without accounts ignores it.
 2. Turn it on and render:
@@ -199,7 +199,7 @@ The lines' own entries stay without accounts until no client uses them without o
     python3 xray/scripts/proxy_accounts.py render
     ```
 
-    `render` then puts every account on the HTTP and SOCKS5 entries of every `xray/*/config/config.json`, lets the HA entry log in to the lines as `svc-ha` and the probes as `svc-monitor`.
+    `render` then requires every account on the HTTP and SOCKS5 entries of every `xray/*/config/config.json`, and has the HA entry log in to the lines as `svc-ha` and the probes as `svc-monitor`.
 3. Restart the lines and `xray-ha` together, and reload the probes:
 
     ```sh
@@ -209,7 +209,7 @@ The lines' own entries stay without accounts until no client uses them without o
 
     The HA entry and the lines must agree: the HA entry logging in to a line without accounts, or not logging in to a line with them, fails, and the HA entry fails closed until both sides have restarted.
 
-From then on, every account change restarts the lines too, and a line made with `create_xray_service.py` gets the accounts at the next `render`. `raw-auth off` and the same steps undo it.
+While accounts are on, restart the lines together with `xray-ha` after every account change. A line made with `create_xray_service.py` requires the accounts from its creation. `raw-auth off` followed by the same steps turns them off.
 
 ## Proxy availability
 
@@ -270,9 +270,11 @@ the proxy works.
 
 ## Use the proxy
 
+The examples below use a line's own entry, which needs no account while the lines do not require accounts. Through the HA entry, use the URL with your account from [Client settings](#client-settings) instead.
+
 ### Docker daemon
 
-Docker pulls images through the proxy set in a systemd drop-in. Through the HA entry, the daemon logs in with its own account: see [Docker daemon with an account](#docker-daemon-with-an-account) for the URL and where to keep it. Through a line's own entry without an account (the [reference file](../services/system-configurations/etc/systemd/system/docker.service.d/proxy.conf) has the values used on the supplementary services VM):
+Docker pulls images through the proxy set in a systemd drop-in. Through the HA entry, follow [Docker daemon with an account](#docker-daemon-with-an-account). Through a line's own entry, follow the steps below (the [reference file](../services/system-configurations/etc/systemd/system/docker.service.d/proxy.conf) has the values used on the supplementary services VM).
 
 1) Create the folder:
 

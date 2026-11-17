@@ -238,6 +238,18 @@ class RenderTest(_Base):
         self.assertFalse([line for line in rendered if "proxy_url:" in line and "PASSWORD" in line])
 
 
+class ExampleTest(unittest.TestCase):
+    def test_example_placeholders_cannot_log_in(self):
+        # Basic auth splits user:pass at the first ':', so no HTTP client can send a user name holding one;
+        # an empty list would turn HTTP authentication off, so the HTTP placeholder stays.
+        config = json.loads((SERVICES / pa.HA_EXAMPLE).read_text())
+        inbounds = {i["protocol"]: i["settings"] for i in config["inbounds"] if i["protocol"] in ("http", "socks")}
+        self.assertTrue(inbounds["http"]["users"])
+        for user in inbounds["http"]["users"]:
+            self.assertIn(":", user["user"])
+        self.assertEqual((inbounds["socks"]["auth"], inbounds["socks"]["users"]), ("password", []))
+
+
 class HandlerUsersTest(unittest.TestCase):
     def test_default_output_unchanged(self):
         outbound = {"protocol": "freedom", "settings": {}, "tag": "line"}
@@ -260,7 +272,11 @@ class HandlerUsersTest(unittest.TestCase):
 @unittest.skipUnless(shutil.which("git") and (SERVICES.parent / ".git").exists(), "needs the git checkout")
 class GitIgnoreTest(unittest.TestCase):
     SECRET_PATHS = ("services/proxy-accounts/accounts.json", "services/xray-ha/config/config.json",
-                    "services/blackbox/config/blackbox.yml", "services/xray/usca5-bwh-sla-1tb/config/config.json")
+                    "services/blackbox/config/blackbox.yml", "services/xray/usca5-bwh-sla-1tb/config/config.json",
+                    # write_private's temp files, left behind if render is killed before the rename
+                    "services/proxy-accounts/.accounts.json.k3j9x2a1", "services/xray-ha/config/.config.json.k3j9x2a1",
+                    "services/blackbox/config/.blackbox.yml.k3j9x2a1",
+                    "services/xray/usca5-bwh-sla-1tb/config/.config.json.k3j9x2a1")
 
     def test_secret_paths_ignored_and_untracked(self):
         repo = SERVICES.parent

@@ -132,7 +132,8 @@ job 中添加这两个目标（`pool: none`），然后运行 `proxy_accounts.py
    # 检查容器状态
    docker compose ps xray-<service_name> xray-<service_name>-exporter
    
-   # 测试 HTTP / SOCKS5 代理
+   # 测试 HTTP / SOCKS5 代理（raw-auth on 时用 http://<user>:<password>@localhost:<http_port>
+   # 和 socks5h://<user>:<password>@localhost:<socks_port>）
    curl -x http://localhost:<http_port> -I https://www.google.com
    curl --socks5-hostname localhost:<socks_port> -I https://www.google.com
    
@@ -178,11 +179,11 @@ python3 xray/scripts/proxy_accounts.py render
   - `xray/*/config/config.json`：`raw-auth on` 时入站要求所有账号（含 `svc-ha`），`off` 时带账号的入站恢复为无认证，
     其他文件不动。
     修改用的是 `XrayConfigHandler.set_inbound_users`，`build_xray_config(..., inbound_users=...)` 也用它；
-    不传 `inbound_users` 时输出与原来逐字节相同
+    不传 `inbound_users` 时 HTTP/SOCKS5 入站不要求认证（SOCKS5 `auth: noauth`）
 - 缺少 `svc-monitor`（`raw-auth on` 时还有 `svc-ha`）或某个线路配置没有 HTTP/SOCKS5 入站时，`render` 报错，不写任何文件
 - 之后重启 `xray-ha`（`raw-auth on` 时连同所有线路一起），并 `docker compose kill -s SIGHUP blackbox-exporter`
 
-`raw-auth on` 时，`create_xray_service.py` 新建的线路在下一次 `render` 时加上账号。
+`raw-auth on` 时，`create_xray_service.py` 新建的线路在创建时就要求所有账号（配置文件权限 `0600`）；账号文件中没有账号时拒绝创建。
 
 ## 测试
 

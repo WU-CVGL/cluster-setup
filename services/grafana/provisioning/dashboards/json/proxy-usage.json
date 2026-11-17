@@ -133,7 +133,7 @@
         "type": "prometheus",
         "uid": "${prometheus_source}"
       },
-      "description": "Each user where the user enters the proxies: the HA entry and the lines' own entries. Traffic the HA entry relays to a line is counted once, at the HA entry.",
+      "description": "Each user where the user enters the proxies: the HA entry, and a line's own entry when it requires accounts. Traffic the HA entry relays to a line is counted once, at the HA entry.",
       "gridPos": {
         "h": 10,
         "w": 24,
@@ -188,13 +188,13 @@
     },
     {
       "type": "table",
-      "title": "User totals (observed samples)",
+      "title": "User totals",
       "id": 5,
       "datasource": {
         "type": "prometheus",
         "uid": "${prometheus_source}"
       },
-      "description": "Bytes over the selected time range, from the samples Prometheus holds (increase). Traffic between the last scrape and an Xray restart is not counted.",
+      "description": "Bytes over the selected time range, from the samples Prometheus holds (increase). Traffic between the last scrape and an Xray restart is not counted. An account's traffic before its first scrape in the range is not counted.",
       "gridPos": {
         "h": 9,
         "w": 24,
@@ -389,13 +389,13 @@
     },
     {
       "type": "table",
-      "title": "Service account totals (observed samples)",
+      "title": "Service account totals",
       "id": 8,
       "datasource": {
         "type": "prometheus",
         "uid": "${prometheus_source}"
       },
-      "description": "Bytes over the selected time range, from the samples Prometheus holds (increase). Traffic between the last scrape and an Xray restart is not counted.",
+      "description": "Bytes over the selected time range, from the samples Prometheus holds (increase). Traffic between the last scrape and an Xray restart is not counted. An account's traffic before its first scrape in the range is not counted.",
       "gridPos": {
         "h": 9,
         "w": 10,
@@ -590,13 +590,13 @@
     },
     {
       "type": "table",
-      "title": "Line totals (observed samples)",
+      "title": "Line totals",
       "id": 11,
       "datasource": {
         "type": "prometheus",
         "uid": "${prometheus_source}"
       },
-      "description": "Bytes over the selected time range, from the samples Prometheus holds (increase). Traffic between the last scrape and an Xray restart is not counted.",
+      "description": "Bytes over the selected time range, from the samples Prometheus holds (increase). Traffic between the last scrape and an Xray restart is not counted. An account's traffic before its first scrape in the range is not counted.",
       "gridPos": {
         "h": 9,
         "w": 10,

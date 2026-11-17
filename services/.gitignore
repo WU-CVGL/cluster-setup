@@ -1,7 +1,7 @@
-xray/*/config/*.json
+xray/*/config/
 # Proxy accounts and the configs rendered from them (xray/scripts/proxy_accounts.py)
 proxy-accounts/
-xray-ha/config/*.json
+xray-ha/config/
 blackbox/config/
 nginx/ssl/
 harbor/*
