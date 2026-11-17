@@ -20,8 +20,15 @@ class HTTPStatusError(UpstreamError):
         self.body = body
 
 
+class _NoRedirect(urllib.request.HTTPRedirectHandler):
+    """Refuses every redirect: a 3xx raises HTTPError, so a token is never sent to another host."""
+
+    def redirect_request(self, *args, **kwargs):
+        return None
+
+
 # Never use the environment's proxy variables: the upstreams are on the private network.
-_OPENER = urllib.request.build_opener(urllib.request.ProxyHandler({}))
+_OPENER = urllib.request.build_opener(urllib.request.ProxyHandler({}), _NoRedirect)
 
 
 def _check_target(url):

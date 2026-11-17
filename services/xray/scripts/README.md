@@ -179,7 +179,7 @@ python3 xray/scripts/proxy_accounts.py disable <name>           # 保留账号�
 python3 xray/scripts/proxy_accounts.py enable <name>
 python3 xray/scripts/proxy_accounts.py admin <name> on|off      # 管理员可以使用 ha-all 和私有线路
 python3 xray/scripts/proxy_accounts.py list                     # 账号名，管理员标为 admin
-python3 xray/scripts/proxy_accounts.py status [--json]          # 账号、类型、是否启用、是否管理员、线路的类别、raw auth、上次应用的文件哈希；不含密码
+python3 xray/scripts/proxy_accounts.py status [--json]          # 账号、类型、是否启用、是否管理员、线路的类别和端口、raw auth、上次应用的文件哈希；不含密码
 python3 xray/scripts/proxy_accounts.py raw-auth [on|off]        # 公共线路自身入口是否要求账号，默认 off
 python3 xray/scripts/proxy_accounts.py render
 ```

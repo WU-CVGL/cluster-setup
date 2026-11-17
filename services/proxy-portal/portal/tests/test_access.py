@@ -85,14 +85,26 @@ class AccessTest(PortalTestCase):
         self.assertIsNone(view["templates"])
         page = self.client.get("/access")
         self.assertContains(page, "Proxy access is <b>off</b>")
-        self.assertContains(page, "they still work for you")
+        # what stops for a non-admin account, once, without the raw-auth paragraph repeating it
+        self.assertContains(page, "ha-general refuses it. The public lines' own entries still work for you")
+        self.assertNotContains(page, "ha-all and the private lines refuse it")
+        self.assertNotContains(page, "turning an account off stops only")
         self.assertContains(page, "is not a change to your cluster account")
+
+    def test_raw_auth_said_plainly_while_on_or_without_account(self):
+        self.get("alice")
+        self.assertContains(self.client.get("/access"), "so turning an account off stops only the HA entries")
+        self.client.post("/signout")
+        self.master.users["frank"] = ("pw-frank", False, True)
+        self.get("frank")
+        self.assertContains(self.client.get("/access"), "so turning an account off stops only the HA entries")
 
     def test_disabled_admin(self):
         view = self.get("erin")
         usable = {e["id"]: e["usable"] for e in view["entries"]}
         self.assertFalse(usable["ha-all"])
         self.assertFalse(any(usable[name] for name in PRIVATE))
+        self.assertContains(self.client.get("/access"), "ha-general, ha-all and the private lines refuse it.")
 
     def test_raw_auth_on(self):
         self.write_status(lambda d: d.update(raw_auth=True))

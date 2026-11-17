@@ -8,6 +8,7 @@ from django.urls import reverse
 from django.utils import timezone
 from django.utils.http import url_has_allowed_host_and_scheme
 from django.utils.translation import gettext as _
+from django.utils.translation import ngettext
 from django.views.decorators.cache import never_cache
 from django.views.decorators.csrf import csrf_protect
 from django.views.decorators.debug import sensitive_post_parameters, sensitive_variables
@@ -146,7 +147,9 @@ def signin(request):
         context["error"] = _("Enter your Determined username and password.")
         return render(request, "portal/signin.html", context, status=400)
     if limits.blocked(request, username):
-        context["error"] = _("Too many failed sign-ins. Wait a few minutes and try again.")
+        minutes = -(-settings.SIGNIN_WINDOW // 60)
+        context["error"] = ngettext("Too many failed sign-ins. Try again in %(n)d minute.",
+                                    "Too many failed sign-ins. Try again in %(n)d minutes.", minutes) % {"n": minutes}
         return render(request, "portal/signin.html", context, status=429)
     result = master.check_credentials(username, password)
     password = None

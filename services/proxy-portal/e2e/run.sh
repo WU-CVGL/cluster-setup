@@ -13,11 +13,9 @@ rm -rf run && mkdir -p run/ssl run/spool/requests run/spool/results run/spool/st
 openssl req -x509 -newkey rsa:2048 -nodes -days 2 -subj /CN=proxy.cvgl.lab \
   -addext subjectAltName=DNS:proxy.cvgl.lab -keyout run/ssl/Server-unsecure.pvk -out run/ssl/Server.cer 2>/dev/null
 chmod 644 run/ssl/*
-# the real nginx.conf as it is, then a copy with only the portal's upstream address changed to the container
+# the repository's nginx.conf as it is: it reaches the portal by its container name
 echo "nginx -t: $(docker run --rm -v "$PWD/../../nginx/build/nginx.conf:/etc/nginx/nginx.conf:ro" -v "$PWD/run/ssl:/opt/ssl:ro" \
   nginx:1.30.6-alpine@sha256:901e593c95dc85f5a729f5765516321366ef4ac401821431d408897e95287d0a nginx -t 2>&1 | tail -1)"
-sed 's/server 192.168.233.8:8095;/server proxy-portal:8000;/' ../../nginx/build/nginx.conf > run/nginx.conf
-grep -q 'server proxy-portal:8000;' run/nginx.conf
 python3 - <<'PY'
 import datetime, json
 data = json.load(open("../portal/tests/fixtures/status.json"))
@@ -35,6 +33,18 @@ echo "status:        $(r -o /dev/null -w '%{http_code}' https://proxy.cvgl.lab/)
 echo "me anonymous:  $(r -o /dev/null -w '%{http_code}' https://proxy.cvgl.lab/api/me/access)"
 r -D - -o /dev/null https://proxy.cvgl.lab/ | grep -iE '^(content-security-policy|x-frame-options|x-content-type-options|referrer-policy):' | cut -c1-90
 echo "headline:      $(r https://proxy.cvgl.lab/api/status | python3 -c 'import json,sys; print(json.load(sys.stdin)["headline"]["text"])')"
+
+# the README's incident commands: one resolved, one open
+incident() { compose exec -T proxy-portal python manage.py shell -c "
+from django.utils import timezone; from portal.models import Incident
+i = Incident.objects.create(title='$1', body='$2', component='$3', state='investigating',
+                            started_at=timezone.now(), author='carol'); print(i.id)"; }
+id=$(incident "Line restarted" "A public line restarted after an update." lines | tail -1)
+compose exec -T proxy-portal python manage.py shell -c "
+from django.utils import timezone; from portal.models import Incident
+i = Incident.objects.get(id=$id); i.state = 'resolved'; i.resolved_at = timezone.now(); i.save()"
+incident "Slow downloads on one line" "Downloads through one public line are slow; the default proxy is not affected." lines >/dev/null
+echo "incidents:     $(r https://proxy.cvgl.lab/api/status | python3 -c 'import json,sys; print([(i["title"], i["state"]) for i in json.load(sys.stdin)["incidents"]])')"
 
 sleep 3   # Chromium aborts with ERR_NETWORK_CHANGED while Docker is still setting up interfaces
 RESOLVE="proxy.cvgl.lab 127.0.0.1" node shots.cjs https://proxy.cvgl.lab "$out" carol pw-carol

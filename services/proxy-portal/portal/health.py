@@ -19,8 +19,8 @@ log = logging.getLogger("portal.status")
 PROTOCOLS = ("http", "socks")
 HA_ENTRIES = ("ha-general", "ha-all")
 
-# History thresholds: a day is green from 99 % probe success, amber from 90 %, red below; green also needs
-# probe results for at least half of the day, so a day without (enough) data is grey, never green.
+# History thresholds: a day needs probe results for at least half of it, or it is grey; then it is green from
+# 99 % probe success, amber from 90 %, red below.
 DAY_OK = 0.99
 DAY_DEGRADED = 0.90
 DAY_MIN_COVERAGE = 0.5
@@ -122,9 +122,11 @@ def entry_view(data, entry, now):
     view = {"name": entry, "access": "public" if entry == "ha-general" else "admin-only", "protocols": {}}
     for protocol in PROTOCOLS:
         age = last.get(protocol)
+        current = state(ha[protocol], age, data["time"], now)
         view["protocols"][protocol] = {
-            "state": state(ha[protocol], age, data["time"], now),
-            "duration_seconds": _seconds((ha["duration"] or {}).get(protocol)),
+            "state": current,
+            # an old duration is never shown beside Unknown
+            "duration_seconds": None if current == UNKNOWN else _seconds((ha["duration"] or {}).get(protocol)),
             "last_check_age_seconds": None if age is None else round(age + now - data["time"]),
             "success_rate_24h": _ratio((ha["rate_24h"] or {}).get(protocol)),
             "coverage_24h": _ratio((ha["coverage_24h"] or {}).get(protocol)),
@@ -149,9 +151,10 @@ def lines_view(data, status, now):
                "last_check_age_seconds": None if age is None else round(age + now - data["time"]),
                "coverage_24h": _ratio(line.get("coverage_24h")), "protocols": {}}
         for protocol in PROTOCOLS:
+            current = state(line.get(protocol), age, data["time"], now)
             row["protocols"][protocol] = {
-                "state": state(line.get(protocol), age, data["time"], now),
-                "duration_seconds": _seconds(line.get("duration_" + protocol)),
+                "state": current,
+                "duration_seconds": None if current == UNKNOWN else _seconds(line.get("duration_" + protocol)),
                 "success_rate_24h": _ratio(line.get("rate_24h_" + protocol)),
             }
         rows.append(row)
@@ -160,14 +163,12 @@ def lines_view(data, status, now):
 
 
 def day_state(rate, coverage):
-    if rate is None:
+    if rate is None or coverage is None or coverage < DAY_MIN_COVERAGE:
         return "unknown"
     if rate < DAY_DEGRADED:
         return "bad"
     if rate < DAY_OK:
         return "degraded"
-    if coverage is None or coverage < DAY_MIN_COVERAGE:
-        return "unknown"
     return "ok"
 
 

@@ -1,6 +1,9 @@
 networks:
   grafana_monitor:
     driver: bridge
+  # nginx and the proxy portal only: nginx is the portal's only way in
+  proxy_portal:
+    internal: true
   nextcloud:
     external: false
 
@@ -82,6 +85,9 @@ services:
         - "33322:22"
         - "8080:8080"
     restart: always
+    networks:
+      - default
+      - proxy_portal
     volumes:
       - ./nginx/data/html:/usr/share/nginx/html:ro
       - /etc/ssl/private:/opt/ssl:ro
@@ -426,9 +432,10 @@ services:
 
   # The proxy portal (proxy-portal/README.md): status, My access, My usage, behind nginx as
   # https://proxy.cvgl.lab. It reads the applier's status.json from the spool (read-only; requests/
-  # and results/ masked), queries Prometheus on this network, and checks sign-ins with the
+  # and results/ masked), queries Prometheus on the monitoring network, and checks sign-ins with the
   # Determined master. Its database and secret key are in the data folder, owned by uid 3089.
-  # No Docker socket, no accounts file.
+  # No Docker socket, no accounts file. No published port: nginx reaches it on the proxy_portal
+  # network only, so the X-Real-IP and X-Forwarded-Proto it trusts always come from nginx.
   proxy-portal:
     build: ./proxy-portal
     image: proxy-portal
@@ -439,9 +446,7 @@ services:
       PROXY_PORTAL_MASTER_URL: ${PROXY_PORTAL_MASTER_URL:-http://192.168.233.6:8080}
     networks:
       - grafana_monitor
-    ports:
-      # nginx reaches it on the private address; never published on the campus address
-      - "192.168.233.8:8095:8000"
+      - proxy_portal
     volumes:
       - ${PROXY_PORTAL_SPOOL:-/var/lib/proxy-portal/spool}:/srv/spool:ro
       - ${PROXY_PORTAL_DATA:-/var/lib/proxy-portal/data}:/data

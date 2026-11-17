@@ -18,14 +18,14 @@
   </div>
   <div class="status-right">
     <div class="status-number">{% if general.lines.configured is None %}—{% else %}{{ general.lines.passing }} / {{ general.lines.configured }}{% endif %}</div>
-    <div class="status-number-label">{% translate "public lines passing (SOCKS5)" %}</div>
+    <div class="status-number-label">{% translate "public lines passing" %}</div>
   </div>
 </section>
 
 <div class="summary-grid">
   {% with p=general.protocols.http %}<div class="card metric"><div class="m-label">{% translate "Default proxy · HTTP" %}</div><div class="m-value">{% include "portal/state.html" with state=p.state %}</div><div class="m-foot">{% translate "24 h success" %} {{ p.success_rate_24h|percent }} · {% translate "coverage" %} {{ p.coverage_24h|percent:0 }}</div></div>{% endwith %}
   {% with p=general.protocols.socks %}<div class="card metric"><div class="m-label">{% translate "Default proxy · SOCKS5" %}</div><div class="m-value">{% include "portal/state.html" with state=p.state %}</div><div class="m-foot">{% translate "24 h success" %} {{ p.success_rate_24h|percent }} · {% translate "coverage" %} {{ p.coverage_24h|percent:0 }}</div></div>{% endwith %}
-  <div class="card metric"><div class="m-label">{% translate "Lines of the default proxy" %}</div><div class="m-value">{% if general.lines.configured is None %}—{% else %}{{ general.lines.passing }} <span class="muted small">/ {{ general.lines.configured }}</span>{% endif %}</div><div class="m-foot">{% translate "available / configured" %}</div></div>
+  <div class="card metric"><div class="m-label">{% translate "Lines of the default proxy" %}</div><div class="m-value">{% if general.lines.configured is None %}—{% else %}{{ general.lines.passing }} <span class="muted small">/ {{ general.lines.configured }}</span>{% endif %}</div><div class="m-foot">{% translate "passing / configured" %}</div></div>
   <div class="card metric"><div class="m-label">{% translate "Last check" %}</div><div class="m-value">{{ data.last_check_age_seconds|age }}</div><div class="m-foot">{% blocktranslate with s=data.stale_after_seconds %}Unknown when older than {{ s }} s{% endblocktranslate %}</div></div>
 </div>
 
@@ -49,7 +49,7 @@
 </section>
 
 <section class="section" aria-labelledby="history-title">
-  <div class="section-bar"><div><h2 id="history-title">{% translate "Past 30 days" %}</h2><p>{% translate "The default proxy's probe success rate per 24 hours, HTTP and SOCKS5, the worse of the two. A day with probe results for less than half of it is never green." %}</p></div></div>
+  <div class="section-bar"><div><h2 id="history-title">{% translate "Past 30 days" %}</h2><p>{% translate "The default proxy's probe success rate per 24 hours, HTTP and SOCKS5, the worse of the two. A day with probe results for less than half of it is grey." %}</p></div></div>
   <div class="card card-pad">
     <ol class="history">
       {% for day in data.history.days %}
@@ -120,7 +120,7 @@
       <h3>{% translate "Failover" %}</h3>
       <p class="small muted">{% translate "An HA entry chooses a passing line for each new connection, within about 15 seconds of a line failing. Open downloads, SSH sessions and WebSockets stay on their line and break with it; the client has to retry." %}</p>
       <h3>{% translate "Unknown" %}</h3>
-      <p class="small muted">{% translate "No probe result in the last 90 seconds. It is never the last known status." %}</p>
+      <p class="small muted">{% translate "No probe result in the last 90 seconds. An older result is never shown in its place." %}</p>
     </div>
   </section>
 </div>

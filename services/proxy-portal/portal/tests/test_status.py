@@ -20,8 +20,8 @@ class HeadlineTest(SimpleTestCase):
         cases = [
             # http, socks, passing, configured -> level, text
             (PASSING, PASSING, 4, 4, "ok", "Default proxy available; all 4 lines passing"),
-            (PASSING, PASSING, 3, 4, "degraded", "Default proxy available; 1 line failing, failover working"),
-            (PASSING, PASSING, 2, 4, "degraded", "Default proxy available; 2 lines failing, failover working"),
+            (PASSING, PASSING, 3, 4, "degraded", "Default proxy available; 1 line not passing, failover working"),
+            (PASSING, PASSING, 2, 4, "degraded", "Default proxy available; 2 lines not passing, failover working"),
             (PASSING, PASSING, 1, 4, "degraded", "Default proxy available on its last passing line, without a spare"),
             (PASSING, PASSING, 0, 4, "degraded", "Default proxy answering, but no line passes its probe"),
             (PASSING, PASSING, None, None, "ok", "Default proxy available"),
@@ -62,9 +62,13 @@ class StateTest(SimpleTestCase):
     def test_day_states(self):
         self.assertEqual(health.day_state(None, None), "unknown")
         self.assertEqual(health.day_state(1.0, 1.0), "ok")
-        self.assertEqual(health.day_state(1.0, 0.3), "unknown")   # too little data is never green
+        # too little data is grey, whatever the few results say
+        self.assertEqual(health.day_state(1.0, 0.3), "unknown")
+        self.assertEqual(health.day_state(0.95, 0.1), "unknown")
+        self.assertEqual(health.day_state(0.0, 0.001), "unknown")
+        self.assertEqual(health.day_state(0.5, None), "unknown")
         self.assertEqual(health.day_state(0.95, 1.0), "degraded")
-        self.assertEqual(health.day_state(0.95, 0.1), "degraded")
+        self.assertEqual(health.day_state(0.95, 0.5), "degraded")
         self.assertEqual(health.day_state(0.5, 1.0), "bad")
 
 
@@ -72,7 +76,7 @@ class StatusTest(PortalTestCase):
     def test_page_is_public(self):
         response = self.client.get("/")
         self.assertEqual(response.status_code, 200)
-        self.assertContains(response, "Default proxy available; 1 line failing, failover working")
+        self.assertContains(response, "Default proxy available; 1 line not passing, failover working")
         self.assertContains(response, "Admins only")
         self.assertContains(response, "us-west-racknerd-12tb")
         self.assert_only_fixed_queries()
@@ -149,6 +153,19 @@ class StatusTest(PortalTestCase):
         page = self.client.get("/")
         self.assertContains(page, "Monitoring data is unavailable")
         self.assertNotContains(page, 'class="chip passing"')
+        # no check age is not "never": the probes may have run, the portal cannot tell
+        self.assertNotContains(page, ">never<")
+        self.assertNotContains(page, ": never")
+        self.assertContains(page, ">Unknown<")
+        self.assertIsNone(data["last_check_age_seconds"])
+        self.assertNotContains(self.client.get("/", HTTP_ACCEPT_LANGUAGE="zh-CN"), "从未")
+
+    def test_unknown_line_shows_no_duration(self):
+        lines = {line["name"]: line for line in self.client.get("/api/status").json()["lines"]}
+        stale = lines["miyaip-jp-01_relay_jpty1-bwh-2tb"]["protocols"]
+        self.assertEqual({p["state"] for p in stale.values()}, {"unknown"})
+        self.assertEqual({p["duration_seconds"] for p in stale.values()}, {None})
+        self.assertIsNotNone(lines["us-west-racknerd-12tb"]["protocols"]["http"]["duration_seconds"])
 
     def test_parameters_never_reach_prometheus(self):
         self.client.get("/api/status?query=up&target=evil&entry=x")
@@ -196,5 +213,5 @@ class StatusTest(PortalTestCase):
         self.assertEqual(response.status_code, 301)
         self.assertTrue(response["Location"].startswith("https://"))
         with self.settings(ALLOWED_HOSTS=["proxy.cvgl.lab"]):
-            self.assertEqual(Client(HTTP_HOST="192.168.233.8:8095", HTTP_X_FORWARDED_PROTO="https").get("/")
+            self.assertEqual(Client(HTTP_HOST="10.0.1.68", HTTP_X_FORWARDED_PROTO="https").get("/")
                              .status_code, 400)

@@ -58,7 +58,7 @@ def milliseconds(value):
 @register.filter
 def age(value):
     if value is None:
-        return _("never")
+        return _("Unknown")
     value = int(value)
     if value < 120:
         return _("%(n)d s ago") % {"n": value}

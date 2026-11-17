@@ -22,7 +22,7 @@ def headline(http, socks, passing, configured):
     if http == PASSING and socks == PASSING:
         if passing is None or configured is None or configured == 0:
             return OK, _("Default proxy available")
-        failing = configured - passing
+        failing = configured - passing  # failing or unknown: not passing
         if failing <= 0:
             return OK, ngettext("Default proxy available; its %(n)d line is passing",
                                 "Default proxy available; all %(n)d lines passing", configured) % {"n": configured}
@@ -30,8 +30,8 @@ def headline(http, socks, passing, configured):
             return DEGRADED, _("Default proxy answering, but no line passes its probe")
         if passing == 1:
             return DEGRADED, _("Default proxy available on its last passing line, without a spare")
-        return DEGRADED, ngettext("Default proxy available; %(n)d line failing, failover working",
-                                  "Default proxy available; %(n)d lines failing, failover working",
+        return DEGRADED, ngettext("Default proxy available; %(n)d line not passing, failover working",
+                                  "Default proxy available; %(n)d lines not passing, failover working",
                                   failing) % {"n": failing}
     if http == FAILING and socks == FAILING:
         if passing:

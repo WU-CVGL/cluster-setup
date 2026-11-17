@@ -1,4 +1,6 @@
 import logging
+import threading
+from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
 from django.conf import settings
 from django.contrib.sessions.models import Session
@@ -9,6 +11,12 @@ from portal.models import SignInFailure
 from .base import PortalTestCase, PortalTransactionTestCase, https_client
 
 SENTINEL = "Sentinel-Passw0rd-7f3c1e"
+
+
+def _server(handler):
+    server = ThreadingHTTPServer(("127.0.0.1", 0), handler)
+    threading.Thread(target=server.serve_forever, daemon=True).start()
+    return server, f"http://127.0.0.1:{server.server_address[1]}"
 
 
 class SignInTest(PortalTestCase):
@@ -201,7 +209,10 @@ class LimitTest(PortalTestCase):
         response = https_client(HTTP_X_REAL_IP="10.9.9.9").post("/signin", {"username": "alice",
                                                                            "password": "pw-alice"})
         self.assertEqual(response.status_code, 429)
+        self.assertContains(response, "Try again in 15 minutes.", status_code=429)
         self.assertEqual(len(self.master.logins), calls)  # the master is not asked
+        with self.settings(SIGNIN_WINDOW=61):  # minutes rounded up
+            self.assertContains(self.sign_in("alice"), "Try again in 2 minutes.", status_code=429)
         # another user is not affected
         self.assertEqual(https_client(HTTP_X_REAL_IP="10.9.9.8").post(
             "/signin", {"username": "carol", "password": "pw-carol"}).status_code, 302)
@@ -222,4 +233,68 @@ class LimitTest(PortalTestCase):
             self.sign_in("alice", "wrong")
         SignInFailure.objects.update(at=timezone.now() - datetime.timedelta(seconds=settings.SIGNIN_WINDOW + 1))
         self.assertEqual(self.sign_in("alice").status_code, 302)
+        self.assertEqual(SignInFailure.objects.count(), 0)
+
+
+class RedirectTest(PortalTestCase):
+    """A master URL that answers with a redirect: the portal follows none, so no token or password moves on."""
+
+    def setUp(self):
+        super().setUp()
+        received = self.received = []
+
+        class Elsewhere(BaseHTTPRequestHandler):
+            def _do(self):
+                length = int(self.headers.get("Content-Length") or 0)
+                received.append((self.command, self.path, self.headers.get("Authorization"),
+                                 self.rfile.read(length) if length else b""))
+                self.send_response(200)
+                self.send_header("Content-Type", "application/json")
+                self.end_headers()
+                self.wfile.write(b'{"token": "elsewhere", "user": {"username": "carol", "admin": true, "active": true}}')
+
+            do_GET = do_POST = _do
+
+            def log_message(self, *args):
+                pass
+
+        self.elsewhere, elsewhere_url = _server(Elsewhere)
+        self.addCleanup(self.elsewhere.shutdown)
+        self.code = 302
+
+        test = self
+
+        class Redirecting(BaseHTTPRequestHandler):
+            def _do(self):
+                self.send_response(test.code)
+                self.send_header("Location", elsewhere_url + "/elsewhere")
+                self.send_header("Content-Length", "0")
+                self.end_headers()
+
+            do_GET = do_POST = _do
+
+            def log_message(self, *args):
+                pass
+
+        self.redirecting, self.redirecting_url = _server(Redirecting)
+        self.addCleanup(self.redirecting.shutdown)
+
+    def test_logout_redirect_not_followed(self):
+        from portal import master
+        for code in (301, 302, 303, 307, 308):
+            self.code = code
+            with self.settings(MASTER_URL=self.redirecting_url):
+                with self.assertLogs("portal.signin", level="WARNING"):
+                    self.assertIs(master._logout("SECRET-TOKEN"), False)
+        self.assertEqual(self.received, [])
+
+    def test_login_redirect_is_unavailable(self):
+        for code in (301, 302, 303, 307, 308):
+            self.code = code
+            with self.settings(MASTER_URL=self.redirecting_url):
+                with self.assertLogs("portal.signin", level="WARNING"):
+                    response = self.sign_in("carol", SENTINEL)
+            self.assertEqual(response.status_code, 503)
+            self.assertNotIn("username", self.client.session)
+        self.assertEqual(self.received, [])
         self.assertEqual(SignInFailure.objects.count(), 0)
