@@ -38,8 +38,10 @@ DCGM_EXP_XID_ERRORS_TOTAL,   counter, Total XID errors observed since exporter s
 DCGM_EXP_CLOCK_EVENTS_TOTAL, counter, Total clock events observed since exporter start (edge-counted).
 
 # Memory usage
-DCGM_FI_DEV_FB_FREE, gauge, Framebuffer memory free (in MiB).
-DCGM_FI_DEV_FB_USED, gauge, Framebuffer memory used (in MiB).
+DCGM_FI_DEV_FB_TOTAL,    gauge, Framebuffer memory total (in MiB).
+DCGM_FI_DEV_FB_FREE,     gauge, Framebuffer memory free (in MiB).
+DCGM_FI_DEV_FB_USED,     gauge, Framebuffer memory used (in MiB).
+DCGM_FI_DEV_FB_RESERVED, gauge, Framebuffer memory reserved (in MiB).
 
 # ECC
 # DCGM_FI_DEV_ECC_SBE_VOL_TOTAL, counter, Total number of single-bit volatile ECC errors.
