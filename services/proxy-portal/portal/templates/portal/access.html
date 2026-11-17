@@ -31,7 +31,7 @@
   {% else %}
   <div class="notice warn">
     <p>{% blocktranslate with name=view.account.name %}Proxy access is <b>off</b> for the account <b>{{ name }}</b>.{% endblocktranslate %}
-    {% if view.raw_auth %}{% translate "Every entry refuses it, the public lines' own entries included." %}{% elif view.account.admin %}{% translate "ha-general, ha-all and the private lines refuse it. The public lines' own entries still work for you: they need no account while raw auth is off." %}{% else %}{% translate "ha-general refuses it. The public lines' own entries still work for you: they need no account while raw auth is off." %}{% endif %}</p>
+    {% if view.raw_auth %}{% translate "Every entry refuses it, the public lines' own entries included." %}{% elif view.account.admin %}{% translate "ha-general, ha-all and the private lines refuse it. The public lines' own entries still work for you: they need no account while raw auth (accounts on the public lines' own entries) is off." %}{% else %}{% translate "ha-general refuses it. The public lines' own entries still work for you: they need no account while raw auth (accounts on the public lines' own entries) is off." %}{% endif %}</p>
   </div>
   {% endif %}
   <div class="notice">

@@ -86,7 +86,7 @@ class AccessTest(PortalTestCase):
         page = self.client.get("/access")
         self.assertContains(page, "Proxy access is <b>off</b>")
         # what stops for a non-admin account, once, without the raw-auth paragraph repeating it
-        self.assertContains(page, "ha-general refuses it. The public lines' own entries still work for you")
+        self.assertContains(page, "ha-general refuses it. The public lines' own entries still work for you: they need no account while raw auth (accounts on")
         self.assertNotContains(page, "ha-all and the private lines refuse it")
         self.assertNotContains(page, "turning an account off stops only")
         self.assertContains(page, "is not a change to your cluster account")
