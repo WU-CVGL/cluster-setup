@@ -1,7 +1,7 @@
 {
   "uid": "proxy-availability",
   "title": "Proxy Availability",
-  "description": "End-to-end probes through the HA proxy entry and every xray line (docs/00_Network_Proxy.md).",
+  "description": "End-to-end probes through the HA proxy entry and every xray proxy (docs/00_Network_Proxy.md).",
   "tags": [
     "proxy"
   ],
@@ -245,9 +245,9 @@
     },
     {
       "type": "stat",
-      "title": "Pool lines passing",
+      "title": "Pool proxies passing",
       "id": 4,
-      "description": "Lines of the ha-general pool whose own SOCKS5 port passes the probe (the HA entry reaches them over SOCKS5), and the lines configured. One passing line leaves no spare. Lines are not necessarily independent failure domains.",
+      "description": "Proxies of the ha-general pool whose own SOCKS5 port passes the probe (the HA entry reaches them over SOCKS5), and the proxies configured. One passing proxy leaves no spare. Proxies are not necessarily independent failure domains.",
       "datasource": {
         "type": "prometheus",
         "uid": "${prometheus_source}"
@@ -599,7 +599,7 @@
     },
     {
       "type": "row",
-      "title": "Lines",
+      "title": "Proxies",
       "id": 9,
       "collapsed": false,
       "gridPos": {
@@ -612,13 +612,13 @@
     },
     {
       "type": "table",
-      "title": "Lines",
+      "title": "Proxies",
       "id": 10,
       "datasource": {
         "type": "prometheus",
         "uid": "${prometheus_source}"
       },
-      "description": "Each xray line, probed through its own ports and never through the HA entry. Pool: ha-general lines carry the HA entry's traffic; none: probed only. Xray API and traffic come from the line's exporter and do not show whether requests get through.",
+      "description": "Each xray proxy, probed through its own ports and never through the HA entry. Pool: ha-general proxies carry the HA entry's traffic; none: probed only. Xray API and traffic come from the proxy's exporter and do not show whether requests get through.",
       "gridPos": {
         "h": 11,
         "w": 24,
@@ -784,7 +784,7 @@
               "Value #H": "Coverage 24h",
               "Value #I": "Xray API",
               "Value #J": "Traffic 24h",
-              "entry": "Line",
+              "entry": "Proxy",
               "pool": "Pool"
             },
             "indexByName": {
@@ -837,7 +837,7 @@
           {
             "matcher": {
               "id": "byName",
-              "options": "Line"
+              "options": "Proxy"
             },
             "properties": [
               {
@@ -1380,13 +1380,13 @@
     },
     {
       "type": "timeseries",
-      "title": "HA entry traffic by line",
+      "title": "HA entry traffic by proxy",
       "id": 16,
       "datasource": {
         "type": "prometheus",
         "uid": "${prometheus_source}"
       },
-      "description": "Bytes per second the HA entry sends and receives through each pool line, from xray-ha's own counters: client traffic on the line its connections use, plus Xray's own small probe fetches through every line.",
+      "description": "Bytes per second the HA entry sends and receives through each pool proxy, from xray-ha's own counters: client traffic on the proxy its connections use, plus Xray's own small probe fetches through every proxy.",
       "gridPos": {
         "h": 9,
         "w": 12,

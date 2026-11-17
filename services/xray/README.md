@@ -30,7 +30,7 @@ See [scripts/README.md](scripts/README.md) (in Chinese):
 - `scripts/create_xray_service.py <share_url> <name> <http_port> <socks_port>`: parses a vmess/vless/trojan/ss
   share URL, writes `xray/<name>/config/config.json`, and adds `xray-<name>` + `xray-<name>-exporter` to
   `docker-compose.yml` and the exporter target to `prometheus/prometheus.yml`. With `proxy_accounts.py raw-auth on`,
-  the new line requires every proxy account from the start. Afterwards run
+  the new proxy requires every proxy account from the start. Afterwards run
   `docker compose up -d xray-<name> xray-<name>-exporter` and `docker compose kill -s SIGHUP prometheus`.
 - `scripts/proxy_accounts.py add|rotate|remove|enable|disable|list|status|raw-auth|render`: keeps the proxy
   accounts in `services/proxy-accounts/accounts.json` (not in git) and renders every config that holds them: the

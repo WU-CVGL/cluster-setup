@@ -214,7 +214,7 @@ class XrayServiceCreator:
 
     def raw_inbound_users(self) -> Optional[List[Tuple[str, str]]]:
         """
-        proxy-accounts/accounts.json 中 raw_auth 为 true 时返回所有账号 (线路入站要求的账号，
+        proxy-accounts/accounts.json 中 raw_auth 为 true 时返回所有账号 (代理入站要求的账号，
         与 proxy_accounts.py render 写入的相同)，否则返回 None (入站不要求认证)
         """
         accounts = Accounts(self.base_dir)
@@ -545,7 +545,7 @@ class XrayServiceCreator:
 
         print("✓ 端口检查通过")
 
-        # raw-auth 开启时，新线路的入站要求所有代理账号 (见 proxy_accounts.py)
+        # raw-auth 开启时，新代理的入站要求所有代理账号 (见 proxy_accounts.py)
         inbound_users = self.raw_inbound_users()
         if inbound_users is not None:
             print(f"✓ raw-auth 已开启: 入站要求 {len(inbound_users)} 个代理账号")

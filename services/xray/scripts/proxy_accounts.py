@@ -307,7 +307,7 @@ def render_outputs(accounts: Accounts) -> List[Tuple[Path, str]]:
         old = json.loads(path.read_text(encoding="utf-8"))
         if raw_users is None and not any("users" in (i.get("settings") or {}) for i in old.get("inbounds") or []
                                          if i.get("protocol") in ("http", "socks")):
-            continue  # raw auth off and no accounts there: leave the line's config as it is
+            continue  # raw auth off and no accounts there: leave the proxy's config as it is
         new = json.loads(json.dumps(old))
         try:
             XrayConfigHandler.set_inbound_users(new, raw_users)
@@ -372,7 +372,7 @@ def main(argv: Optional[List[str]] = None) -> int:
             elif args.command == "raw-auth":
                 accounts.raw_auth = args.state == "on"
                 accounts.save()
-                print(f"raw-auth: {args.state}; run render, then restart the lines and xray-ha together",
+                print(f"raw-auth: {args.state}; run render, then restart the proxies and xray-ha together",
                       file=sys.stderr)
             elif args.command == "render":
                 written = render(accounts)
