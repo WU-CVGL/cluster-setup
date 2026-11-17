@@ -677,7 +677,7 @@ class IsolationTest(unittest.TestCase):
             self.outbound(c, "private-jpty1-bwh-2tb")["settings"]["servers"][0]["address"] = "xray-ha"
         self.refused(relay_through_ha, "SOCKS to one xray-<proxy>")
 
-    def test_paths_besides_the_proxy_inbounds_refused(self):
+    def test_paths_besides_the_entry_inbounds_refused(self):
         def tunnel_to_ha_private(c):
             c["inbounds"].append({"protocol": "dokodemo-door", "port": 2000, "tag": "fwd",
                                   "settings": {"address": "target", "port": 80}})
@@ -706,11 +706,11 @@ class IsolationTest(unittest.TestCase):
             rule = self.rule(c, "api")
             del rule["outboundTag"]
             rule["balancerTag"] = "ha-private"
-        self.refused(api_rule_to_ha_private, "the only rule for inbounds other than the proxy inbounds")
+        self.refused(api_rule_to_ha_private, "the only rule for inbounds other than the entry inbounds")
 
         def api_rule_to_private(c):
             self.rule(c, "api")["outboundTag"] = "private-jpty1-bwh-2tb"
-        self.refused(api_rule_to_private, "the only rule for inbounds other than the proxy inbounds")
+        self.refused(api_rule_to_private, "the only rule for inbounds other than the entry inbounds")
 
         def api_in_proxy_rule(c):
             c["routing"]["rules"].remove(self.rule(c, "api"))
@@ -720,7 +720,7 @@ class IsolationTest(unittest.TestCase):
         def unknown_tag_rule(c):
             c["routing"]["rules"].insert(0, {"type": "field", "inboundTag": ["ghost"],
                                              "outboundTag": "private-jpty1-bwh-2tb"})
-        self.refused(unknown_tag_rule, "the only rule for inbounds other than the proxy inbounds")
+        self.refused(unknown_tag_rule, "the only rule for inbounds other than the entry inbounds")
 
         def api_retagged(c):
             c["api"]["tag"] = "private-x"

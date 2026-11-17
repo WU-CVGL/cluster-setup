@@ -522,12 +522,12 @@ class XrayServiceCreator:
             service_name: 简短的服务名称（如: jp-osaka-xuqi）
             http_port: HTTP 代理端口
             socks_port: SOCKS5 代理端口
-            private: 必须明确给出，没有默认值。True: 私有代理 (只有管理员可用，始终要求账号)；
+            private: 必须明确给出，没有默认值。True: 私有代理 (只有管理员账号可用，始终要求账号)；
                 False: 公共代理，加入 xray/public-proxies.txt
         """
         if not isinstance(private, bool):
             raise ValueError("必须明确指定代理类型: --public 或 --private")
-        print(f"正在创建 xray 服务: {service_name} ({'私有，只有管理员可用' if private else '公共'})")
+        print(f"正在创建 xray 服务: {service_name} ({'私有，只有管理员账号可用' if private else '公共'})")
         print(f"HTTP 端口: {http_port}, SOCKS5 端口: {socks_port}")
 
         # 检查参数
@@ -649,7 +649,7 @@ class XrayServiceCreator:
         print(f"  2. 启动服务: docker compose up -d xray-{service_name} xray-{service_name}-exporter")
         print("  3. 重新加载 Prometheus 配置: docker compose kill -s SIGHUP prometheus")
         if private:
-            print("     私有代理: 只有管理员可用，入站始终要求账号；只有 ha-private 能经过它")
+            print("     私有代理：只有管理员账号可用，入站始终要求账号；只有 ha-private 能经过它")
         login = "<user>:<password>@" if inbound_users is not None else ""
         print(f"  4. 验证代理: curl -x http://{login}localhost:{http_port} -I https://www.google.com")
         socks = f"-x socks5h://{login}localhost:{socks_port}" if login else f"--socks5-hostname localhost:{socks_port}"
@@ -696,7 +696,7 @@ def main():
     )
     access.add_argument(
         '--private', dest='private', action='store_true',
-        help='私有代理: 只有管理员可用，入站始终要求账号'
+        help='私有代理：只有管理员账号可用，入站始终要求账号'
     )
 
     parser.add_argument(

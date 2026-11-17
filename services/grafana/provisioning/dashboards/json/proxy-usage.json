@@ -1,7 +1,7 @@
 {
   "uid": "proxy-usage",
   "title": "Proxy Usage",
-  "description": "Proxy traffic per user, service account and proxy (docs/00_Network_Proxy.md#usage).",
+  "description": "Traffic per user, service account and proxy (docs/00_Network_Proxy.md#usage).",
   "tags": [
     "proxy"
   ],

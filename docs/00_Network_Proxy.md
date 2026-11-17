@@ -175,7 +175,7 @@ python3 xray/scripts/proxy_accounts.py rotate <user> --show   # new password; th
 python3 xray/scripts/proxy_accounts.py remove <user>
 python3 xray/scripts/proxy_accounts.py disable <user>         # keeps the account and its password
 python3 xray/scripts/proxy_accounts.py enable <user>
-python3 xray/scripts/proxy_accounts.py admin <user> on|off    # private entries
+python3 xray/scripts/proxy_accounts.py admin <user> on|off    # admin flag: may use the private entries
 python3 xray/scripts/proxy_accounts.py list                   # names, admin accounts marked
 python3 xray/scripts/proxy_accounts.py status                 # accounts and proxies; --json for the portal
 python3 xray/scripts/proxy_accounts.py render                 # lists the files it wrote
