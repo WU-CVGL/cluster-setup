@@ -88,7 +88,7 @@
       "pluginVersion": "8.5.5",
       "targets": [
         {
-          "expr": "count(v2ray_up{job=~\"$job\",instance=~\"$instance\"} == 1)",
+          "expr": "count(v2ray_up{job=~\"$job\",instance=~\"$instance\",proxy_role!=\"entry\"} == 1)",
           "instant": false,
           "refId": "A"
         }
@@ -239,14 +239,14 @@
       ],
       "targets": [
         {
-          "expr": "v2ray_uptime_seconds{job=~\"$job\",instance=~\"$instance\"}",
+          "expr": "v2ray_uptime_seconds{job=~\"$job\",instance=~\"$instance\",proxy_role!=\"entry\"}",
           "format": "table",
           "instant": true,
           "legendFormat": "",
           "refId": "A"
         },
         {
-          "expr": "sum by (instance) (increase(v2ray_traffic_downlink_bytes_total{job=~\"$job\",instance=~\"$instance\",dimension=\"inbound\"}[$__range]))",
+          "expr": "sum by (instance) (increase(v2ray_traffic_downlink_bytes_total{job=~\"$job\",instance=~\"$instance\",proxy_role!=\"entry\",dimension=\"inbound\"}[$__range]))",
           "format": "table",
           "hide": false,
           "instant": true,
@@ -255,7 +255,7 @@
           "refId": "B"
         },
         {
-          "expr": "sum by (instance) (increase(v2ray_traffic_uplink_bytes_total{job=~\"$job\",instance=~\"$instance\",dimension=\"inbound\"}[$__range]))",
+          "expr": "sum by (instance) (increase(v2ray_traffic_uplink_bytes_total{job=~\"$job\",instance=~\"$instance\",proxy_role!=\"entry\",dimension=\"inbound\"}[$__range]))",
           "format": "table",
           "instant": true,
           "interval": "",
@@ -336,7 +336,7 @@
       "pluginVersion": "8.5.5",
       "targets": [
         {
-          "expr": "count(v2ray_up{job=~\"$job\",instance=~\"$instance\"}) - count(v2ray_up{job=~\"$job\",instance=~\"$instance\"} == 1)",
+          "expr": "count(v2ray_up{job=~\"$job\",instance=~\"$instance\",proxy_role!=\"entry\"}) - count(v2ray_up{job=~\"$job\",instance=~\"$instance\",proxy_role!=\"entry\"} == 1)",
           "instant": false,
           "refId": "A"
         }
@@ -503,7 +503,7 @@
       ],
       "targets": [
         {
-          "expr": "increase(v2ray_traffic_downlink_bytes_total{job=~\"$job\",instance=~\"$instance\"}[$__range])",
+          "expr": "increase(v2ray_traffic_downlink_bytes_total{job=~\"$job\",instance=~\"$instance\",proxy_role!=\"entry\"}[$__range])",
           "format": "table",
           "instant": true,
           "interval": "",
@@ -511,7 +511,7 @@
           "refId": "A"
         },
         {
-          "expr": "increase(v2ray_traffic_uplink_bytes_total{job=~\"$job\",instance=~\"$instance\"}[$__range])",
+          "expr": "increase(v2ray_traffic_uplink_bytes_total{job=~\"$job\",instance=~\"$instance\",proxy_role!=\"entry\"}[$__range])",
           "format": "table",
           "instant": true,
           "interval": "",
@@ -579,13 +579,13 @@
       "steppedLine": false,
       "targets": [
         {
-          "expr": "sum(irate(v2ray_traffic_downlink_bytes_total{job=~\"$job\",instance=~\"$instance\",dimension=\"inbound\"}[5m]))",
+          "expr": "sum(irate(v2ray_traffic_downlink_bytes_total{job=~\"$job\",instance=~\"$instance\",proxy_role!=\"entry\",dimension=\"inbound\"}[5m]))",
           "interval": "",
           "legendFormat": "Downlink",
           "refId": "A"
         },
         {
-          "expr": "sum(irate(v2ray_traffic_uplink_bytes_total{job=~\"$job\",instance=~\"$instance\",dimension=\"inbound\"}[5m]))",
+          "expr": "sum(irate(v2ray_traffic_uplink_bytes_total{job=~\"$job\",instance=~\"$instance\",proxy_role!=\"entry\",dimension=\"inbound\"}[5m]))",
           "interval": "",
           "legendFormat": "Uplink",
           "refId": "B"
@@ -675,7 +675,7 @@
       "steppedLine": false,
       "targets": [
         {
-          "expr": "irate(v2ray_traffic_downlink_bytes_total{job=~\"$job\",instance=~\"$instance\",dimension=\"inbound\"}[5m])",
+          "expr": "irate(v2ray_traffic_downlink_bytes_total{job=~\"$job\",instance=~\"$instance\",proxy_role!=\"entry\",dimension=\"inbound\"}[5m])",
           "interval": "",
           "legendFormat": "{{target}}",
           "refId": "A"
@@ -766,7 +766,7 @@
       "steppedLine": false,
       "targets": [
         {
-          "expr": "irate(v2ray_traffic_uplink_bytes_total{job=~\"$job\",instance=~\"$instance\",dimension=\"inbound\"}[5m])",
+          "expr": "irate(v2ray_traffic_uplink_bytes_total{job=~\"$job\",instance=~\"$instance\",proxy_role!=\"entry\",dimension=\"inbound\"}[5m])",
           "interval": "",
           "legendFormat": "{{target}}",
           "refId": "A"
@@ -823,7 +823,7 @@
           "type": "prometheus",
           "uid": "Prometheus"
         },
-        "definition": "query_result(count_over_time(v2ray_up[$__range]))",
+        "definition": "query_result(count_over_time(v2ray_up{proxy_role!=\"entry\"}[$__range]))",
         "hide": 0,
         "includeAll": true,
         "label": "Job",
@@ -831,7 +831,7 @@
         "name": "job",
         "options": [],
         "query": {
-          "query": "query_result(count_over_time(v2ray_up[$__range]))",
+          "query": "query_result(count_over_time(v2ray_up{proxy_role!=\"entry\"}[$__range]))",
           "refId": "Prometheus-job-Variable-Query"
         },
         "refresh": 2,
@@ -853,7 +853,7 @@
           "type": "prometheus",
           "uid": "Prometheus"
         },
-        "definition": "query_result(count_over_time(v2ray_up{job=\"$job\"}[$__range]))",
+        "definition": "query_result(count_over_time(v2ray_up{job=\"$job\",proxy_role!=\"entry\"}[$__range]))",
         "hide": 0,
         "includeAll": true,
         "label": "Instance",
@@ -861,7 +861,7 @@
         "name": "instance",
         "options": [],
         "query": {
-          "query": "query_result(count_over_time(v2ray_up{job=\"$job\"}[$__range]))",
+          "query": "query_result(count_over_time(v2ray_up{job=\"$job\",proxy_role!=\"entry\"}[$__range]))",
           "refId": "Prometheus-instance-Variable-Query"
         },
         "refresh": 2,

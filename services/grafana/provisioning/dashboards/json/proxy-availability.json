@@ -1,0 +1,1440 @@
+{
+  "uid": "proxy-availability",
+  "title": "Proxy Availability",
+  "description": "End-to-end probes through the HA proxy entry and every xray line (docs/00_Network_Proxy.md).",
+  "tags": [
+    "proxy"
+  ],
+  "timezone": "browser",
+  "schemaVersion": 39,
+  "version": 1,
+  "editable": true,
+  "graphTooltip": 1,
+  "refresh": "30s",
+  "time": {
+    "from": "now-24h",
+    "to": "now"
+  },
+  "annotations": {
+    "list": []
+  },
+  "links": [],
+  "templating": {
+    "list": [
+      {
+        "name": "prometheus_source",
+        "label": "Prometheus source",
+        "type": "datasource",
+        "query": "prometheus",
+        "regex": "",
+        "refresh": 1,
+        "multi": false,
+        "includeAll": false,
+        "current": {},
+        "options": [],
+        "hide": 0,
+        "skipUrlSync": false
+      }
+    ]
+  },
+  "panels": [
+    {
+      "type": "row",
+      "title": "HA entry ha-general",
+      "id": 1,
+      "collapsed": false,
+      "gridPos": {
+        "h": 1,
+        "w": 24,
+        "x": 0,
+        "y": 0
+      },
+      "panels": []
+    },
+    {
+      "type": "stat",
+      "title": "HA entry \u00b7 HTTP",
+      "id": 2,
+      "description": "A request through the HA entry's HTTP port returned 204 within 8 s. Unknown: no result in the last 90 s.",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${prometheus_source}"
+      },
+      "gridPos": {
+        "h": 4,
+        "w": 4,
+        "x": 0,
+        "y": 1
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${prometheus_source}"
+          },
+          "expr": "(max by (protocol) (probe_success{job=\"proxy-probe\",kind=\"ha\",protocol=\"http\"} unless on (instance) (time() - timestamp(probe_success{job=\"proxy-probe\",kind=\"ha\",protocol=\"http\"}) > 90))) or (max by (protocol) (max_over_time(up{job=\"proxy-probe\",kind=\"ha\",protocol=\"http\"}[1d])) * 0 - 1)",
+          "legendFormat": "HTTP",
+          "refId": "A",
+          "instant": true,
+          "range": false
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "mappings": [
+            {
+              "type": "value",
+              "options": {
+                "1": {
+                  "text": "Passing",
+                  "color": "green",
+                  "index": 0
+                },
+                "0": {
+                  "text": "Failing",
+                  "color": "red",
+                  "index": 1
+                },
+                "-1": {
+                  "text": "Unknown",
+                  "color": "#808080",
+                  "index": 2
+                }
+              }
+            },
+            {
+              "type": "special",
+              "options": {
+                "match": "null",
+                "result": {
+                  "text": "Unknown",
+                  "color": "#808080",
+                  "index": 3
+                }
+              }
+            }
+          ],
+          "color": {
+            "mode": "thresholds"
+          },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "text",
+                "value": null
+              }
+            ]
+          },
+          "noValue": "Unknown"
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "colorMode": "background",
+        "graphMode": "none",
+        "justifyMode": "auto",
+        "textMode": "value_and_name",
+        "orientation": "auto",
+        "wideLayout": true,
+        "showPercentChange": false
+      }
+    },
+    {
+      "type": "stat",
+      "title": "HA entry \u00b7 SOCKS5",
+      "id": 3,
+      "description": "A request through the HA entry's SOCKS5 port returned 204 within 8 s. Unknown: no result in the last 90 s.",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${prometheus_source}"
+      },
+      "gridPos": {
+        "h": 4,
+        "w": 4,
+        "x": 4,
+        "y": 1
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${prometheus_source}"
+          },
+          "expr": "(max by (protocol) (probe_success{job=\"proxy-probe\",kind=\"ha\",protocol=\"socks\"} unless on (instance) (time() - timestamp(probe_success{job=\"proxy-probe\",kind=\"ha\",protocol=\"socks\"}) > 90))) or (max by (protocol) (max_over_time(up{job=\"proxy-probe\",kind=\"ha\",protocol=\"socks\"}[1d])) * 0 - 1)",
+          "legendFormat": "SOCKS5",
+          "refId": "A",
+          "instant": true,
+          "range": false
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "mappings": [
+            {
+              "type": "value",
+              "options": {
+                "1": {
+                  "text": "Passing",
+                  "color": "green",
+                  "index": 0
+                },
+                "0": {
+                  "text": "Failing",
+                  "color": "red",
+                  "index": 1
+                },
+                "-1": {
+                  "text": "Unknown",
+                  "color": "#808080",
+                  "index": 2
+                }
+              }
+            },
+            {
+              "type": "special",
+              "options": {
+                "match": "null",
+                "result": {
+                  "text": "Unknown",
+                  "color": "#808080",
+                  "index": 3
+                }
+              }
+            }
+          ],
+          "color": {
+            "mode": "thresholds"
+          },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "text",
+                "value": null
+              }
+            ]
+          },
+          "noValue": "Unknown"
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "colorMode": "background",
+        "graphMode": "none",
+        "justifyMode": "auto",
+        "textMode": "value_and_name",
+        "orientation": "auto",
+        "wideLayout": true,
+        "showPercentChange": false
+      }
+    },
+    {
+      "type": "stat",
+      "title": "Pool lines passing",
+      "id": 4,
+      "description": "Lines of the ha-general pool whose own SOCKS5 port passes the probe (the HA entry reaches them over SOCKS5), and the lines configured. One passing line leaves no spare. Lines are not necessarily independent failure domains.",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${prometheus_source}"
+      },
+      "gridPos": {
+        "h": 4,
+        "w": 4,
+        "x": 8,
+        "y": 1
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${prometheus_source}"
+          },
+          "expr": "count(((max by (entry) (probe_success{job=\"proxy-probe\",kind=\"raw\",pool=\"ha-general\",protocol=\"socks\"} unless on (instance) (time() - timestamp(probe_success{job=\"proxy-probe\",kind=\"raw\",pool=\"ha-general\",protocol=\"socks\"}) > 90))) or (max by (entry) (max_over_time(up{job=\"proxy-probe\",kind=\"raw\",pool=\"ha-general\",protocol=\"socks\"}[1d])) * 0 - 1)) == 1) or vector(0)",
+          "legendFormat": "passing",
+          "refId": "A",
+          "instant": true,
+          "range": false
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${prometheus_source}"
+          },
+          "expr": "count(max by (entry) (max_over_time(up{job=\"proxy-probe\",kind=\"raw\",pool=\"ha-general\",protocol=\"socks\"}[1d])))",
+          "legendFormat": "configured",
+          "refId": "B",
+          "instant": true,
+          "range": false
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "mappings": [],
+          "color": {
+            "mode": "thresholds"
+          },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "red",
+                "value": null
+              },
+              {
+                "color": "orange",
+                "value": 1
+              },
+              {
+                "color": "green",
+                "value": 2
+              }
+            ]
+          },
+          "noValue": "Unknown"
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "colorMode": "value",
+        "graphMode": "none",
+        "justifyMode": "auto",
+        "textMode": "value_and_name",
+        "orientation": "auto",
+        "wideLayout": true,
+        "showPercentChange": false
+      }
+    },
+    {
+      "type": "stat",
+      "title": "Probe duration",
+      "id": 5,
+      "description": "Time of the last probe through the HA entry.",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${prometheus_source}"
+      },
+      "gridPos": {
+        "h": 4,
+        "w": 3,
+        "x": 12,
+        "y": 1
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${prometheus_source}"
+          },
+          "expr": "max by (protocol) (probe_duration_seconds{job=\"proxy-probe\",kind=\"ha\"} unless on (instance) (time() - timestamp(probe_duration_seconds{job=\"proxy-probe\",kind=\"ha\"}) > 90))",
+          "legendFormat": "{{protocol}}",
+          "refId": "A",
+          "instant": true,
+          "range": false
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "mappings": [],
+          "color": {
+            "mode": "thresholds"
+          },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "text",
+                "value": null
+              }
+            ]
+          },
+          "noValue": "Unknown",
+          "unit": "s"
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "colorMode": "none",
+        "graphMode": "none",
+        "justifyMode": "auto",
+        "textMode": "value_and_name",
+        "orientation": "auto",
+        "wideLayout": true,
+        "showPercentChange": false
+      }
+    },
+    {
+      "type": "stat",
+      "title": "Last check",
+      "id": 6,
+      "description": "Age of the latest probe result. Older than 90 s: the status shows Unknown.",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${prometheus_source}"
+      },
+      "gridPos": {
+        "h": 4,
+        "w": 3,
+        "x": 15,
+        "y": 1
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${prometheus_source}"
+          },
+          "expr": "max by (protocol) (time() - timestamp(probe_success{job=\"proxy-probe\",kind=\"ha\"}))",
+          "legendFormat": "{{protocol}}",
+          "refId": "A",
+          "instant": true,
+          "range": false
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "mappings": [],
+          "color": {
+            "mode": "thresholds"
+          },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "#808080",
+                "value": 90
+              }
+            ]
+          },
+          "noValue": "Unknown",
+          "unit": "s",
+          "decimals": 0
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "colorMode": "value",
+        "graphMode": "none",
+        "justifyMode": "auto",
+        "textMode": "value_and_name",
+        "orientation": "auto",
+        "wideLayout": true,
+        "showPercentChange": false
+      }
+    },
+    {
+      "type": "stat",
+      "title": "Probe success rate 24h",
+      "id": 7,
+      "description": "Share of the probes taken in the last 24 h that passed. Times without probes count neither way: see coverage.",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${prometheus_source}"
+      },
+      "gridPos": {
+        "h": 4,
+        "w": 3,
+        "x": 18,
+        "y": 1
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${prometheus_source}"
+          },
+          "expr": "max by (protocol) (avg_over_time(probe_success{job=\"proxy-probe\",kind=\"ha\"}[24h]))",
+          "legendFormat": "{{protocol}}",
+          "refId": "A",
+          "instant": true,
+          "range": false
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "mappings": [],
+          "color": {
+            "mode": "thresholds"
+          },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "text",
+                "value": null
+              }
+            ]
+          },
+          "noValue": "Unknown",
+          "unit": "percentunit",
+          "decimals": 2
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "colorMode": "none",
+        "graphMode": "none",
+        "justifyMode": "auto",
+        "textMode": "value_and_name",
+        "orientation": "auto",
+        "wideLayout": true,
+        "showPercentChange": false
+      }
+    },
+    {
+      "type": "stat",
+      "title": "Coverage 24h",
+      "id": 8,
+      "description": "Probes taken in the last 24 h, out of the 2880 a 30 s interval gives.",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${prometheus_source}"
+      },
+      "gridPos": {
+        "h": 4,
+        "w": 3,
+        "x": 21,
+        "y": 1
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${prometheus_source}"
+          },
+          "expr": "min by (protocol) (clamp_max(count_over_time(probe_success{job=\"proxy-probe\",kind=\"ha\"}[24h]) / 2880, 1))",
+          "legendFormat": "{{protocol}}",
+          "refId": "A",
+          "instant": true,
+          "range": false
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "mappings": [],
+          "color": {
+            "mode": "thresholds"
+          },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "orange",
+                "value": null
+              },
+              {
+                "color": "text",
+                "value": 0.99
+              }
+            ]
+          },
+          "noValue": "Unknown",
+          "unit": "percentunit",
+          "decimals": 1
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "colorMode": "value",
+        "graphMode": "none",
+        "justifyMode": "auto",
+        "textMode": "value_and_name",
+        "orientation": "auto",
+        "wideLayout": true,
+        "showPercentChange": false
+      }
+    },
+    {
+      "type": "row",
+      "title": "Lines",
+      "id": 9,
+      "collapsed": false,
+      "gridPos": {
+        "h": 1,
+        "w": 24,
+        "x": 0,
+        "y": 5
+      },
+      "panels": []
+    },
+    {
+      "type": "table",
+      "title": "Lines",
+      "id": 10,
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${prometheus_source}"
+      },
+      "description": "Each xray line, probed through its own ports and never through the HA entry. Pool: ha-general lines carry the HA entry's traffic; none: probed only. Xray API and traffic come from the line's exporter and do not show whether requests get through.",
+      "gridPos": {
+        "h": 11,
+        "w": 24,
+        "x": 0,
+        "y": 6
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${prometheus_source}"
+          },
+          "expr": "(max by (entry, pool) (probe_success{job=\"proxy-probe\",kind=\"raw\",protocol=\"http\"} unless on (instance) (time() - timestamp(probe_success{job=\"proxy-probe\",kind=\"raw\",protocol=\"http\"}) > 90))) or (max by (entry, pool) (max_over_time(up{job=\"proxy-probe\",kind=\"raw\",protocol=\"http\"}[1d])) * 0 - 1)",
+          "legendFormat": "",
+          "refId": "A",
+          "instant": true,
+          "range": false,
+          "format": "table"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${prometheus_source}"
+          },
+          "expr": "(max by (entry) (probe_success{job=\"proxy-probe\",kind=\"raw\",protocol=\"socks\"} unless on (instance) (time() - timestamp(probe_success{job=\"proxy-probe\",kind=\"raw\",protocol=\"socks\"}) > 90))) or (max by (entry) (max_over_time(up{job=\"proxy-probe\",kind=\"raw\",protocol=\"socks\"}[1d])) * 0 - 1)",
+          "legendFormat": "",
+          "refId": "B",
+          "instant": true,
+          "range": false,
+          "format": "table"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${prometheus_source}"
+          },
+          "expr": "max by (entry) (probe_duration_seconds{job=\"proxy-probe\",kind=\"raw\",protocol=\"http\"})",
+          "legendFormat": "",
+          "refId": "C",
+          "instant": true,
+          "range": false,
+          "format": "table"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${prometheus_source}"
+          },
+          "expr": "max by (entry) (probe_duration_seconds{job=\"proxy-probe\",kind=\"raw\",protocol=\"socks\"})",
+          "legendFormat": "",
+          "refId": "D",
+          "instant": true,
+          "range": false,
+          "format": "table"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${prometheus_source}"
+          },
+          "expr": "max by (entry) (time() - timestamp(probe_success{job=\"proxy-probe\",kind=\"raw\"}))",
+          "legendFormat": "",
+          "refId": "E",
+          "instant": true,
+          "range": false,
+          "format": "table"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${prometheus_source}"
+          },
+          "expr": "max by (entry) (avg_over_time(probe_success{job=\"proxy-probe\",kind=\"raw\",protocol=\"http\"}[24h]))",
+          "legendFormat": "",
+          "refId": "F",
+          "instant": true,
+          "range": false,
+          "format": "table"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${prometheus_source}"
+          },
+          "expr": "max by (entry) (avg_over_time(probe_success{job=\"proxy-probe\",kind=\"raw\",protocol=\"socks\"}[24h]))",
+          "legendFormat": "",
+          "refId": "G",
+          "instant": true,
+          "range": false,
+          "format": "table"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${prometheus_source}"
+          },
+          "expr": "min by (entry) (clamp_max(count_over_time(probe_success{job=\"proxy-probe\",kind=\"raw\"}[24h]) / 2880, 1))",
+          "legendFormat": "",
+          "refId": "H",
+          "instant": true,
+          "range": false,
+          "format": "table"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${prometheus_source}"
+          },
+          "expr": "max by (entry) (label_replace(v2ray_up{job=\"v2ray\",proxy_role!=\"entry\"}, \"entry\", \"$1\", \"instance\", \"xray-(.+)-exporter:9550\"))",
+          "legendFormat": "",
+          "refId": "I",
+          "instant": true,
+          "range": false,
+          "format": "table"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${prometheus_source}"
+          },
+          "expr": "sum by (entry) (label_replace(increase(v2ray_traffic_downlink_bytes_total{job=\"v2ray\",proxy_role!=\"entry\",dimension=\"inbound\"}[24h]), \"entry\", \"$1\", \"instance\", \"xray-(.+)-exporter:9550\")) + sum by (entry) (label_replace(increase(v2ray_traffic_uplink_bytes_total{job=\"v2ray\",proxy_role!=\"entry\",dimension=\"inbound\"}[24h]), \"entry\", \"$1\", \"instance\", \"xray-(.+)-exporter:9550\"))",
+          "legendFormat": "",
+          "refId": "J",
+          "instant": true,
+          "range": false,
+          "format": "table"
+        }
+      ],
+      "transformations": [
+        {
+          "id": "joinByField",
+          "options": {
+            "byField": "entry",
+            "mode": "outer"
+          }
+        },
+        {
+          "id": "organize",
+          "options": {
+            "excludeByName": {
+              "Time": true,
+              "Time 1": true,
+              "Time 2": true,
+              "Time 3": true,
+              "Time 4": true,
+              "Time 5": true,
+              "Time 6": true,
+              "Time 7": true,
+              "Time 8": true,
+              "Time 9": true,
+              "Time 10": true,
+              "Time 11": true,
+              "Time 12": true
+            },
+            "renameByName": {
+              "Value #A": "HTTP",
+              "Value #B": "SOCKS5",
+              "Value #C": "HTTP duration",
+              "Value #D": "SOCKS5 duration",
+              "Value #E": "Last check",
+              "Value #F": "HTTP rate 24h",
+              "Value #G": "SOCKS5 rate 24h",
+              "Value #H": "Coverage 24h",
+              "Value #I": "Xray API",
+              "Value #J": "Traffic 24h",
+              "entry": "Line",
+              "pool": "Pool"
+            },
+            "indexByName": {
+              "entry": 0,
+              "pool": 1,
+              "Value #A": 2,
+              "Value #B": 3,
+              "Value #C": 4,
+              "Value #D": 5,
+              "Value #E": 6,
+              "Value #F": 7,
+              "Value #G": 8,
+              "Value #H": 9,
+              "Value #I": 10,
+              "Value #J": 11
+            }
+          }
+        },
+        {
+          "id": "sortBy",
+          "options": {
+            "sort": [
+              {
+                "field": "Pool",
+                "desc": false
+              }
+            ]
+          }
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "align": "auto",
+            "cellOptions": {
+              "type": "auto"
+            }
+          },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "text",
+                "value": null
+              }
+            ]
+          }
+        },
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Line"
+            },
+            "properties": [
+              {
+                "id": "custom.width",
+                "value": 330
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "HTTP"
+            },
+            "properties": [
+              {
+                "id": "mappings",
+                "value": [
+                  {
+                    "type": "value",
+                    "options": {
+                      "1": {
+                        "text": "Passing",
+                        "color": "green",
+                        "index": 0
+                      },
+                      "0": {
+                        "text": "Failing",
+                        "color": "red",
+                        "index": 1
+                      },
+                      "-1": {
+                        "text": "Unknown",
+                        "color": "#808080",
+                        "index": 2
+                      }
+                    }
+                  },
+                  {
+                    "type": "special",
+                    "options": {
+                      "match": "null",
+                      "result": {
+                        "text": "Unknown",
+                        "color": "#808080",
+                        "index": 3
+                      }
+                    }
+                  }
+                ]
+              },
+              {
+                "id": "custom.cellOptions",
+                "value": {
+                  "type": "color-background",
+                  "mode": "basic"
+                }
+              },
+              {
+                "id": "noValue",
+                "value": "Unknown"
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "SOCKS5"
+            },
+            "properties": [
+              {
+                "id": "mappings",
+                "value": [
+                  {
+                    "type": "value",
+                    "options": {
+                      "1": {
+                        "text": "Passing",
+                        "color": "green",
+                        "index": 0
+                      },
+                      "0": {
+                        "text": "Failing",
+                        "color": "red",
+                        "index": 1
+                      },
+                      "-1": {
+                        "text": "Unknown",
+                        "color": "#808080",
+                        "index": 2
+                      }
+                    }
+                  },
+                  {
+                    "type": "special",
+                    "options": {
+                      "match": "null",
+                      "result": {
+                        "text": "Unknown",
+                        "color": "#808080",
+                        "index": 3
+                      }
+                    }
+                  }
+                ]
+              },
+              {
+                "id": "custom.cellOptions",
+                "value": {
+                  "type": "color-background",
+                  "mode": "basic"
+                }
+              },
+              {
+                "id": "noValue",
+                "value": "Unknown"
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "HTTP duration"
+            },
+            "properties": [
+              {
+                "id": "unit",
+                "value": "s"
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "SOCKS5 duration"
+            },
+            "properties": [
+              {
+                "id": "unit",
+                "value": "s"
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Last check"
+            },
+            "properties": [
+              {
+                "id": "unit",
+                "value": "s"
+              },
+              {
+                "id": "decimals",
+                "value": 0
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "HTTP rate 24h"
+            },
+            "properties": [
+              {
+                "id": "unit",
+                "value": "percentunit"
+              },
+              {
+                "id": "decimals",
+                "value": 2
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "SOCKS5 rate 24h"
+            },
+            "properties": [
+              {
+                "id": "unit",
+                "value": "percentunit"
+              },
+              {
+                "id": "decimals",
+                "value": 2
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Coverage 24h"
+            },
+            "properties": [
+              {
+                "id": "unit",
+                "value": "percentunit"
+              },
+              {
+                "id": "decimals",
+                "value": 1
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Xray API"
+            },
+            "properties": [
+              {
+                "id": "mappings",
+                "value": [
+                  {
+                    "type": "value",
+                    "options": {
+                      "1": {
+                        "text": "Up",
+                        "index": 0
+                      },
+                      "0": {
+                        "text": "Down",
+                        "index": 1
+                      }
+                    }
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Traffic 24h"
+            },
+            "properties": [
+              {
+                "id": "unit",
+                "value": "bytes"
+              }
+            ]
+          }
+        ]
+      },
+      "options": {
+        "showHeader": true,
+        "cellHeight": "sm",
+        "footer": {
+          "show": false
+        }
+      }
+    },
+    {
+      "type": "row",
+      "title": "History",
+      "id": 11,
+      "collapsed": false,
+      "gridPos": {
+        "h": 1,
+        "w": 24,
+        "x": 0,
+        "y": 17
+      },
+      "panels": []
+    },
+    {
+      "type": "state-timeline",
+      "title": "Probe results",
+      "id": 12,
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${prometheus_source}"
+      },
+      "description": "Passing, failing or unknown (no result for 90 s) per entry and protocol.",
+      "gridPos": {
+        "h": 12,
+        "w": 24,
+        "x": 0,
+        "y": 18
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${prometheus_source}"
+          },
+          "expr": "(max by (entry, protocol) (probe_success{job=\"proxy-probe\"} unless on (instance) (time() - timestamp(probe_success{job=\"proxy-probe\"}) > 90))) or (max by (entry, protocol) (max_over_time(up{job=\"proxy-probe\"}[1d])) * 0 - 1)",
+          "legendFormat": "{{entry}} {{protocol}}",
+          "refId": "A"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "insertNulls": 65000,
+            "spanNulls": false
+          },
+          "mappings": [
+            {
+              "type": "value",
+              "options": {
+                "1": {
+                  "text": "Passing",
+                  "color": "green",
+                  "index": 0
+                },
+                "0": {
+                  "text": "Failing",
+                  "color": "red",
+                  "index": 1
+                },
+                "-1": {
+                  "text": "Unknown",
+                  "color": "#808080",
+                  "index": 2
+                }
+              }
+            },
+            {
+              "type": "special",
+              "options": {
+                "match": "null",
+                "result": {
+                  "text": "Unknown",
+                  "color": "#808080",
+                  "index": 3
+                }
+              }
+            }
+          ],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "#808080",
+                "value": null
+              },
+              {
+                "color": "red",
+                "value": 0
+              },
+              {
+                "color": "green",
+                "value": 1
+              }
+            ]
+          },
+          "color": {
+            "mode": "thresholds"
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "showValue": "never",
+        "mergeValues": true,
+        "rowHeight": 0.8,
+        "alignValue": "left",
+        "legend": {
+          "showLegend": false
+        }
+      }
+    },
+    {
+      "type": "timeseries",
+      "title": "Probe duration",
+      "id": 13,
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${prometheus_source}"
+      },
+      "description": "",
+      "gridPos": {
+        "h": 9,
+        "w": 12,
+        "x": 0,
+        "y": 30
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${prometheus_source}"
+          },
+          "expr": "probe_duration_seconds{job=\"proxy-probe\"}",
+          "legendFormat": "{{entry}} {{protocol}}",
+          "refId": "A"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "insertNulls": 65000,
+            "spanNulls": false
+          },
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              }
+            ]
+          },
+          "unit": "s"
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "showLegend": true,
+          "displayMode": "table",
+          "placement": "right"
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      }
+    },
+    {
+      "type": "timeseries",
+      "title": "Probe success rate (1 h)",
+      "id": 14,
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${prometheus_source}"
+      },
+      "description": "",
+      "gridPos": {
+        "h": 9,
+        "w": 12,
+        "x": 12,
+        "y": 30
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${prometheus_source}"
+          },
+          "expr": "avg_over_time(probe_success{job=\"proxy-probe\"}[1h])",
+          "legendFormat": "{{entry}} {{protocol}}",
+          "refId": "A"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "insertNulls": 65000,
+            "spanNulls": false
+          },
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              }
+            ]
+          },
+          "unit": "percentunit",
+          "max": 1,
+          "min": 0
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "showLegend": true,
+          "displayMode": "table",
+          "placement": "right"
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      }
+    },
+    {
+      "type": "timeseries",
+      "title": "Probe results per 5 min (10 expected)",
+      "id": 15,
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${prometheus_source}"
+      },
+      "description": "Fewer than 10 means missing probe results: the exporter or Prometheus did not run.",
+      "gridPos": {
+        "h": 9,
+        "w": 12,
+        "x": 0,
+        "y": 39
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${prometheus_source}"
+          },
+          "expr": "count_over_time(probe_success{job=\"proxy-probe\"}[5m])",
+          "legendFormat": "{{entry}} {{protocol}}",
+          "refId": "A"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "insertNulls": 65000,
+            "spanNulls": false
+          },
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              }
+            ]
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "showLegend": true,
+          "displayMode": "table",
+          "placement": "right"
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      }
+    },
+    {
+      "type": "timeseries",
+      "title": "HA entry traffic by line",
+      "id": 16,
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${prometheus_source}"
+      },
+      "description": "Bytes per second the HA entry sends and receives through each pool line, from xray-ha's own counters: client traffic on the line its connections use, plus Xray's own small probe fetches through every line.",
+      "gridPos": {
+        "h": 9,
+        "w": 12,
+        "x": 12,
+        "y": 39
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${prometheus_source}"
+          },
+          "expr": "sum by (target) (irate(v2ray_traffic_downlink_bytes_total{job=\"v2ray\",proxy_role=\"entry\",dimension=\"outbound\"}[5m])) + sum by (target) (irate(v2ray_traffic_uplink_bytes_total{job=\"v2ray\",proxy_role=\"entry\",dimension=\"outbound\"}[5m]))",
+          "legendFormat": "{{target}}",
+          "refId": "A"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "insertNulls": 65000,
+            "spanNulls": false
+          },
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              }
+            ]
+          },
+          "unit": "Bps"
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "showLegend": true,
+          "displayMode": "table",
+          "placement": "right"
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      }
+    }
+  ]
+}

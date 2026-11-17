@@ -17,6 +17,11 @@ providers:
     editable: true
     options:
       path: /etc/grafana/provisioning/dashboards/json/v2ray-dashboard_rev4.json
+  - name: 'Proxy Availability'
+    type: file
+    editable: true
+    options:
+      path: /etc/grafana/provisioning/dashboards/json/proxy-availability.json
   # - name: 'NVIDIA DCGM Exporter v2'
   # # https://grafana.com/grafana/dashboards/15117-nvidia-dcgm-exporter/
   #   type: file

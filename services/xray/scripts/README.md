@@ -98,7 +98,11 @@ ss -ltn | grep ":<port> "
 脚本会自动：
 - 在 `xray/<service_name>/config/config.json` 创建配置文件（并创建 `xray/<service_name>/log/`）
 - 在 `docker-compose.yml` 中最后一个 xray exporter 服务之后添加 xray 服务和 exporter 服务
-- 在 `prometheus/prometheus.yml` 的 v2ray job 中添加 exporter 目标
+- 在 `prometheus/prometheus.yml` 的 v2ray job 中添加 exporter 目标（第一组 targets，`proxy_role: raw`；`xray-ha-exporter` 在另一组）
+
+脚本不会把新线路加入 HA 入口的线路池，也不会为它添加端到端探测：探测需要手动在 `blackbox/blackbox.yml`
+中添加 `<service_name>_http` 和 `<service_name>_socks` 两个 module，并在 `prometheus.yml` 的 `proxy-probe`
+job 中添加这两个目标（`pool: none`），见 [docs/00](../../../docs/00_Network_Proxy.md#proxy-availability)。
 
 三个文件的新内容都先在内存中生成并检查（安装了 PyYAML 时还会确认除新增内容外文件没有其他变化），
 全部通过后才写入。写入过程中出错时，已写入的文件会被恢复，新建的目录会被删除。

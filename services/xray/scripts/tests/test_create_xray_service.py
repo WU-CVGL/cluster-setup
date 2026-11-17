@@ -142,8 +142,9 @@ class _TempServicesMixin:
         for job_name, job in jobs.items():
             targets = [t for sc in job.get('static_configs') or [] for t in sc.get('targets') or []]
             if job_name == 'v2ray':
-                self.assertEqual(targets[-1], target)
-                job['static_configs'][-1]['targets'].remove(target)
+                # The xray lines are the first group; the HA entry, when present, is another.
+                self.assertEqual(job['static_configs'][0]['targets'][-1], target)
+                job['static_configs'][0]['targets'].remove(target)
             else:
                 self.assertNotIn(target, targets, job_name)
         self.assertEqual(new, old)
@@ -415,13 +416,22 @@ class RepoFilesYamlTest(_TempServicesMixin, unittest.TestCase):
         insert_at = next(i for i in range(last + 1, len(old_lines)) if re.match(r'^\s{2}[a-zA-Z0-9]', old_lines[i]))
         block = golden_block(name).replace('56089:', f'{socks_port}:').replace('56889:', f'{http_port}:')
         self.assertEqual(read(self.compose_file), ''.join(old_lines[:insert_at]) + block + ''.join(old_lines[insert_at:]))
-        # 新目标紧跟在最后一个 xray exporter 目标之后，后面的 det-master job 逐字不变
+        # 新目标紧跟在 v2ray job 第一组 targets (proxy_role: raw 的 xray 线路) 的最后一个之后，
+        # 后面的 HA 入口组和其他 job 逐字不变
         old_prom_lines = old_prometheus.splitlines(True)
-        last_target = max(i for i, line in enumerate(old_prom_lines) if V2RAY_TARGET_RE.match(line.rstrip('\n')))
+        last_target = next(i for i, line in enumerate(old_prom_lines) if V2RAY_TARGET_RE.match(line.rstrip('\n')))
+        while V2RAY_TARGET_RE.match(old_prom_lines[last_target + 1].rstrip('\n')):
+            last_target += 1
         new_line = f'          - "xray-{name}-exporter:9550"\n'
         self.assertEqual(read(self.prometheus_file),
                          ''.join(old_prom_lines[:last_target + 1]) + new_line + ''.join(old_prom_lines[last_target + 1:]))
         self.assertOnlyNewV2rayTarget(old_prometheus, read(self.prometheus_file), name)
+        if pyyaml is not None:
+            jobs = {job['job_name']: job for job in pyyaml.safe_load(read(self.prometheus_file))['scrape_configs']}
+            groups = {target: group.get('labels', {}).get('proxy_role')
+                      for group in jobs['v2ray']['static_configs'] for target in group['targets']}
+            self.assertEqual(groups[f'xray-{name}-exporter:9550'], 'raw')
+            self.assertEqual(groups['xray-ha-exporter:9550'], 'entry')
 
     def test_rejects_ports_and_names_in_use(self):
         services = compose_services(read(self.compose_file))
