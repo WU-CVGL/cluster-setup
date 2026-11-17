@@ -7,32 +7,33 @@ Proxy accounts: one protected accounts file, from which every authenticated prox
     proxy_accounts.py remove NAME
     proxy_accounts.py disable NAME           keep the account, refuse it at the entries that require accounts
     proxy_accounts.py enable NAME
-    proxy_accounts.py admin NAME on|off      admin accounts may use ha-all and the private lines
+    proxy_accounts.py admin NAME on|off      admin accounts may use ha-private and the private proxies
     proxy_accounts.py list                   account names, admins marked, without passwords
     proxy_accounts.py status [--json]        accounts, lines and their ports, raw auth and the last applied file hash
     proxy_accounts.py raw-auth [on|off]      show or set authentication on the public lines (off by default)
     proxy_accounts.py render                 write the configs below from the accounts file
 
-Lines: xray/public-lines.txt lists the public lines. Every other line (xray/<name>/) is private: admins only.
+Proxies: xray/public-proxies.txt lists the public proxies. Every other proxy (xray/<name>/) is private: for admin
+accounts only.
 
 The HA entry xray-ha has two entries: ha-general (inbounds http_IN, socks_IN) over the pool-* outbounds, which
-must all lead to public lines, and ha-all (inbounds ha-all_http_IN, ha-all_socks_IN) over the pool-* and private-*
-outbounds, every line.
+must all lead to public proxies, and ha-private (inbounds ha-private_http_IN, ha-private_socks_IN) over the pool-*
+and private-* outbounds, every proxy.
 
 render writes, relative to services/ (all gitignored, mode 0600, replaced atomically):
   xray-ha/config/config.json     xray-ha/config.example.json with every enabled account except svc-ha required
-                                 on ha-general, and the enabled admins and svc-monitor on ha-all; the outbounds
-                                 log in as svc-ha to every line that requires accounts
+                                 on ha-general, and the enabled admins and svc-monitor on ha-private; the outbounds
+                                 log in as svc-ha to every proxy that requires accounts
   blackbox/config/blackbox.yml   blackbox/blackbox.example.yml with svc-monitor in the proxy URLs of the HA
-                                 entries and the private lines, and of the public lines with raw auth
-  xray/*/config/config.json      private lines: the enabled admins, svc-ha and svc-monitor, always. Public lines:
+                                 entries and the private proxies, and of the public proxies with raw auth
+  xray/*/config/config.json      private proxies: the enabled admins, svc-ha and svc-monitor, always. Public proxies:
                                  with raw auth, every enabled account; without it, inbounds that carry accounts
                                  back to no authentication, other files untouched
 
 Account names are cluster usernames; names starting with svc- are service accounts:
-svc-ha (the HA entry's login to the lines), svc-monitor (the probes), svc-docker-<node> (a node's Docker daemon).
+svc-ha (the HA entry's login to the proxies), svc-monitor (the probes), svc-docker-<node> (a node's Docker daemon).
 svc-ha and svc-monitor cannot be disabled or removed; service accounts are never admins. A disabled account is
-left out of every rendered config: with raw auth off, the public lines' own entries require no account, so a
+left out of every rendered config: with raw auth off, the public proxies' own entries require no account, so a
 disabled account can still use them.
 
 The commands that change the accounts file or render hold an exclusive lock (proxy-accounts/.lock), which the
@@ -72,12 +73,12 @@ COMPOSE_FILE = Path("docker-compose.yml")
 RELAY = "svc-ha"
 MONITOR = "svc-monitor"
 PROTECTED = (RELAY, MONITOR)
-POOL_PREFIX = "pool-"          # outbounds to public lines: ha-general and ha-all
-PRIVATE_PREFIX = "private-"    # outbounds to private lines: ha-all only
+POOL_PREFIX = "pool-"          # outbounds to public proxies: ha-general and ha-private
+PRIVATE_PREFIX = "private-"    # outbounds to private proxies: ha-private only
 GENERAL = "ha-general"
-ALL = "ha-all"
+HA_PRIVATE = "ha-private"
 GENERAL_INBOUNDS = ("http_IN", "socks_IN")
-ALL_INBOUNDS = ("ha-all_http_IN", "ha-all_socks_IN")
+HA_PRIVATE_INBOUNDS = ("ha-private_http_IN", "ha-private_socks_IN")
 API_TAG = "api"  # the stats API's inbound, routed to Xray's API handler
 API_PROTOCOLS = ("dokodemo-door", "tunnel")
 HA_TOP_LEVEL = {"log", "stats", "api", "policy", "inbounds", "outbounds", "observatory", "routing"}
@@ -89,7 +90,7 @@ HA_CONTAINER_PORTS = {GENERAL: {"http": 8889, "socks": 1089}, ALL: {"http": 8890
 LINE_HOST_PREFIX = "xray-"
 
 NAME_RE = re.compile(r"[a-z0-9][a-z0-9._-]{0,63}")
-LINE_RE = re.compile(r"[a-z0-9][a-z0-9_-]*")  # create_xray_service.py's service names
+PROXY_NAME_RE = re.compile(r"[a-z0-9][a-z0-9_-]*")  # create_xray_service.py's service names
 SERVICE_RE = re.compile(r"svc-(?:ha|monitor|docker-[a-z0-9][a-z0-9._-]*)")
 PROXY_URL_RE = re.compile(r"^(\s*proxy_url:\s*)(https?|socks5h?)://(?:[^@/\s]*@)?([A-Za-z0-9._-]+)(:\d+\s*)$")
 
@@ -112,31 +113,31 @@ def new_password() -> str:
     return secrets.token_urlsafe(24)
 
 
-def public_lines(base_dir: Path) -> Set[str]:
+def public_proxies(base_dir: Path) -> Set[str]:
     """
-    The public lines, from xray/public-lines.txt: one line name per line, '#' starts a comment. A line not listed
-    is private, so a line nobody classified is admin-only. A missing file is an error, not an empty list.
+    The public proxies, from xray/public-proxies.txt: one proxy name per line, '#' starts a comment. A proxy not
+    listed is private, so a proxy nobody classified is private too. A missing file is an error, not an empty list.
     """
-    path = Path(base_dir) / PUBLIC_LINES_FILE
+    path = Path(base_dir) / PUBLIC_PROXIES_FILE
     try:
         text = path.read_text(encoding="utf-8")
     except FileNotFoundError:
-        raise AccountsError(f"{PUBLIC_LINES_FILE} is missing: it lists the public lines")
+        raise AccountsError(f"{PUBLIC_PROXIES_FILE} is missing: it lists the public proxies")
     names = set()  # type: Set[str]
     for number, line in enumerate(text.splitlines(), 1):
         name = line.split("#", 1)[0].strip()
         if not name:
             continue
-        if not LINE_RE.fullmatch(name):
-            raise AccountsError(f"{PUBLIC_LINES_FILE}:{number}: invalid line name {name!r}")
+        if not PROXY_NAME_RE.fullmatch(name):
+            raise AccountsError(f"{PUBLIC_PROXIES_FILE}:{number}: invalid proxy name {name!r}")
         if name in names:
-            raise AccountsError(f"{PUBLIC_LINES_FILE}:{number}: {name} is listed twice")
+            raise AccountsError(f"{PUBLIC_PROXIES_FILE}:{number}: {name} is listed twice")
         names.add(name)
     return names
 
 
-def line_names(base_dir: Path) -> List[str]:
-    """The lines that have a config: xray/<name>/config/config.json."""
+def proxy_names(base_dir: Path) -> List[str]:
+    """The proxies that have a config: xray/<name>/config/config.json."""
     return sorted(path.parent.parent.name for path in Path(base_dir).glob(RAW_CONFIG_GLOB))
 
 
@@ -291,7 +292,7 @@ class Accounts:
         return True
 
     def is_admin(self, name: str) -> bool:
-        """An enabled admin: may use ha-all and the private lines."""
+        """An enabled admin: may use ha-private and the private proxies."""
         return self.enabled(name) and name in self.admins
 
     def remove(self, name: str) -> None:
@@ -311,14 +312,14 @@ class Accounts:
         """The enabled admins."""
         return [(name, pw) for name, pw in sorted(self.accounts.items()) if self.is_admin(name)]
 
-    def ha_all_users(self) -> List[Tuple[str, str]]:
-        """Who may log in to ha-all: the enabled admins and svc-monitor."""
+    def ha_private_users(self) -> List[Tuple[str, str]]:
+        """Who may log in to ha-private: the enabled admins and svc-monitor."""
         return sorted(self.admin_pairs() + [(MONITOR, self.accounts[MONITOR])])
 
-    def line_users(self, private: bool) -> Optional[List[Tuple[str, str]]]:
+    def proxy_users(self, private: bool) -> Optional[List[Tuple[str, str]]]:
         """
-        Who may log in to a line's own entry: on a private line the enabled admins, svc-ha and svc-monitor, always;
-        on a public line every enabled account with raw auth, else nobody needs to (None).
+        Who may log in to a proxy's own entry: on a private proxy the enabled admins, svc-ha and svc-monitor, always;
+        on a public proxy every enabled account with raw auth, else nobody needs to (None).
         """
         if private:
             return sorted(self.admin_pairs() + [(name, self.accounts[name]) for name in PROTECTED])
@@ -389,9 +390,10 @@ def status(accounts: Accounts) -> dict:
     ports = compose_ports(accounts.base_dir)
     return {
         "raw_auth": accounts.raw_auth,
-        # The entries that refuse a disabled account: while raw auth is off, the public lines' own entries
+        # The entries that refuse a disabled account: while raw auth is off, the public proxies' own entries
         # require no account, so they do not
-        "disabled_refused_at": [GENERAL, ALL, "private-lines"] + (["public-lines"] if accounts.raw_auth else []),
+        "disabled_refused_at": [GENERAL, HA_PRIVATE, "private-proxies"]
+                               + (["public-proxies"] if accounts.raw_auth else []),
         "accounts": [{"name": name, "kind": kind(name), "enabled": accounts.enabled(name),
                       "admin": name in accounts.admins, "protected": name in PROTECTED}
                      for name in sorted(accounts.accounts)],
@@ -407,23 +409,23 @@ def status(accounts: Accounts) -> dict:
     }
 
 
-def _line_of(outbound: dict) -> str:
-    """The line a pool-* or private-* outbound leads to: one SOCKS server xray-<line>:1089."""
+def _proxy_of(outbound: dict) -> str:
+    """The proxy a pool-* or private-* outbound leads to: one SOCKS server xray-<proxy>:1089."""
     servers = (outbound.get("settings") or {}).get("servers") or []
     address = servers[0].get("address", "") if len(servers) == 1 and isinstance(servers[0], dict) else ""
-    if outbound.get("protocol") != "socks" or not address.startswith(LINE_HOST_PREFIX) or address == HA_HOST:
-        raise AccountsError(f"{HA_EXAMPLE}: outbound {outbound.get('tag')!r} must be SOCKS to one xray-<line>")
-    return address[len(LINE_HOST_PREFIX):]
+    if outbound.get("protocol") != "socks" or not address.startswith(PROXY_HOST_PREFIX) or address == HA_HOST:
+        raise AccountsError(f"{HA_EXAMPLE}: outbound {outbound.get('tag')!r} must be SOCKS to one xray-<proxy>")
+    return address[len(PROXY_HOST_PREFIX):]
 
 
 def check_ha(config: dict, public: Set[str]) -> Dict[str, str]:
     """
-    Check that no path of the HA example lets ha-general reach a private line; returns {outbound tag: line}.
+    Check that no path of the HA example lets ha-general reach a private proxy; returns {outbound tag: proxy}.
     The first outbound (Xray's default) is the blackhole; every outbound is the blackhole, pool-* to a public
-    line or private-* to a private line, with no other keys (no proxySettings or streamSettings to chain it);
-    ha-general selects only pool-* outbounds and ha-all every line; the inbounds are exactly the four proxy
+    proxy or private-* to a private proxy, with no other keys (no proxySettings or streamSettings to chain it);
+    ha-general selects only pool-* outbounds and ha-private every proxy; the inbounds are exactly the four proxy
     inbounds and the API's dokodemo-door; each proxy inbound is routed, by its tag alone, to its own entry's
-    balancer, and the API inbound only to the API; the observatory covers every line.
+    balancer, and the API inbound only to the API; the observatory covers every proxy.
     """
     def fail(message):
         raise AccountsError(f"{HA_EXAMPLE}: {message}")
@@ -438,25 +440,26 @@ def check_ha(config: dict, public: Set[str]) -> Dict[str, str]:
         fail("the first outbound must be the blackhole, tagged blackhole")
     if set(outbounds[0]) - {"protocol", "tag", "settings"}:
         fail("the blackhole may set only protocol, tag and settings")
-    lines = {}  # type: Dict[str, str]
+    proxies = {}  # type: Dict[str, str]
     for outbound in outbounds[1:]:
         tag = str(outbound.get("tag", ""))
         if tag.startswith(POOL_PREFIX) or tag.startswith(PRIVATE_PREFIX):
-            line = _line_of(outbound)
+            proxy = _proxy_of(outbound)
             if set(outbound) - {"protocol", "tag", "settings"} or set(outbound["settings"]) != {"servers"} \
                     or set(outbound["settings"]["servers"][0]) - {"address", "port"}:
                 fail(f"outbound {tag} may set only protocol, tag and settings.servers[0].address and port")
-            if tag.startswith(POOL_PREFIX) and line not in public:
-                fail(f"{tag} leads to {line}, which is not in {PUBLIC_LINES_FILE}: private lines take {PRIVATE_PREFIX}*")
-            if tag.startswith(PRIVATE_PREFIX) and line in public:
-                fail(f"{tag} leads to the public line {line}: public lines take {POOL_PREFIX}*")
-            lines[tag] = line
+            if tag.startswith(POOL_PREFIX) and proxy not in public:
+                fail(f"{tag} leads to {proxy}, which is not in {PUBLIC_PROXIES_FILE}: "
+                     f"private proxies take {PRIVATE_PREFIX}*")
+            if tag.startswith(PRIVATE_PREFIX) and proxy in public:
+                fail(f"{tag} leads to the public proxy {proxy}: public proxies take {POOL_PREFIX}*")
+            proxies[tag] = proxy
         else:
             fail(f"unexpected outbound {tag!r}: only the blackhole, {POOL_PREFIX}* and {PRIVATE_PREFIX}*")
-    if not any(t.startswith(POOL_PREFIX) for t in lines):
+    if not any(t.startswith(POOL_PREFIX) for t in proxies):
         fail(f"no {POOL_PREFIX}* outbounds")
 
-    proxy_inbounds = GENERAL_INBOUNDS + ALL_INBOUNDS
+    proxy_inbounds = GENERAL_INBOUNDS + HA_PRIVATE_INBOUNDS
     inbounds = config.get("inbounds") or []
     if sorted((str(i.get("tag")) for i in inbounds)) != sorted(proxy_inbounds + (API_TAG,)):
         fail(f"the inbounds must be exactly {', '.join(proxy_inbounds)} and {API_TAG}")
@@ -468,20 +471,20 @@ def check_ha(config: dict, public: Set[str]) -> Dict[str, str]:
 
     routing = config.get("routing") or {}
     balancers = {b.get("tag"): b for b in routing.get("balancers") or []}
-    if set(balancers) != {GENERAL, ALL}:
-        fail(f"the balancers must be exactly {GENERAL} and {ALL}")
+    if set(balancers) != {GENERAL, HA_PRIVATE}:
+        fail(f"the balancers must be exactly {GENERAL} and {HA_PRIVATE}")
     for name, balancer in balancers.items():
         if balancer.get("fallbackTag") != "blackhole":
             fail(f"{name} must fall back to the blackhole")
-        selected = {t for t in lines if any(t.startswith(str(s)) for s in balancer.get("selector") or [])}
+        selected = {t for t in proxies if any(t.startswith(str(s)) for s in balancer.get("selector") or [])}
         if name == GENERAL and (not selected or any(not t.startswith(POOL_PREFIX) for t in selected)):
             fail(f"{GENERAL} must select only {POOL_PREFIX}* outbounds")
-        if name == ALL and selected != set(lines):
-            fail(f"{ALL} must select every line: missing {', '.join(sorted(set(lines) - selected))}")
-    observed = {t for t in lines if any(t.startswith(str(s)) for s in
+        if name == HA_PRIVATE and selected != set(proxies):
+            fail(f"{HA_PRIVATE} must select every proxy: missing {', '.join(sorted(set(proxies) - selected))}")
+    observed = {t for t in proxies if any(t.startswith(str(s)) for s in
                                          (config.get("observatory") or {}).get("subjectSelector") or [])}
-    if observed != set(lines):
-        fail(f"the observatory must cover every line: missing {', '.join(sorted(set(lines) - observed))}")
+    if observed != set(proxies):
+        fail(f"the observatory must cover every proxy: missing {', '.join(sorted(set(proxies) - observed))}")
 
     routed = {}  # type: Dict[str, str]
     for rule in routing.get("rules") or []:
@@ -495,7 +498,8 @@ def check_ha(config: dict, public: Set[str]) -> Dict[str, str]:
         proxy_tags = set(inbound_tags) & set(proxy_inbounds)
         if proxy_tags:
             tags = set(inbound_tags)
-            want = GENERAL if tags <= set(GENERAL_INBOUNDS) else ALL if tags <= set(ALL_INBOUNDS) else None
+            want = (GENERAL if tags <= set(GENERAL_INBOUNDS)
+                    else HA_PRIVATE if tags <= set(HA_PRIVATE_INBOUNDS) else None)
             if want is None or set(rule) - {"type", "ruleTag"} != {"inboundTag", "balancerTag"} \
                     or rule["balancerTag"] != want:
                 fail(f"the rule for {', '.join(sorted(tags))} must send them, by inboundTag only, "
@@ -506,23 +510,23 @@ def check_ha(config: dict, public: Set[str]) -> Dict[str, str]:
     missing = [t for t in proxy_inbounds if t not in routed]
     if missing:
         fail(f"no routing rule for {', '.join(missing)}")
-    return lines
+    return proxies
 
 
 def render_ha(example: dict, accounts: Accounts, public: Set[str]) -> dict:
     config = json.loads(json.dumps(example))
-    lines = check_ha(config, public)
+    proxies = check_ha(config, public)
     try:
         XrayConfigHandler.set_inbound_users(config, accounts.pairs(exclude=(RELAY,)), tags=GENERAL_INBOUNDS)
-        XrayConfigHandler.set_inbound_users(config, accounts.ha_all_users(), tags=ALL_INBOUNDS)
+        XrayConfigHandler.set_inbound_users(config, accounts.ha_private_users(), tags=HA_PRIVATE_INBOUNDS)
     except ValueError as e:
         raise AccountsError(f"{HA_EXAMPLE}: {e}")
     for outbound in config["outbounds"]:
-        line = lines.get(outbound.get("tag"))
-        if line is None:
+        proxy = proxies.get(outbound.get("tag"))
+        if proxy is None:
             continue
         server = outbound["settings"]["servers"][0]
-        if line not in public or accounts.raw_auth:  # the line requires accounts
+        if proxy not in public or accounts.raw_auth:  # the proxy requires accounts
             server["users"] = [{"user": RELAY, "pass": accounts.accounts[RELAY]}]
         else:
             server.pop("users", None)
@@ -538,8 +542,8 @@ def render_blackbox(example: str, accounts: Accounts, public: Set[str]) -> str:
         if match:
             prefix, scheme, host, rest = match.groups()
             ha_urls += host == HA_HOST
-            line = host[len(LINE_HOST_PREFIX):] if host.startswith(LINE_HOST_PREFIX) and host != HA_HOST else None
-            auth = host == HA_HOST or (line is not None and (line not in public or accounts.raw_auth))
+            proxy = host[len(PROXY_HOST_PREFIX):] if host.startswith(PROXY_HOST_PREFIX) and host != HA_HOST else None
+            auth = host == HA_HOST or (proxy is not None and (proxy not in public or accounts.raw_auth))
             line = f"{prefix}{scheme}://{userinfo if auth else ''}{host}{rest}\n"
         elif "proxy_url:" in line:
             raise AccountsError(f"{BLACKBOX_EXAMPLE}: cannot parse {line.strip()!r}")
@@ -554,21 +558,21 @@ def render_blackbox(example: str, accounts: Accounts, public: Set[str]) -> str:
 def render_outputs(accounts: Accounts) -> List[Tuple[Path, str]]:
     """Render every config in memory; returns the (path, text) of those that differ from the files."""
     base = accounts.base_dir
-    for name in (MONITOR, RELAY):  # svc-ha: the private lines always require accounts
+    for name in (MONITOR, RELAY):  # svc-ha: the private proxies always require accounts
         if name not in accounts.accounts:
             raise AccountsError(f"service account {name} is missing: run 'add {name}' first")
-    public = public_lines(base)
+    public = public_proxies(base)
     outputs = []  # type: List[Tuple[Path, str]]
     ha = render_ha(json.loads((base / HA_EXAMPLE).read_text(encoding="utf-8")), accounts, public)
     outputs.append((base / HA_CONFIG, json.dumps(ha, indent=4) + "\n"))
     outputs.append((base / BLACKBOX_CONFIG,
                     render_blackbox((base / BLACKBOX_EXAMPLE).read_text(encoding="utf-8"), accounts, public)))
     for path in sorted(base.glob(RAW_CONFIG_GLOB)):
-        raw_users = accounts.line_users(private=path.parent.parent.name not in public)
+        raw_users = accounts.proxy_users(private=path.parent.parent.name not in public)
         old = json.loads(path.read_text(encoding="utf-8"))
         if raw_users is None and not any("users" in (i.get("settings") or {}) for i in old.get("inbounds") or []
                                          if i.get("protocol") in ("http", "socks")):
-            continue  # a public line, raw auth off and no accounts there: leave its config as it is
+            continue  # a public proxy, raw auth off and no accounts there: leave its config as it is
         new = json.loads(json.dumps(old))
         try:
             XrayConfigHandler.set_inbound_users(new, raw_users)
@@ -633,14 +637,14 @@ def main(argv: Optional[List[str]] = None) -> int:
                     print(accounts.accounts[name])
                 note = ""
                 if args.command == "disable" and not accounts.raw_auth:
-                    note = " (raw auth is off: the public lines' own entries still accept it)"
+                    note = " (raw auth is off: the public proxies' own entries still accept it)"
                 what = f"admin {args.state}" if args.command == "admin" else args.command
                 print(f"{what}: {name}{note}; run render, then restart the proxies whose configs it writes",
                       file=sys.stderr)
             elif args.command == "raw-auth":
                 accounts.raw_auth = args.state == "on"
                 accounts.save()
-                print(f"raw-auth: {args.state}; run render, then restart the public lines and xray-ha together",
+                print(f"raw-auth: {args.state}; run render, then restart the public proxies and xray-ha together",
                       file=sys.stderr)
             elif args.command == "render":
                 written = render(accounts)
@@ -665,7 +669,7 @@ def read_command(accounts: Accounts, args: argparse.Namespace) -> int:
     else:
         view = status(accounts)
         scope = ("every entry" if accounts.raw_auth else
-                 "ha-general, ha-all and the private lines; the public lines' own entries still accept them "
+                 "ha-general, ha-private and the private proxies; the public proxies' own entries still accept them "
                  "(raw auth is off)")
         print(f"raw auth: {'on' if accounts.raw_auth else 'off'}; disabled accounts are refused at {scope}")
         for entry in view["accounts"]:

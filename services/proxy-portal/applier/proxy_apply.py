@@ -58,8 +58,8 @@ BACKUP_DIR = Path("proxy-accounts/.apply-backup")
 MANIFEST = "manifest.json"
 
 Run = Callable[[Sequence[str], Optional[str], float], Tuple[int, str, str]]
-Probe = Callable[[str, str, str], Tuple[str, Optional[int]]]  # (entry, user, password): ha-general or ha-all
-ENTRIES = (pa.GENERAL, pa.ALL)
+Probe = Callable[[str, str, str], Tuple[str, Optional[int]]]  # (entry, user, password): ha-general or ha-private
+ENTRIES = (pa.GENERAL, pa.HA_PRIVATE)
 Login = Tuple[str, str, str, str]  # (label, entry, user, password)
 
 
@@ -647,7 +647,7 @@ class Applier:
 
     def restart_set(self, accounts: pa.Accounts, outputs: List[Tuple[Path, str]]) -> List[str]:
         """
-        xray-ha; every line with raw auth, and a line whose config changed (a private line whenever the admins
+        xray-ha; every proxy with raw auth, and a proxy whose config changed (a private proxy whenever the admins
         it accepts change); blackbox-exporter when its config did.
         """
         running = self.compose.running()
@@ -669,9 +669,9 @@ class Applier:
                      accounts: pa.Accounts) -> Tuple[List[Login], List[Login]]:
         """
         (accept, refuse): logins through the HA entries that must get 204 or 407. On ha-general and on
-        ha-all, as on each the accounts it accepts: svc-monitor passes; a new, enabled or rotated login
-        passes; a disabled or removed one, or a replaced password, is refused. ha-all also refuses every
-        non-admin this batch changed, and one non-admin it did not, so each apply shows that ha-all keeps
+        ha-private, as on each the accounts it accepts: svc-monitor passes; a new, enabled or rotated login
+        passes; a disabled or removed one, or a replaced password, is refused. ha-private also refuses every
+        non-admin this batch changed, and one non-admin it did not, so each apply shows that ha-private keeps
         non-admins out.
         """
         pw = accounts.accounts
@@ -684,7 +684,7 @@ class Applier:
             old, new = old_passwords.get(name), pw.get(name)
             rotated = old is not None and new is not None and old != new
             states = {pa.GENERAL: (name in old_enabled, accounts.enabled(name)),
-                      pa.ALL: (name in old_enabled and name in old_admins, accounts.is_admin(name))}
+                      pa.HA_PRIVATE: (name in old_enabled and name in old_admins, accounts.is_admin(name))}
             for entry, (was, now) in states.items():
                 if was and (not now or rotated):
                     label = name if not now else f"{name} (previous password)"
@@ -694,21 +694,21 @@ class Applier:
             changed = old is None or rotated or (name in old_enabled) != accounts.enabled(name) \
                 or (name in old_admins) != (name in accounts.admins)
             if new is not None and accounts.enabled(name) and not accounts.is_admin(name):
-                if changed and (pa.ALL, name, new) not in [(e, u, p) for _, e, u, p in refuse]:
-                    refuse.append((f"{name} (not an admin) on {pa.ALL}", pa.ALL, name, new))
+                if changed and (pa.HA_PRIVATE, name, new) not in [(e, u, p) for _, e, u, p in refuse]:
+                    refuse.append((f"{name} (not an admin) on {pa.HA_PRIVATE}", pa.HA_PRIVATE, name, new))
                 non_admin_refused |= changed
         if not non_admin_refused:
             other = next((name for name in sorted(pw) if name not in pa.PROTECTED and accounts.enabled(name)
                           and not accounts.is_admin(name)), None)
             if other is not None:
-                refuse.append((f"{other} (not an admin) on {pa.ALL}", pa.ALL, other, pw[other]))
+                refuse.append((f"{other} (not an admin) on {pa.HA_PRIVATE}", pa.HA_PRIVATE, other, pw[other]))
         return accept, refuse
 
     def verify(self, accept: List[Login], refuse: List[Login]) -> Tuple[str, str]:
         """
         ("ok"|"failed"|"unconfirmed", detail). A login that must be refused gets 407 from a running entry
-        whatever the lines do, and a wrong password always must (the canary, on each entry): no 407 by the
-        deadline is a failure. A login that must pass needs a working line for its 204: no answer by then
+        whatever the proxies do, and a wrong password always must (the canary, on each entry): no 407 by the
+        deadline is a failure. A login that must pass needs a working proxy for its 204: no answer by then
         is unconfirmed.
         """
         deadline = self.clock() + self.verify_timeout
@@ -891,8 +891,8 @@ def main(argv: Optional[List[str]] = None) -> int:
     parser.add_argument("--compose-project", default=env("PROXY_APPLY_COMPOSE_PROJECT") or None)
     parser.add_argument("--ha-http", type=host_port, default=env("PROXY_APPLY_HA_HTTP") or "127.0.0.1:30889",
                         help="ha-general's HTTP port")
-    parser.add_argument("--ha-all-http", type=host_port, default=env("PROXY_APPLY_HA_ALL_HTTP") or "127.0.0.1:31889",
-                        help="ha-all's HTTP port")
+    parser.add_argument("--ha-private-http", type=host_port,
+                        default=env("PROXY_APPLY_HA_PRIVATE_HTTP") or "127.0.0.1:31889", help="ha-private's HTTP port")
     parser.add_argument("--probe-url", default=env("PROXY_APPLY_PROBE_URL") or "https://www.google.com/generate_204")
     parser.add_argument("--verify-timeout", type=float, default=float(env("PROXY_APPLY_VERIFY_TIMEOUT") or 60))
     parser.add_argument("command", choices=("init", "run", "status"))
@@ -914,7 +914,7 @@ def main(argv: Optional[List[str]] = None) -> int:
         return 0
     compose = Compose(args.compose_file or args.services_dir / "docker-compose.yml", args.compose_project)
 
-    entries = {pa.GENERAL: args.ha_http, pa.ALL: args.ha_all_http}
+    entries = {pa.GENERAL: args.ha_http, pa.HA_PRIVATE: args.ha_private_http}
 
     def probe(entry, user, password):
         return proxy_probe(entries[entry], args.probe_url, user, password)

@@ -1,7 +1,7 @@
 {
   "uid": "proxy-availability",
   "title": "Proxy Availability",
-  "description": "End-to-end probes through the HA proxy entries and every xray line (docs/00_Network_Proxy.md).",
+  "description": "End-to-end probes through the HA proxy entries and every xray proxy (docs/00_Network_Proxy.md).",
   "tags": [
     "proxy"
   ],
@@ -245,9 +245,9 @@
     },
     {
       "type": "stat",
-      "title": "Pool lines passing",
+      "title": "Pool proxies passing",
       "id": 4,
-      "description": "Lines of the ha-general pool whose own SOCKS5 port passes the probe (the HA entry reaches them over SOCKS5), and the lines configured. One passing line leaves no spare. Lines are not necessarily independent failure domains.",
+      "description": "Proxies of the ha-general pool whose own SOCKS5 port passes the probe (the HA entry reaches them over SOCKS5), and the proxies configured. One passing proxy leaves no spare. Proxies are not necessarily independent failure domains.",
       "datasource": {
         "type": "prometheus",
         "uid": "${prometheus_source}"
@@ -599,7 +599,7 @@
     },
     {
       "type": "row",
-      "title": "HA entry ha-all (admins only)",
+      "title": "HA entry ha-private",
       "id": 9,
       "collapsed": false,
       "gridPos": {
@@ -612,9 +612,9 @@
     },
     {
       "type": "stat",
-      "title": "ha-all \u00b7 HTTP",
+      "title": "ha-private \u00b7 HTTP",
       "id": 10,
-      "description": "A request through ha-all's HTTP port returned 204 within 8 s. Unknown: no result in the last 90 s.",
+      "description": "A request through ha-private's HTTP port returned 204 within 8 s. Unknown: no result in the last 90 s.",
       "datasource": {
         "type": "prometheus",
         "uid": "${prometheus_source}"
@@ -631,7 +631,7 @@
             "type": "prometheus",
             "uid": "${prometheus_source}"
           },
-          "expr": "(max by (protocol) (probe_success{job=\"proxy-probe\",kind=\"ha\",pool=\"ha-all\",protocol=\"http\"} unless on (instance) (time() - timestamp(probe_success{job=\"proxy-probe\",kind=\"ha\",pool=\"ha-all\",protocol=\"http\"}) > 90))) or (max by (protocol) (max_over_time(up{job=\"proxy-probe\",kind=\"ha\",pool=\"ha-all\",protocol=\"http\"}[1d])) * 0 - 1)",
+          "expr": "(max by (protocol) (probe_success{job=\"proxy-probe\",kind=\"ha\",pool=\"ha-private\",protocol=\"http\"} unless on (instance) (time() - timestamp(probe_success{job=\"proxy-probe\",kind=\"ha\",pool=\"ha-private\",protocol=\"http\"}) > 90))) or (max by (protocol) (max_over_time(up{job=\"proxy-probe\",kind=\"ha\",pool=\"ha-private\",protocol=\"http\"}[1d])) * 0 - 1)",
           "legendFormat": "HTTP",
           "refId": "A",
           "instant": true,
@@ -708,9 +708,9 @@
     },
     {
       "type": "stat",
-      "title": "ha-all \u00b7 SOCKS5",
+      "title": "ha-private \u00b7 SOCKS5",
       "id": 11,
-      "description": "A request through ha-all's SOCKS5 port returned 204 within 8 s. Unknown: no result in the last 90 s.",
+      "description": "A request through ha-private's SOCKS5 port returned 204 within 8 s. Unknown: no result in the last 90 s.",
       "datasource": {
         "type": "prometheus",
         "uid": "${prometheus_source}"
@@ -727,7 +727,7 @@
             "type": "prometheus",
             "uid": "${prometheus_source}"
           },
-          "expr": "(max by (protocol) (probe_success{job=\"proxy-probe\",kind=\"ha\",pool=\"ha-all\",protocol=\"socks\"} unless on (instance) (time() - timestamp(probe_success{job=\"proxy-probe\",kind=\"ha\",pool=\"ha-all\",protocol=\"socks\"}) > 90))) or (max by (protocol) (max_over_time(up{job=\"proxy-probe\",kind=\"ha\",pool=\"ha-all\",protocol=\"socks\"}[1d])) * 0 - 1)",
+          "expr": "(max by (protocol) (probe_success{job=\"proxy-probe\",kind=\"ha\",pool=\"ha-private\",protocol=\"socks\"} unless on (instance) (time() - timestamp(probe_success{job=\"proxy-probe\",kind=\"ha\",pool=\"ha-private\",protocol=\"socks\"}) > 90))) or (max by (protocol) (max_over_time(up{job=\"proxy-probe\",kind=\"ha\",pool=\"ha-private\",protocol=\"socks\"}[1d])) * 0 - 1)",
           "legendFormat": "SOCKS5",
           "refId": "A",
           "instant": true,
@@ -804,9 +804,9 @@
     },
     {
       "type": "stat",
-      "title": "Lines passing",
+      "title": "Proxies passing",
       "id": 12,
-      "description": "Lines ha-all balances over, every public and private line, whose own SOCKS5 port passes the probe, and the lines configured. Lines are not necessarily independent failure domains.",
+      "description": "Proxies ha-private balances over, every public and private proxy, whose own SOCKS5 port passes the probe, and the proxies configured. Proxies are not necessarily independent failure domains.",
       "datasource": {
         "type": "prometheus",
         "uid": "${prometheus_source}"
@@ -823,7 +823,7 @@
             "type": "prometheus",
             "uid": "${prometheus_source}"
           },
-          "expr": "count(((max by (entry) (probe_success{job=\"proxy-probe\",kind=\"raw\",pool=~\"ha-general|ha-all\",protocol=\"socks\"} unless on (instance) (time() - timestamp(probe_success{job=\"proxy-probe\",kind=\"raw\",pool=~\"ha-general|ha-all\",protocol=\"socks\"}) > 90))) or (max by (entry) (max_over_time(up{job=\"proxy-probe\",kind=\"raw\",pool=~\"ha-general|ha-all\",protocol=\"socks\"}[1d])) * 0 - 1)) == 1) or vector(0)",
+          "expr": "count(((max by (entry) (probe_success{job=\"proxy-probe\",kind=\"raw\",pool=~\"ha-general|ha-private\",protocol=\"socks\"} unless on (instance) (time() - timestamp(probe_success{job=\"proxy-probe\",kind=\"raw\",pool=~\"ha-general|ha-private\",protocol=\"socks\"}) > 90))) or (max by (entry) (max_over_time(up{job=\"proxy-probe\",kind=\"raw\",pool=~\"ha-general|ha-private\",protocol=\"socks\"}[1d])) * 0 - 1)) == 1) or vector(0)",
           "legendFormat": "passing",
           "refId": "A",
           "instant": true,
@@ -834,7 +834,7 @@
             "type": "prometheus",
             "uid": "${prometheus_source}"
           },
-          "expr": "count(max by (entry) (max_over_time(up{job=\"proxy-probe\",kind=\"raw\",pool=~\"ha-general|ha-all\",protocol=\"socks\"}[1d])))",
+          "expr": "count(max by (entry) (max_over_time(up{job=\"proxy-probe\",kind=\"raw\",pool=~\"ha-general|ha-private\",protocol=\"socks\"}[1d])))",
           "legendFormat": "configured",
           "refId": "B",
           "instant": true,
@@ -889,7 +889,7 @@
       "type": "stat",
       "title": "Probe duration",
       "id": 13,
-      "description": "Time of the last probe through ha-all.",
+      "description": "Time of the last probe through ha-private.",
       "datasource": {
         "type": "prometheus",
         "uid": "${prometheus_source}"
@@ -906,7 +906,7 @@
             "type": "prometheus",
             "uid": "${prometheus_source}"
           },
-          "expr": "max by (protocol) (probe_duration_seconds{job=\"proxy-probe\",kind=\"ha\",pool=\"ha-all\"} unless on (instance) (time() - timestamp(probe_duration_seconds{job=\"proxy-probe\",kind=\"ha\",pool=\"ha-all\"}) > 90))",
+          "expr": "max by (protocol) (probe_duration_seconds{job=\"proxy-probe\",kind=\"ha\",pool=\"ha-private\"} unless on (instance) (time() - timestamp(probe_duration_seconds{job=\"proxy-probe\",kind=\"ha\",pool=\"ha-private\"}) > 90))",
           "legendFormat": "{{protocol}}",
           "refId": "A",
           "instant": true,
@@ -971,7 +971,7 @@
             "type": "prometheus",
             "uid": "${prometheus_source}"
           },
-          "expr": "max by (protocol) (time() - timestamp(probe_success{job=\"proxy-probe\",kind=\"ha\",pool=\"ha-all\"}))",
+          "expr": "max by (protocol) (time() - timestamp(probe_success{job=\"proxy-probe\",kind=\"ha\",pool=\"ha-private\"}))",
           "legendFormat": "{{protocol}}",
           "refId": "A",
           "instant": true,
@@ -1041,7 +1041,7 @@
             "type": "prometheus",
             "uid": "${prometheus_source}"
           },
-          "expr": "max by (protocol) (avg_over_time(probe_success{job=\"proxy-probe\",kind=\"ha\",pool=\"ha-all\"}[24h]))",
+          "expr": "max by (protocol) (avg_over_time(probe_success{job=\"proxy-probe\",kind=\"ha\",pool=\"ha-private\"}[24h]))",
           "legendFormat": "{{protocol}}",
           "refId": "A",
           "instant": true,
@@ -1107,7 +1107,7 @@
             "type": "prometheus",
             "uid": "${prometheus_source}"
           },
-          "expr": "min by (protocol) (clamp_max(count_over_time(probe_success{job=\"proxy-probe\",kind=\"ha\",pool=\"ha-all\"}[24h]) / 2880, 1))",
+          "expr": "min by (protocol) (clamp_max(count_over_time(probe_success{job=\"proxy-probe\",kind=\"ha\",pool=\"ha-private\"}[24h]) / 2880, 1))",
           "legendFormat": "{{protocol}}",
           "refId": "A",
           "instant": true,
@@ -1158,7 +1158,7 @@
     },
     {
       "type": "row",
-      "title": "Lines",
+      "title": "Proxies",
       "id": 17,
       "collapsed": false,
       "gridPos": {
@@ -1171,13 +1171,13 @@
     },
     {
       "type": "table",
-      "title": "Lines",
+      "title": "Proxies",
       "id": 18,
       "datasource": {
         "type": "prometheus",
         "uid": "${prometheus_source}"
       },
-      "description": "Each xray line, probed through its own ports and never through the HA entry. Pool: ha-general lines carry the traffic of ha-general and ha-all; ha-all lines only ha-all's; none: probed only. Access: Admins only for a private line, whose own entry accepts only admins. Xray API and traffic come from the line's exporter and do not show whether requests get through.",
+      "description": "Each xray proxy, probed through its own ports and never through the HA entry. Pool: ha-general proxies carry the traffic of ha-general and ha-private; ha-private proxies only ha-private's; none: probed only. Access: Private for a private proxy, whose own entry accepts only admins. Xray API and traffic come from the proxy's exporter and do not show whether requests get through.",
       "gridPos": {
         "h": 11,
         "w": 24,
@@ -1343,7 +1343,7 @@
               "Value #H": "Coverage 24h",
               "Value #I": "Xray API",
               "Value #J": "Traffic 24h",
-              "entry": "Line",
+              "entry": "Proxy",
               "pool": "Pool",
               "access": "Access"
             },
@@ -1398,7 +1398,7 @@
           {
             "matcher": {
               "id": "byName",
-              "options": "Line"
+              "options": "Proxy"
             },
             "properties": [
               {
@@ -1423,8 +1423,8 @@
                         "text": "Public",
                         "index": 0
                       },
-                      "admin-only": {
-                        "text": "Admins only",
+                      "private": {
+                        "text": "Private",
                         "index": 1
                       }
                     }
@@ -1967,13 +1967,13 @@
     },
     {
       "type": "timeseries",
-      "title": "HA entry traffic by line",
+      "title": "HA entry traffic by proxy",
       "id": 24,
       "datasource": {
         "type": "prometheus",
         "uid": "${prometheus_source}"
       },
-      "description": "Bytes per second the HA entry sends and receives through each line, ha-general and ha-all together, from xray-ha's own counters: client traffic on the line its connections use, plus Xray's own small probe fetches through every line.",
+      "description": "Bytes per second the HA entry sends and receives through each proxy, ha-general and ha-private together, from xray-ha's own counters: client traffic on the proxy its connections use, plus Xray's own small probe fetches through every proxy.",
       "gridPos": {
         "h": 9,
         "w": 12,

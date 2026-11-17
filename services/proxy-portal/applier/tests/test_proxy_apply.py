@@ -30,8 +30,8 @@ from XrayConfigHandler import XrayConfigHandler  # noqa: E402
 
 SERVICES = Path(__file__).resolve().parents[3]
 IMAGE = "teddysun/xray:1@sha256:" + "0" * 64
-LINE = "usca5-bwh-sla-1tb"      # a public line (xray/public-lines.txt)
-PRIVATE = "jpty1-bwh-2tb"        # a private line
+PROXY = "usca5-bwh-sla-1tb"      # a public proxy (xray/public-proxies.txt)
+PRIVATE = "jpty1-bwh-2tb"        # a private proxy
 
 
 class Crash(BaseException):
@@ -39,9 +39,9 @@ class Crash(BaseException):
 
 
 class FakeDocker:
-    """docker and docker compose, with the HA entries and the lines as login tables loaded at each restart."""
+    """docker and docker compose, with the HA entries and the proxies as login tables loaded at each restart."""
 
-    SERVICES = ["xray-ha", "xray-" + LINE, "xray-" + PRIVATE, "blackbox-exporter", "xray-ha-exporter"]
+    SERVICES = ["xray-ha", "xray-" + PROXY, "xray-" + PRIVATE, "blackbox-exporter", "xray-ha-exporter"]
 
     def __init__(self, base):
         self.base = base
@@ -53,8 +53,8 @@ class FakeDocker:
         self.stale = False
         self.image = IMAGE
         self.ha_users = {}       # ha-general
-        self.ha_all_users = {}   # ha-all
-        self.private_users = {}  # the private line's own entry
+        self.ha_private_users = {}   # ha-private
+        self.private_users = {}  # the private proxy's own entry
         self.load()
 
     @staticmethod
@@ -66,7 +66,7 @@ class FakeDocker:
 
     def load(self):
         self.ha_users = self.users(self.base / pa.HA_CONFIG, "http_IN")
-        self.ha_all_users = self.users(self.base / pa.HA_CONFIG, "ha-all_http_IN")
+        self.ha_private_users = self.users(self.base / pa.HA_CONFIG, "ha-private_http_IN")
         self.private_users = self.users(self.base / "xray" / PRIVATE / "config" / "config.json", "http_IN")
 
     def __call__(self, argv, input_text, timeout):
@@ -104,11 +104,11 @@ class FakeDocker:
 
 
 class FakeProbe:
-    """The HA entries: 204 for a login it knows, 407 otherwise; or a down entry, or one without lines."""
+    """The HA entries: 204 for a login it knows, 407 otherwise; or a down entry, or one without proxies."""
 
     def __init__(self, docker):
         self.docker = docker
-        self.mode = "ok"      # ok | down | silent | nolines
+        self.mode = "ok"      # ok | down | silent | noproxies
         self.calls = []       # users
         self.entry_calls = []  # (entry, user)
 
@@ -119,11 +119,11 @@ class FakeProbe:
             return "unreachable", None
         if self.mode == "silent":
             return "noresponse", None
-        users = {"ha-general": self.docker.ha_users, "ha-all": self.docker.ha_all_users}[entry]
+        users = {"ha-general": self.docker.ha_users, "ha-private": self.docker.ha_private_users}[entry]
         known = users.get(user) == password
         if not known:
             return "status", 407
-        return ("noresponse", None) if self.mode == "nolines" else ("status", 204)
+        return ("noresponse", None) if self.mode == "noproxies" else ("status", 204)
 
 
 class _Base(unittest.TestCase):
@@ -131,14 +131,14 @@ class _Base(unittest.TestCase):
         self.tmp = Path(tempfile.mkdtemp())
         self.addCleanup(shutil.rmtree, self.tmp)
         self.base = self.tmp / "services"
-        for rel in (pa.HA_EXAMPLE, pa.BLACKBOX_EXAMPLE, pa.PUBLIC_LINES_FILE):
+        for rel in (pa.HA_EXAMPLE, pa.BLACKBOX_EXAMPLE, pa.PUBLIC_PROXIES_FILE):
             (self.base / rel).parent.mkdir(parents=True, exist_ok=True)
             shutil.copy(SERVICES / rel, self.base / rel)
-        outbound = {"protocol": "freedom", "settings": {}, "tag": "line"}
+        outbound = {"protocol": "freedom", "settings": {}, "tag": "proxy"}
         text = json.dumps(XrayConfigHandler.build_xray_config(outbound, include_stats_api=True), indent=4)
-        self.line = self.base / "xray" / LINE / "config" / "config.json"
+        self.proxy = self.base / "xray" / PROXY / "config" / "config.json"
         self.private = self.base / "xray" / PRIVATE / "config" / "config.json"
-        for path in (self.line, self.private):
+        for path in (self.proxy, self.private):
             path.parent.mkdir(parents=True)
             path.write_text(text)
         accounts = pa.Accounts(self.base)
@@ -181,7 +181,7 @@ class _Base(unittest.TestCase):
 
     def files(self):
         return {rel: (self.base / rel).read_text()
-                for rel in (pa.ACCOUNTS_FILE, pa.HA_CONFIG, pa.BLACKBOX_CONFIG, self.line.relative_to(self.base),
+                for rel in (pa.ACCOUNTS_FILE, pa.HA_CONFIG, pa.BLACKBOX_CONFIG, self.proxy.relative_to(self.base),
                             self.private.relative_to(self.base))}
 
     def assert_no_leaks(self):
@@ -382,7 +382,7 @@ class ApplyTest(_Base):
         self.assertEqual(self.docker.tests(), 1)  # only the HA config changed
         view = json.loads((self.spool.root / "status.json").read_text())
         self.assertEqual(next(a for a in view["accounts"] if a["name"] == "alice")["enabled"], False)
-        self.assertEqual(view["disabled_refused_at"], ["ha-general", "ha-all", "private-lines"])
+        self.assertEqual(view["disabled_refused_at"], ["ha-general", "ha-private", "private-proxies"])
         self.assertIs(view["unapplied_changes"], False)
         self.assertFalse((self.base / ap.BACKUP_DIR).exists())
         self.assertEqual(os.listdir(self.spool.results), [])
@@ -465,28 +465,28 @@ class ApplyTest(_Base):
         self.assertNotIn("svc-docker-node01", self.passwords())
         self.assertNotIn("svc-docker-node01", self.docker.ha_users)
 
-    def test_raw_auth_restarts_the_lines(self):
+    def test_raw_auth_restarts_the_proxies(self):
         accounts = pa.Accounts(self.base)
         accounts.raw_auth = True
         accounts.save()
         pa.render(accounts)
         self.request("abcdefgh-1", "disable", "alice")
         self.assertEqual(self.run_applier(), 0)
-        self.assertEqual(self.status("abcdefgh-1")["restarted"], ["xray-ha", "xray-" + PRIVATE, "xray-" + LINE])
-        line = json.loads(self.line.read_text())
-        users = [u["user"] for u in line["inbounds"][0]["settings"]["users"]]
+        self.assertEqual(self.status("abcdefgh-1")["restarted"], ["xray-ha", "xray-" + PRIVATE, "xray-" + PROXY])
+        proxy = json.loads(self.proxy.read_text())
+        users = [u["user"] for u in proxy["inbounds"][0]["settings"]["users"]]
         self.assertNotIn("alice", users)
         self.assertIn("bob", users)
-        self.assertEqual(self.docker.tests(), 2)  # the HA config and the line
+        self.assertEqual(self.docker.tests(), 2)  # the HA config and the proxy
         view = json.loads((self.spool.root / "status.json").read_text())
-        self.assertEqual(view["disabled_refused_at"], ["ha-general", "ha-all", "private-lines", "public-lines"])
+        self.assertEqual(view["disabled_refused_at"], ["ha-general", "ha-private", "private-proxies", "public-proxies"])
 
-    def test_raw_auth_line_not_running_is_not_started(self):
+    def test_raw_auth_proxy_not_running_is_not_started(self):
         accounts = pa.Accounts(self.base)
         accounts.raw_auth = True
         accounts.save()
         pa.render(accounts)
-        self.docker.running.discard("xray-" + LINE)
+        self.docker.running.discard("xray-" + PROXY)
         self.request("abcdefgh-1", "disable", "alice")
         self.assertEqual(self.run_applier(), 0)
         self.assertEqual(self.status("abcdefgh-1")["restarted"], ["xray-ha", "xray-" + PRIVATE])
@@ -516,22 +516,22 @@ class ApplyTest(_Base):
 
 
 class AdminTest(_Base):
-    """admin-on and admin-off: ha-all and the private lines follow, the public lines and ha-general do not."""
+    """admin-on and admin-off: ha-private and the private proxies follow, the public proxies and ha-general do not."""
 
     def test_admin_on_and_off(self):
         alice = self.passwords()["alice"]
-        public_before = self.line.read_text()
+        public_before = self.proxy.read_text()
         self.request("abcdefgh-1", "admin-on", "alice")
         self.assertEqual(self.run_applier(), 0)
         record = self.status("abcdefgh-1")
         self.assertEqual((record["status"], record["changed"], record["restarted"]),
                          ("applied", True, ["xray-ha", "xray-" + PRIVATE]))
-        self.assertEqual(self.docker.ha_all_users.get("alice"), alice)
+        self.assertEqual(self.docker.ha_private_users.get("alice"), alice)
         self.assertEqual(self.docker.private_users.get("alice"), alice)
         self.assertEqual(self.docker.ha_users.get("alice"), alice)
-        self.assertIn(("ha-all", "alice"), self.probe.entry_calls)        # 204 on ha-all checked
-        self.assertIn(("ha-all", "bob"), self.probe.entry_calls)          # a non-admin's 407 on ha-all checked
-        self.assertEqual(self.docker.tests(), 2)  # the HA config and the private line
+        self.assertIn(("ha-private", "alice"), self.probe.entry_calls)        # 204 on ha-private checked
+        self.assertIn(("ha-private", "bob"), self.probe.entry_calls)          # a non-admin's 407 on ha-private checked
+        self.assertEqual(self.docker.tests(), 2)  # the HA config and the private proxy
         view = json.loads((self.spool.root / "status.json").read_text())
         self.assertTrue(next(a for a in view["accounts"] if a["name"] == "alice")["admin"])
 
@@ -540,39 +540,39 @@ class AdminTest(_Base):
         self.assertEqual(self.run_applier(), 0)
         record = self.status("abcdefgh-2")
         self.assertEqual((record["status"], record["restarted"]), ("applied", ["xray-ha", "xray-" + PRIVATE]))
-        self.assertNotIn("alice", self.docker.ha_all_users)
+        self.assertNotIn("alice", self.docker.ha_private_users)
         self.assertNotIn("alice", self.docker.private_users)
         self.assertEqual(self.docker.ha_users.get("alice"), alice)  # ha-general unchanged
-        self.assertIn(("ha-all", "alice"), self.probe.entry_calls)   # her 407 on ha-all checked
-        self.assertEqual(self.line.read_text(), public_before)      # raw auth off: the public line untouched
+        self.assertIn(("ha-private", "alice"), self.probe.entry_calls)   # her 407 on ha-private checked
+        self.assertEqual(self.proxy.read_text(), public_before)      # raw auth off: the public proxy untouched
         self.assert_no_leaks()
 
-    def test_admin_rotate_and_disable_restart_the_private_line(self):
+    def test_admin_rotate_and_disable_restart_the_private_proxy(self):
         boss = self.passwords()["boss"]
         self.request("abcdefgh-1", "rotate", "boss")
         self.assertEqual(self.run_applier(), 0)
         self.assertEqual(self.status("abcdefgh-1")["restarted"], ["xray-ha", "xray-" + PRIVATE])
         new = self.passwords()["boss"]
-        self.assertEqual((self.docker.ha_all_users["boss"], self.docker.private_users["boss"]), (new, new))
+        self.assertEqual((self.docker.ha_private_users["boss"], self.docker.private_users["boss"]), (new, new))
         result = json.loads((self.spool.results / "abcdefgh-1.json").read_text())
         self.assertEqual(result["password"], new)
         self.assertNotEqual(new, boss)
         self.request("abcdefgh-2", "disable", "boss")
         self.assertEqual(self.run_applier(), 0)
         self.assertEqual(self.status("abcdefgh-2")["restarted"], ["xray-ha", "xray-" + PRIVATE])
-        for users in (self.docker.ha_users, self.docker.ha_all_users, self.docker.private_users):
+        for users in (self.docker.ha_users, self.docker.ha_private_users, self.docker.private_users):
             self.assertNotIn("boss", users)
         self.assert_no_leaks()
 
-    def test_non_admin_changes_leave_the_private_line(self):
+    def test_non_admin_changes_leave_the_private_proxy(self):
         self.request("abcdefgh-1", "add", "carol")
         self.request("abcdefgh-2", "rotate", "bob")
         self.assertEqual(self.run_applier(), 0)
         for request_id in ("abcdefgh-1", "abcdefgh-2"):
             self.assertEqual(self.status(request_id)["restarted"], ["xray-ha"])
-        self.assertNotIn("carol", self.docker.ha_all_users)
-        self.assertIn(("ha-all", "carol"), self.probe.entry_calls)
-        self.assertIn(("ha-all", "bob"), self.probe.entry_calls)
+        self.assertNotIn("carol", self.docker.ha_private_users)
+        self.assertIn(("ha-private", "carol"), self.probe.entry_calls)
+        self.assertIn(("ha-private", "bob"), self.probe.entry_calls)
 
     def test_service_accounts_cannot_be_admins(self):
         before = self.files()
@@ -588,30 +588,30 @@ class AdminTest(_Base):
         self.assertEqual(self.files(), before)
         self.assertEqual(self.docker.restarts(), [])
 
-    def test_ha_all_open_to_a_non_admin_rolls_back(self):
-        # An HA config that lets every account into ha-all: the non-admin's 200 instead of 407 fails the apply
-        real = pa.Accounts.ha_all_users
+    def test_ha_private_open_to_a_non_admin_rolls_back(self):
+        # An HA config that lets every account into ha-private: the non-admin's 200 instead of 407 fails the apply
+        real = pa.Accounts.ha_private_users
         before = self.files()
-        with mock.patch.object(pa.Accounts, "ha_all_users", lambda a: real(a) + a.pairs(exclude=(pa.RELAY,
+        with mock.patch.object(pa.Accounts, "ha_private_users", lambda a: real(a) + a.pairs(exclude=(pa.RELAY,
                                                                                                  pa.MONITOR, "boss"))):
             self.request("abcdefgh-1", "admin-on", "alice")
             self.assertEqual(self.run_applier(), 0)
         record = self.status("abcdefgh-1")
         self.assertEqual((record["status"], record["stage"], record["restored"]), ("failed", "verify", True))
-        self.assertIn("(not an admin) on ha-all: expected 407, got 204", record["error"])
+        self.assertIn("(not an admin) on ha-private: expected 407, got 204", record["error"])
         self.assertEqual(self.files(), before)
 
-    def test_new_admin_refused_on_ha_all_rolls_back(self):
-        # The HA config leaves ha-all as it was: the new admin's 407 fails the apply
+    def test_new_admin_refused_on_ha_private_rolls_back(self):
+        # The HA config leaves ha-private as it was: the new admin's 407 fails the apply
         before = self.files()
-        with mock.patch.object(pa.Accounts, "ha_all_users",
+        with mock.patch.object(pa.Accounts, "ha_private_users",
                                lambda a: sorted([(n, p) for n, p in a.admin_pairs() if n != "alice"]
                                                 + [(pa.MONITOR, a.accounts[pa.MONITOR])])):
             self.request("abcdefgh-1", "admin-on", "alice")
             self.assertEqual(self.run_applier(), 0)
         record = self.status("abcdefgh-1")
         self.assertEqual((record["status"], record["stage"]), ("failed", "verify"))
-        self.assertIn("alice on ha-all: refused with 407", record["error"])
+        self.assertIn("alice on ha-private: refused with 407", record["error"])
         self.assertEqual(self.files(), before)
 
 
@@ -674,27 +674,27 @@ class FailureTest(_Base):
         self.probe.mode = "down"
         self.run_failing("verify", restored=False)  # the entry stays down after the rollback too
         self.assertIn("no 407 from xray-ha in 10 s for alice on ha-general (unreachable), carol (not an admin) on "
-                      "ha-all (unreachable), a wrong password on ha-general (unreachable), a wrong password on "
-                      "ha-all (unreachable)", self.status("abcdefgh-1")["error"])
+                      "ha-private (unreachable), a wrong password on ha-general (unreachable), a wrong password on "
+                      "ha-private (unreachable)", self.status("abcdefgh-1")["error"])
 
     def test_entry_that_takes_connections_but_never_answers_rolls_back(self):
         self.probe.mode = "silent"  # what docker-proxy looks like in front of a port nothing listens on
         self.run_failing("verify", restored=False)
-        self.assertIn("a wrong password on ha-all (noresponse)", self.status("abcdefgh-1")["error"])
+        self.assertIn("a wrong password on ha-private (noresponse)", self.status("abcdefgh-1")["error"])
 
     def test_rollback_restart_failure_reported(self):
         self.docker.fail_restart = 2
         self.run_failing("restart", restored=False)
 
     def test_unconfirmed_keeps_the_change_and_delivers(self):
-        self.probe.mode = "nolines"  # logins are taken, no line answers
+        self.probe.mode = "noproxies"  # logins are taken, no proxy answers
         self.request("abcdefgh-1", "disable", "alice")
         self.request("abcdefgh-2", "add", "carol")
         self.assertEqual(self.run_applier(), 0)
         for request_id in ("abcdefgh-1", "abcdefgh-2"):
             self.assertEqual(self.status(request_id)["status"], "unconfirmed")
         self.assertEqual(self.status("abcdefgh-1")["error"], "no 204 for svc-monitor on ha-general (noresponse), "
-                         "svc-monitor on ha-all (noresponse), carol on ha-general (noresponse)")
+                         "svc-monitor on ha-private (noresponse), carol on ha-general (noresponse)")
         self.assertNotIn("alice", self.docker.ha_users)
         self.assertTrue(self.status("abcdefgh-2")["result"])
         self.assertTrue((self.spool.results / "abcdefgh-2.json").exists())
