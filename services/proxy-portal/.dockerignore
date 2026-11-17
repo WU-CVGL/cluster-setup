@@ -1,0 +1,7 @@
+data/
+e2e/
+**/__pycache__/
+**/*.mo
+applier/
+portal/tests/
+README.md

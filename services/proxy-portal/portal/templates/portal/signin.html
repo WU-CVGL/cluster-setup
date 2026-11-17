@@ -1,0 +1,19 @@
+{% extends "portal/base.html" %}{% load i18n %}
+{% block title %}{% translate "Sign in" %}{% endblock %}
+{% block content %}
+<div class="card card-pad signin">
+  <div class="eyebrow">{% translate "Sign in" %}</div>
+  <h1>{% translate "Sign in with your Determined login" %}</h1>
+  <p class="sub small">{% translate "The portal checks your username and password once with the Determined master and keeps neither the password nor the master's token." %}</p>
+  {% if error %}<div class="notice bad section" role="alert" id="signin-error"><p>{{ error }}</p></div>{% endif %}
+  <form method="post" action="{% url 'signin' %}" novalidate>{% csrf_token %}
+    <input type="hidden" name="next" value="{{ next }}">
+    <div class="field"><label for="username">{% translate "Username" %}</label>
+      <input class="input" id="username" name="username" autocomplete="username" autocapitalize="none" spellcheck="false" required value="{{ username }}"{% if error %} aria-describedby="signin-error"{% endif %}></div>
+    <div class="field"><label for="password">{% translate "Password" %}</label>
+      <input class="input" id="password" name="password" type="password" autocomplete="current-password" required></div>
+    <div class="form-actions"><button class="btn primary" type="submit">{% translate "Sign in" %}</button></div>
+  </form>
+  <p class="tiny section">{% blocktranslate with hours=session_hours %}You stay signed in for {{ hours }} hours. Your Determined admin flag is read at sign-in: sign in again after it changes.{% endblocktranslate %}</p>
+</div>
+{% endblock %}

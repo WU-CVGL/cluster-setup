@@ -1,0 +1,67 @@
+{% extends "portal/base.html" %}{% load i18n portal %}
+{% block title %}{% translate "My usage" %}{% endblock %}
+{% block content %}
+<div class="hero-head">
+  <div>
+    <div class="eyebrow">{% translate "My usage" %}</div>
+    <h1>{% translate "My proxy usage" %}</h1>
+    <p class="sub">{% blocktranslate with name=view.username %}Observed traffic of the account {{ name }}, counted where you enter the proxies: the HA entries, and a line's own entry when it requires accounts. Traffic through a line's own entry without an account is counted under no user.{% endblocktranslate %}</p>
+  </div>
+</div>
+
+{% if not view.available %}
+<div class="notice warn" role="status"><p>{% translate "Usage data is unavailable right now: Prometheus did not answer. Try again later." %}</p></div>
+{% else %}
+<section aria-labelledby="totals-title">
+  <div class="section-bar"><div><h2 id="totals-title">{% translate "Observed totals" %}</h2><p>{% translate "Download and upload through the proxies over the last 24 hours, 7 days and 30 days." %}</p></div></div>
+  <div class="usage-grid">
+    {% for window in windows %}{% with row=view.windows|get:window %}
+    <div class="card usage-card">
+      <div class="m-label">{% if window == '24h' %}{% translate "Last 24 hours" %}{% elif window == '7d' %}{% translate "Last 7 days" %}{% else %}{% translate "Last 30 days" %}{% endif %}</div>
+      <div class="big">{{ row.total|bytes_value }}<span class="unit">{{ row.total|bytes_unit }}</span></div>
+      <div class="usage-split"><span>{% translate "Download" %} <b>{{ row.download|size }}</b></span><span>{% translate "Upload" %} <b>{{ row.upload|size }}</b></span></div>
+      {% if not row.observed %}<div class="tiny">{% translate "No traffic observed" %}</div>{% endif %}
+    </div>
+    {% endwith %}{% endfor %}
+  </div>
+</section>
+
+<section class="section" aria-labelledby="trend-title">
+  <div class="section-bar"><div><h2 id="trend-title">{% translate "Trend" %}</h2><p>{% translate "Download and upload per hour (24 hours), per 6 hours (7 days) and per day (30 days)." %}</p></div>
+    <div class="seg" data-switch="window" data-default="7d" hidden role="group" aria-label="{% translate 'Range' %}">
+      <button type="button" data-value="24h" aria-pressed="false">{% translate "24 hours" %}</button>
+      <button type="button" data-value="7d" aria-pressed="true">{% translate "7 days" %}</button>
+      <button type="button" data-value="30d" aria-pressed="false">{% translate "30 days" %}</button>
+    </div>
+  </div>
+  <div class="card card-pad">
+    <div class="key"><span><i class="swatch down"></i>{% translate "Download" %}</span><span><i class="swatch up"></i>{% translate "Upload" %}</span></div>
+    {% for window in windows %}{% with chart=charts|get:window %}
+    <div class="chart chart-panel" data-panel="window" data-value="{{ window }}">
+      <h3 class="sr-only">{% if window == '24h' %}{% translate "24 hours" %}{% elif window == '7d' %}{% translate "7 days" %}{% else %}{% translate "30 days" %}{% endif %}</h3>
+      <svg viewBox="0 0 {{ chart.width }} {{ chart.height }}" role="img" aria-labelledby="chart-{{ window }}-desc">
+        <desc id="chart-{{ window }}-desc">{% blocktranslate with peak=chart.peak|size %}Traffic per bucket; the highest bucket is {{ peak }}.{% endblocktranslate %}</desc>
+        <line class="axis" x1="{{ chart.left }}" y1="{{ chart.top }}" x2="{{ chart.right }}" y2="{{ chart.top }}"/>
+        <line class="axis" x1="{{ chart.left }}" y1="{{ chart.middle }}" x2="{{ chart.right }}" y2="{{ chart.middle }}"/>
+        <line class="axis" x1="{{ chart.left }}" y1="{{ chart.base }}" x2="{{ chart.right }}" y2="{{ chart.base }}"/>
+        {% for bar in chart.bars %}
+        <g><title>{{ bar.start|date:"m-d H:i" }} – {{ bar.end|date:"m-d H:i" }}: {% translate "Download" %} {{ bar.download|size }}, {% translate "Upload" %} {{ bar.upload|size }}</title>
+          <rect class="bar-down" x="{{ bar.x }}" y="{{ bar.down_y }}" width="{{ bar.width }}" height="{{ bar.down_h }}"/>
+          <rect class="bar-up" x="{{ bar.x }}" y="{{ bar.up_y }}" width="{{ bar.width }}" height="{{ bar.up_h }}"/></g>
+        {% endfor %}
+      </svg>
+      <div class="legend"><span>{{ chart.first|date:"m-d H:i" }}</span><span>{% blocktranslate with peak=chart.peak|size %}Highest bar: {{ peak }}{% endblocktranslate %}</span><span>{% translate "Now" %}</span></div>
+    </div>
+    {% endwith %}{% endfor %}
+  </div>
+</section>
+
+<section class="section" aria-labelledby="notes-title">
+  <h2 id="notes-title" class="sr-only">{% translate "Notes" %}</h2>
+  <div class="notice">
+    <p>{% translate "These are observed totals, not a bill or a quota. They include traffic to private and Chinese destinations. Counters restart when a proxy restarts, as after an account change, so a little traffic before a restart can be missing, and a total built from few samples can read high." %}</p>
+    <p>{% translate "Only your own usage is shown here, for the account of the signed-in user." %}</p>
+  </div>
+</section>
+{% endif %}
+{% endblock %}

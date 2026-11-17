@@ -17,6 +17,7 @@
     - [Usage](#usage)
     - [Accounts on the lines](#accounts-on-the-lines)
     - [Changes from the portal](#changes-from-the-portal)
+  - [The proxy portal](#the-proxy-portal)
   - [Proxy availability](#proxy-availability)
   - [Bootstrap: a temporary proxy on one machine](#bootstrap-a-temporary-proxy-on-one-machine)
   - [Verify a proxy](#verify-a-proxy)
@@ -264,7 +265,7 @@ While accounts are on, restart the lines together with `xray-ha` after every acc
 
 The proxy portal does not change accounts itself. It writes a request per change into a spool folder, and the applier, a root systemd service on the VM ([`services/proxy-portal/applier`](../services/proxy-portal/applier/README.md)), applies them. The portal never gets the Docker socket or the accounts file. The accounts file stays the only record of the accounts and whether they are enabled.
 
-- **Install:** the units `proxy-apply.service`, `.path` and `.timer` and the settings file `/etc/default/proxy-apply` are in [`services/system-configurations/etc`](../services/system-configurations/etc). Create the portal's user, install the files, set `PROXY_APPLY_SERVICES_DIR`, run `proxy_apply.py init` and enable the `.path` and `.timer` units; the [applier README](../services/proxy-portal/applier/README.md#install) has the commands.
+- **Install:** the units `proxy-apply.service`, `.path` and `.timer` and the settings file `/etc/default/proxy-apply` are in [`services/system-configurations/etc`](../services/system-configurations/etc). Create the portal's user `proxy-portal` with uid 3089, the uid its image runs as, install the files, set `PROXY_APPLY_SERVICES_DIR`, run `proxy_apply.py init` and enable the `.path` and `.timer` units; the [applier README](../services/proxy-portal/applier/README.md#install) has the commands.
 - **Spool and permissions:** `/var/lib/proxy-portal/spool`. The portal's user owns `requests/` and `results/` (`0700`); root owns `status/` and `status.json`. A request is accepted only as a regular file owned by the portal's user, at most 4096 bytes. Write each request under a name not ending in `.json`, then rename it to `<id>.json`; every `*.json` entry is read once and removed, valid or not.
 - **Requests:** `{"id": "<id>", "op": "add|rotate|enable|disable|remove|admin-on|admin-off", "username": "<account>"}` in `requests/<id>.json`, nothing else; `<id>` is 8 to 64 lowercase letters, digits and `-` (a UUID fits), new for every request. `svc-ha` and `svc-monitor` are refused; admins change them only with `proxy_accounts.py` ([Manage accounts](#manage-accounts)). `admin-on` for a service account fails. For `add` and `rotate`, the applier generates the password and writes it once to `results/<id>.json` (mode `0400`, owned by the portal's user), which the portal deletes after showing it.
 - **Statuses** in `status/<id>.json`: `applying` while its batch runs, then `applied` (live and verified), `failed` (not applied; the previous files and services are restored, `restored: false` if the rollback did not finish: the [applier README](../services/proxy-portal/applier/README.md#statuses) has the recovery), or `unconfirmed` (live and every refused login gets 407, but the logins that must pass got no 204 in time, e.g. while the lines are down).
@@ -272,6 +273,18 @@ The proxy portal does not change accounts itself. It writes a request per change
 - **Restart impact:** every change restarts `xray-ha`, a change to an admin account also the private lines, and with raw auth on every line. Established connections through them drop, and new ones fail for a few seconds. Requests that arrive together share one restart; each further request for the same account adds one.
 
 While raw auth is off, turning a user's access off in the portal stops it only at the HA entries (and the private lines); the public lines' own entries stay open to them.
+
+## The proxy portal
+
+`https://proxy.cvgl.lab` shows the status of the proxies to everyone, and to each user signed in with their Determined login their own access and usage, in English or Chinese ([`services/proxy-portal`](../services/proxy-portal/README.md)).
+
+- **Status:** a headline of what the probes mean for users (for example, the default proxy available with one line failing and failover working, or the HTTP entry failing while SOCKS5 still works), `ha-general` and its lines passing, `ha-all` and the private lines marked admins only, the public lines, the last check, a 30-day history of `ha-general`'s probe success rate and the admins' incident notices. It uses the [Proxy Availability](#proxy-availability) dashboard's queries: a result older than 90 seconds is Unknown, and a day without enough results is grey, never green.
+- **My access:** whether the user has an account, whether its proxy access is on, whether it is an admin account, the entries it may use with their addresses on both networks, and client settings without the password. It shows the accounts file as the applier last read it, never a request still waiting. Turning proxy access off is not a change to the cluster account; while raw auth is off it stops only the HA entries and the private lines for that account ([Manage accounts](#manage-accounts)). Users without an account ask an admin.
+- **My usage:** the user's observed download, upload and total over 24 hours, 7 days and 30 days, counted where they enter the proxies as on the [Proxy Usage](#usage) dashboard, and a trend.
+- **Sign-in:** the portal checks the Determined username and password once with the master, ends the master session at once and keeps neither the password nor the token. The portal keeps the Determined admin flag read at sign-in, so a change on the master shows after signing in again. Sessions last 8 hours, and repeated failed sign-ins are refused for 15 minutes.
+- **Never:** it takes no PromQL, metric name or target from a client (only fixed queries, server-side), never shows a password, and has no Docker socket and no access to the accounts file: it reads the applier's `status.json` through a read-only mount.
+
+Install: build and start the `proxy-portal` Compose service (it listens on `192.168.233.8:8095`, data in `/var/lib/proxy-portal/data`, owned by uid 3089), rebuild nginx with the `proxy.cvgl.lab` virtual host, and add `proxy.cvgl.lab` to the hosts files: `192.168.233.8` on the nodes and the login node ([reference](../services/system-configurations/etc/hosts)), `10.0.1.68` on campus PCs. The lab certificate's `*.cvgl.lab` covers the name. Details: [the portal's README](../services/proxy-portal/README.md#install-and-upgrade).
 
 ## Proxy availability
 

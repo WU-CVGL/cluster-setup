@@ -281,7 +281,10 @@ class StatusTest(_Base):
                 {"name": "bob", "kind": "user", "enabled": False, "admin": False, "protected": False},
                 {"name": "svc-ha", "kind": "service", "enabled": True, "admin": False, "protected": True},
                 {"name": "svc-monitor", "kind": "service", "enabled": True, "admin": False, "protected": True}],
-            "lines": [{"name": PRIVATE, "access": "admin"}, {"name": PUBLIC, "access": "public"}],
+            "lines": [{"name": PRIVATE, "access": "admin", "ports": {"http": None, "socks": None}},
+                      {"name": PUBLIC, "access": "public", "ports": {"http": None, "socks": None}}],
+            "entries": {"ha-general": {"ports": {"http": None, "socks": None}},
+                        "ha-all": {"ports": {"http": None, "socks": None}}},
             "accounts_sha256": pa.sha256_text(text), "applied": None, "unapplied_changes": None})
         (self.base / pa.APPLIED_FILE).write_text(json.dumps({"accounts_sha256": pa.sha256_text(text),
                                                              "applied_at": "2000-01-01T00:00:00Z"}))
@@ -296,6 +299,37 @@ class StatusTest(_Base):
         self.assertIn(f"line {PRIVATE:<40} admins only", out)
         self.assertIn("bob", out)
         self.assertNotIn(self.passwords()["bob"], out)
+
+    def test_status_ports_from_compose(self):
+        self.line(PUBLIC)
+        self.line(PRIVATE)
+        (self.base / pa.COMPOSE_FILE).write_text(
+            "services:\n"
+            f"  xray-{PUBLIC}:\n    image: x\n    ports:\n      - 59880:1089\n      - \"59889:8889\"   # HTTP\n"
+            f"  xray-{PUBLIC}-exporter:\n    image: x\n    expose:\n      - 9550\n"
+            f"  xray-{PRIVATE}:\n    image: x\n    ports:\n      - 127.0.0.1:55089:1089\n"
+            "  xray-ha:\n    image: x\n    ports:\n      - 30089:1089\n      - 30889:8889\n"
+            "      - 31089:1090\n      - 31889:8890\n")
+        view = json.loads(run(self.base, "status", "--json")[1])
+        self.assertEqual({line["name"]: line["ports"] for line in view["lines"]},
+                         {PUBLIC: {"http": 59889, "socks": 59880}, PRIVATE: {"http": None, "socks": 55089}})
+        self.assertEqual(view["entries"], {"ha-general": {"ports": {"http": 30889, "socks": 30089}},
+                                           "ha-all": {"ports": {"http": 31889, "socks": 31089}}})
+        self.assertIn(f"line {PUBLIC:<40} public       http 59889  socks 59880", run(self.base, "status")[1])
+
+    def test_status_ports_of_the_repository_compose_file(self):
+        ports = pa.compose_ports(SERVICES)
+        self.assertEqual(pa._ports(ports["xray-ha"], pa.HA_CONTAINER_PORTS[pa.ALL]), {"http": 31889, "socks": 31089})
+        for name in pa.public_lines(SERVICES):
+            self.assertTrue(all(pa._ports(ports["xray-" + name], pa.LINE_CONTAINER_PORTS).values()), name)
+
+    def test_status_with_an_unreadable_compose_file(self):
+        self.line(PUBLIC)
+        (self.base / pa.COMPOSE_FILE).write_bytes(b"services:\n  xray-a: [\xff\n")
+        code, out, err = run(self.base, "status", "--json")
+        self.assertEqual(code, 0)
+        self.assertEqual(json.loads(out)["lines"][0]["ports"], {"http": None, "socks": None})
+        self.assertIn("no ports from docker-compose.yml", err)
 
     def test_status_without_file(self):
         view = json.loads(run(self.base, "status", "--json")[1])

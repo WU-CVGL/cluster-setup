@@ -1,0 +1,151 @@
+{
+  "raw_auth": false,
+  "disabled_refused_at": [
+    "ha-general",
+    "ha-all",
+    "private-lines"
+  ],
+  "accounts": [
+    {
+      "name": "alice",
+      "kind": "user",
+      "enabled": true,
+      "admin": false,
+      "protected": false
+    },
+    {
+      "name": "bob",
+      "kind": "user",
+      "enabled": false,
+      "admin": false,
+      "protected": false
+    },
+    {
+      "name": "carol",
+      "kind": "user",
+      "enabled": true,
+      "admin": true,
+      "protected": false
+    },
+    {
+      "name": "erin",
+      "kind": "user",
+      "enabled": false,
+      "admin": true,
+      "protected": false
+    },
+    {
+      "name": "svc-docker-cvgl-node01",
+      "kind": "service",
+      "enabled": true,
+      "admin": false,
+      "protected": false
+    },
+    {
+      "name": "svc-ha",
+      "kind": "service",
+      "enabled": true,
+      "admin": false,
+      "protected": true
+    },
+    {
+      "name": "svc-monitor",
+      "kind": "service",
+      "enabled": true,
+      "admin": false,
+      "protected": true
+    }
+  ],
+  "lines": [
+    {
+      "name": "jpty1-bwh-2tb",
+      "access": "admin",
+      "ports": {
+        "http": 55889,
+        "socks": 55089
+      }
+    },
+    {
+      "name": "miyaip-jp-01_relay_jpty1-bwh-2tb",
+      "access": "admin",
+      "ports": {
+        "http": 52889,
+        "socks": 52089
+      }
+    },
+    {
+      "name": "miyaip-jp-01_relay_usca5-bwh-sla-2tb",
+      "access": "admin",
+      "ports": {
+        "http": 51889,
+        "socks": 51089
+      }
+    },
+    {
+      "name": "miyaip-uk-01_relay_jpty1-bwh-2tb",
+      "access": "admin",
+      "ports": {
+        "http": 54889,
+        "socks": 54089
+      }
+    },
+    {
+      "name": "miyaip-uk-01_relay_usca5-bwh-sla-2tb",
+      "access": "admin",
+      "ports": {
+        "http": 53889,
+        "socks": 53089
+      }
+    },
+    {
+      "name": "us-west-racknerd-12tb",
+      "access": "public",
+      "ports": {
+        "http": 58889,
+        "socks": 50089
+      }
+    },
+    {
+      "name": "usca1-bwh-megaboxpro-2tb",
+      "access": "public",
+      "ports": {
+        "http": 28889,
+        "socks": 20089
+      }
+    },
+    {
+      "name": "usca5-bwh-sla-1tb",
+      "access": "public",
+      "ports": {
+        "http": 59889,
+        "socks": 59880
+      }
+    },
+    {
+      "name": "usca6-bwh-1tb",
+      "access": "public",
+      "ports": {
+        "http": 18889,
+        "socks": 10089
+      }
+    }
+  ],
+  "entries": {
+    "ha-general": {
+      "ports": {
+        "http": 30889,
+        "socks": 30089
+      }
+    },
+    "ha-all": {
+      "ports": {
+        "http": 31889,
+        "socks": 31089
+      }
+    }
+  },
+  "accounts_sha256": "07e179df4350641d925e3f05c2799466ce782897c1c522baccb52c973e1b470f",
+  "applied": null,
+  "unapplied_changes": null,
+  "generated_at": "2026-11-18T08:00:00Z"
+}
