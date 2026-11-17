@@ -198,14 +198,14 @@ python3 xray/scripts/proxy_accounts.py render
 - `render` 先在内存中生成全部文件并检查，再逐个原子替换（同目录临时文件 + rename，权限 `0600`），内容未变的文件不写：
   - `xray-ha/config/config.json`：`xray-ha/config.example.json` 中 `ha-general` 的 HTTP 和 SOCKS5 入站
     （`http_IN`、`socks_IN`）换成除 `svc-ha` 外的所有启用账号，`ha-private` 的入站（`ha-private_http_IN`、`ha-private_socks_IN`）
-    换成启用的管理员和 `svc-monitor`（SOCKS5 `auth: password`）；`private-*` 出站始终、`pool-*` 出站在
+    换成启用的管理员账号和 `svc-monitor`（SOCKS5 `auth: password`）；`private-*` 出站始终、`pool-*` 出站在
     `raw-auth on` 时以 `svc-ha` 登录代理。写入前检查 `ha-general` 不能到达任何私有代理：`pool-*` 出站只能指向
     公共代理，`ha-general` 只选择 `pool-*`，每个入站只按 `inboundTag` 路由到自己的 balancer，第一个出站是 blackhole；
     入站只有这四个和 API 的 dokodemo-door（`api`，只路由到 API），出站只有 blackhole、`pool-*` 和 `private-*`，
     且不带 `proxySettings`、`streamSettings` 等可以串联到其他出站的设置
   - `blackbox/config/blackbox.yml`：`blackbox/blackbox.example.yml` 中经过 `xray-ha` 和私有代理的 `proxy_url` 带上
     `svc-monitor`（percent-encode）；`raw-auth on` 时公共代理的 `proxy_url` 也带上
-  - `xray/*/config/config.json`：私有代理的入站始终要求启用的管理员、`svc-ha` 和 `svc-monitor`；公共代理在
+  - `xray/*/config/config.json`：私有代理的入站始终要求启用的管理员账号、`svc-ha` 和 `svc-monitor`；公共代理在
     `raw-auth on` 时要求所有启用的账号（含 `svc-ha`），`off` 时带账号的入站恢复为无认证，其他文件不动。
     修改用的是 `XrayConfigHandler.set_inbound_users`，`build_xray_config(..., inbound_users=...)` 也用它；
     不传 `inbound_users` 时 HTTP/SOCKS5 入站不要求认证（SOCKS5 `auth: noauth`）

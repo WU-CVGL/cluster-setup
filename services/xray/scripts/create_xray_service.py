@@ -216,7 +216,7 @@ class XrayServiceCreator:
     def raw_inbound_users(self, private: bool) -> Optional[List[Tuple[str, str]]]:
         """
         新代理入站要求的账号，与 proxy_accounts.py render 写入的相同 (Accounts.proxy_users)：
-        私有代理始终要求账号 (启用的管理员、svc-ha、svc-monitor)；公共代理在 raw_auth 为 true 时
+        私有代理始终要求账号 (启用的管理员账号、svc-ha、svc-monitor)；公共代理在 raw_auth 为 true 时
         要求所有启用的账号，否则返回 None (入站不要求认证)
         """
         accounts = Accounts(self.base_dir)

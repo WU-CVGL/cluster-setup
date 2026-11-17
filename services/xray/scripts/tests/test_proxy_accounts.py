@@ -694,9 +694,9 @@ class IsolationTest(unittest.TestCase):
             c["inbounds"][-1]["port"] = 8891
         self.refused(duplicate_inbound, "the inbounds must be exactly")
 
-        def proxy_tag_on_other_protocol(c):
+        def entry_tag_on_other_protocol(c):
             c["inbounds"][2]["protocol"] = "mixed"
-        self.refused(proxy_tag_on_other_protocol, "must be http")
+        self.refused(entry_tag_on_other_protocol, "must be http")
 
         def api_as_open_proxy(c):
             self.inbound(c, "api")["protocol"] = "http"
@@ -712,10 +712,10 @@ class IsolationTest(unittest.TestCase):
             self.rule(c, "api")["outboundTag"] = "private-jpty1-bwh-2tb"
         self.refused(api_rule_to_private, "the only rule for inbounds other than the entry inbounds")
 
-        def api_in_proxy_rule(c):
+        def api_in_entry_rule(c):
             c["routing"]["rules"].remove(self.rule(c, "api"))
             self.rule(c, "ha-private_http_IN")["inboundTag"].append("api")
-        self.refused(api_in_proxy_rule, "by inboundTag only")
+        self.refused(api_in_entry_rule, "by inboundTag only")
 
         def unknown_tag_rule(c):
             c["routing"]["rules"].insert(0, {"type": "field", "inboundTag": ["ghost"],
