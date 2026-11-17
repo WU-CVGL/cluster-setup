@@ -4,6 +4,8 @@
 Description=Apply proxy account change requests
 After=docker.service
 Requires=docker.service
+# Requests can come in bursts, and each run can end in a second: no start limit, or the path unit stops
+StartLimitIntervalSec=0
 
 [Service]
 Type=oneshot

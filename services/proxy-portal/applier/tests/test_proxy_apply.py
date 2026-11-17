@@ -232,7 +232,7 @@ class SpoolTest(_Base):
         self.request("abcdefgh-9", "remove", "svc-monitor")                           # protected
         (self.spool.requests / "abcdefgh-10.json.tmp").write_text("{}")               # a temp file: left alone
         files = self.files()
-        self.assertEqual(self.run_applier(), 1)
+        self.assertEqual(self.run_applier(), 0)
         self.assertEqual(sorted(os.listdir(self.spool.requests)), ["abcdefgh-10.json.tmp"])
         self.assertTrue(target.exists())
         self.assertEqual(self.files(), files)
@@ -249,7 +249,7 @@ class SpoolTest(_Base):
     def test_other_owner_refused(self):
         self.spool.requester_uid = os.getuid() + 1
         self.request("abcdefgh-1", "disable", "alice")
-        self.assertEqual(self.run_applier(), 1)
+        self.assertEqual(self.run_applier(), 0)
         self.assertEqual(os.listdir(self.spool.requests), [])
         self.assertIn("not the requester", self.status("abcdefgh-1")["error"])
         self.assertTrue(pa.Accounts(self.base).enabled("alice"))
@@ -336,7 +336,7 @@ class ApplyTest(_Base):
         self.request("abcdefgh-1", "add", "carol")
         self.request("abcdefgh-2", "rotate", "bob")
         self.request("abcdefgh-3", "add", "alice")  # exists: fails alone
-        self.assertEqual(self.run_applier(), 1)
+        self.assertEqual(self.run_applier(), 0)
         passwords = self.passwords()
         for request_id, name in (("abcdefgh-1", "carol"), ("abcdefgh-2", "bob")):
             record = self.status(request_id)
@@ -401,7 +401,7 @@ class FailureTest(_Base):
         alice = self.passwords()["alice"]
         self.request("abcdefgh-1", "disable", "alice")
         self.request("abcdefgh-2", "add", "carol")
-        self.assertEqual(self.run_applier(), 1)
+        self.assertEqual(self.run_applier(), 0 if restored else 1)
         for request_id in ("abcdefgh-1", "abcdefgh-2"):
             record = self.status(request_id)
             self.assertEqual((record["status"], record["stage"], record["restored"]), ("failed", stage, restored))
@@ -469,7 +469,7 @@ class FailureTest(_Base):
         self.probe.mode = "nolines"  # logins are taken, no line answers
         self.request("abcdefgh-1", "disable", "alice")
         self.request("abcdefgh-2", "add", "carol")
-        self.assertEqual(self.run_applier(), 1)
+        self.assertEqual(self.run_applier(), 0)
         for request_id in ("abcdefgh-1", "abcdefgh-2"):
             self.assertEqual(self.status(request_id)["status"], "unconfirmed")
         self.assertEqual(self.status("abcdefgh-1")["error"], "no 204 for svc-monitor (noresponse), carol (noresponse)")

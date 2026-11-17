@@ -1,6 +1,6 @@
 # Proxy account applier
 
-`proxy_apply.py` applies proxy account changes requested by the proxy portal: it updates the accounts file (`services/proxy-accounts/accounts.json`), renders and checks the configs, restarts the proxies and verifies the result. It runs on the supplementary services VM as root, started by systemd. The portal only writes request files into a spool folder; it never gets the Docker socket, the accounts file or a shell on the host. Python 3.6 or later, standard library only. How accounts work: [docs/00](../../../docs/00_Network_Proxy.md#accounts).
+`proxy_apply.py` applies proxy account changes requested by the proxy portal: it updates the accounts file (`services/proxy-accounts/accounts.json`), renders and checks the configs, restarts the proxies and verifies the result. It runs on the supplementary services VM as root, started by systemd. The portal only writes request files into a spool folder; it never gets the Docker socket, the accounts file or a shell on the host. Python 3.8 or later, standard library only. How accounts work: [docs/00](../../../docs/00_Network_Proxy.md#accounts).
 
 ## Install
 
@@ -30,7 +30,7 @@ The settings come from `/etc/default/proxy-apply` only, never from a request:
 | `PROXY_APPLY_PROBE_URL` | `https://www.google.com/generate_204` | fetched through the HA entry to verify |
 | `PROXY_APPLY_VERIFY_TIMEOUT` | `60` | seconds |
 
-`proxy-apply.path` starts the service while a request is waiting; `proxy-apply.timer` runs it every 5 minutes to expire results and to recover an interrupted apply. Its log is in `journalctl -u proxy-apply`. Files the applier replaces keep their owner, so the admins' `proxy_accounts.py` keeps working on them.
+`proxy-apply.path` starts the service while a request is waiting; `proxy-apply.timer` runs it every 5 minutes to expire results and to recover an interrupted apply. The service has no start limit, so a burst of quick runs does not stop the path unit. It exits 1 only when a rollback did not finish, and 2 when it cannot run (spool, accounts file); refused and rolled-back requests are reported in their status files. Its log is in `journalctl -u proxy-apply`. Files the applier replaces keep their owner, so the admins' `proxy_accounts.py` keeps working on them.
 
 ## Spool
 
@@ -58,7 +58,7 @@ The portal mounts the spool. It writes a request under a name that does not end 
 
 ## Statuses
 
-`status/<id>.json` holds `id`, `op`, `username`, `status` and `updated_at`, plus:
+`status/<id>.json` holds `id`, `status` and `updated_at`, `op` and `username` once the request could be read, plus:
 
 | `status` | Meaning |
 | :--- | :--- |

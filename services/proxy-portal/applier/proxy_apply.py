@@ -16,7 +16,7 @@ The spool (default /var/lib/proxy-portal/spool):
 A request is {"id": ..., "op": "add|rotate|enable|disable|remove", "username": ...} and nothing else.
 Passwords are generated here, never taken from a request. svc-ha and svc-monitor are managed with
 proxy_accounts.py only. Settings come from the environment (PROXY_APPLY_*) or the options below, never
-from a request. Python 3.6+, standard library only.
+from a request. Python 3.8+, standard library only.
 """
 
 import argparse
@@ -419,7 +419,11 @@ class Applier:
     # -- entry point
 
     def run(self) -> int:
-        """Apply every pending request, one batch at a time, holding the accounts lock throughout."""
+        """
+        Apply every pending request, one batch at a time, holding the accounts lock throughout.
+        Exit status 1 when a rollback did not finish (a status with restored: false), else 0: refused and
+        rolled-back requests are reported in their status files, not as a failure of the service.
+        """
         self.spool.check()
         failures = 0
         with pa.accounts_lock(self.base):
@@ -442,7 +446,6 @@ class Applier:
                         if request_id:
                             self.spool.write_status(request_id, {"id": request_id, "status": "failed",
                                                                  "stage": "request", "error": error, "restored": True})
-                        failures += 1
                         continue
                     batch.append((request, uid))
                 if batch:
@@ -563,7 +566,7 @@ class Applier:
         if not self.keep_backup:
             shutil.rmtree(str(self.base / BACKUP_DIR), ignore_errors=True)
         self.keep_backup = False
-        return sum(record["status"] != "applied" for record in records.values())
+        return sum(record["status"] == "failed" and not record.get("restored") for record in records.values())
 
     def restart_set(self, accounts: pa.Accounts, outputs: List[Tuple[Path, str]]) -> List[str]:
         """xray-ha; the lines, with raw auth or when their config changed; blackbox-exporter when its config did."""
