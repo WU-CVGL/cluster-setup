@@ -369,7 +369,7 @@ services:
     expose:
       - 9550
 
-  # End-to-end probes through the HA entry and every xray line (blackbox/blackbox.example.yml), scraped
+  # End-to-end probes through the HA entry and every xray proxy (blackbox/blackbox.example.yml), scraped
   # by the proxy-probe job; the Proxy Availability dashboard shows them.
   blackbox-exporter:
     image: prom/blackbox-exporter:v0.29.1@sha256:ea1c7aa3ef3f307cd03e85f34abb604478ccb90b567fc690da0cd9776da76b13

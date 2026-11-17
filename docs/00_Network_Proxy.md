@@ -15,7 +15,7 @@
     - [Client settings](#client-settings)
     - [Docker daemon with an account](#docker-daemon-with-an-account)
     - [Usage](#usage)
-    - [Accounts on the lines](#accounts-on-the-lines)
+    - [Accounts on the proxies](#accounts-on-the-proxies)
     - [Changes from the portal](#changes-from-the-portal)
   - [Proxy availability](#proxy-availability)
   - [Bootstrap: a temporary proxy on one machine](#bootstrap-a-temporary-proxy-on-one-machine)
@@ -84,7 +84,7 @@ Add a new proxy from a share link (`vmess://`, `vless://`, `trojan://`, `ss://`)
 
 ## The HA entry
 
-`xray-ha` is one more entry on the same VM that does not depend on a single line:
+`xray-ha` is one more entry on the same VM that does not depend on a single proxy:
 
 | Protocol | Private network | Campus network |
 | :--- | :--- | :--- |
@@ -161,7 +161,7 @@ To reclassify a line, edit the list, move its outbound between `pool-` and `priv
 
 ## Accounts
 
-Every cluster user has one proxy account, named after their cluster username; an admin creates it and hands out the password. Accounts whose names start with `svc-` are service accounts: `svc-docker-<node>` (`<node>` is the node's hostname) for the Docker daemon of a node, `svc-monitor` for the [probes](#proxy-availability) and `svc-ha` for the HA entry's connections to the lines.
+Every cluster user has one proxy account, named after their cluster username; an admin creates it and hands out the password. Accounts whose names start with `svc-` are service accounts: `svc-docker-<node>` (`<node>` is the node's hostname) for the Docker daemon of a node, `svc-monitor` for the [probes](#proxy-availability) and `svc-ha` for the HA entry's connections to the proxies.
 
 ### Manage accounts
 
@@ -227,7 +227,7 @@ Then reload and restart Docker on the drained node as in steps 3 and 4 of [Docke
 
 ### Usage
 
-The **Proxy Usage** dashboard in Grafana shows the traffic per user, per service account and per line, to everyone who can open Grafana.
+The **Proxy Usage** dashboard in Grafana shows the traffic per user, per service account and per proxy, to everyone who can open Grafana.
 
 - **Users** are counted where they enter the proxies: at the HA entry (`ha-general` and `ha-all` share one counter per user, `proxy_role="entry"`), and at a line's own entry when they use it directly and it requires accounts. The HA entry reaches the lines as `svc-ha` where they require accounts, so traffic it relays is counted once for the user, at the HA entry, never twice. User figures include traffic to private and Chinese destinations; traffic through a line's own entry without an account is counted under no user. There is no per-user breakdown by line.
 - **Service accounts** are shown apart from users.
@@ -236,11 +236,11 @@ The **Proxy Usage** dashboard in Grafana shows the traffic per user, per service
 
 The totals are Prometheus `increase()` over the selected range, extrapolated to the range edges, so a total built from only a few samples (a short range, or a counter that lived briefly between restarts) reads high. Xray's counters restart from zero when Xray restarts, as after every account change, and an account's counter appears only at its first use after that. Not counted: traffic after the last scrape before a restart, and an account's traffic up to its first scrape when the range holds no earlier sample of it (a new account, or a range that starts after a restart). Prometheus keeps 30 days of samples (`--storage.tsdb.retention.time` in `docker-compose.yml`), which bounds the range.
 
-### Accounts on the lines
+### Accounts on the proxies
 
 By default the public lines' own entries (the *raw* entries, hence `raw-auth`) require no account; the private lines always do. Turn accounts on there only once every client of a line sends one, because a client without one is refused:
 
-1. Move the clients to the HA entry with their accounts, and the Docker daemons to their `svc-docker-<node>` accounts, one drained node at a time. A client that keeps using a line directly can add its account to the line's URL beforehand: a line without accounts ignores it.
+1. Move the clients to the HA entry with their accounts, and the Docker daemons to their `svc-docker-<node>` accounts, one drained node at a time. A client that keeps using a proxy directly can add its account to the proxy's URL beforehand: a proxy without accounts ignores it.
 2. Turn it on and render:
 
     ```sh
@@ -256,9 +256,9 @@ By default the public lines' own entries (the *raw* entries, hence `raw-auth`) r
     docker compose kill -s SIGHUP blackbox-exporter
     ```
 
-    The HA entry and the lines must agree: the HA entry logging in to a line without accounts, or not logging in to a line with them, fails, and the HA entry fails closed until both sides have restarted.
+    The HA entry and the proxies must agree: the HA entry logging in to a proxy without accounts, or not logging in to a proxy with them, fails, and the HA entry fails closed until both sides have restarted.
 
-While accounts are on, restart the lines together with `xray-ha` after every account change. A line made with `create_xray_service.py` requires the accounts from its creation. `raw-auth off` followed by the same steps turns them off.
+While accounts are on, restart the proxies together with `xray-ha` after every account change. A proxy made with `create_xray_service.py` requires the accounts from its creation. `raw-auth off` followed by the same steps turns them off.
 
 ### Changes from the portal
 
@@ -283,14 +283,14 @@ The **Proxy Availability** dashboard in Grafana (linked from Flare) shows whethe
 
 A status is **Passing**, **Failing** or **Unknown**. Unknown means no result in the last 90 seconds; it is never the last known status. The probe success rate counts only the probes that ran, so read it together with the coverage. Reading the statuses together:
 
-| HA entry | Pool lines | Meaning |
+| HA entry | Pool proxies | Meaning |
 | :--- | :--- | :--- |
-| Passing | 2 or more passing | Working, with a spare line |
+| Passing | 2 or more passing | Working, with a spare proxy |
 | Passing | 1 passing | Working, without a spare |
 | Failing | some passing | Look at `xray-ha` and its ports first |
-| Failing | none passing | Nothing gets out from the VM to the probe URL: all lines are down, or the probe URL is |
+| Failing | none passing | Nothing gets out from the VM to the probe URL: all proxies are down, or the probe URL is |
 
-The probes run on the VM. They do not cover the way from a node or the login node to the VM's ports; check that with `curl` as above. Pool lines that pass are not necessarily independent: several lines can share an upstream provider.
+The probes run on the VM. They do not cover the way from a node or the login node to the VM's ports; check that with `curl` as above. Pool proxies that pass are not necessarily independent: several proxies can share an upstream provider.
 
 A new line needs its two modules in `blackbox.example.yml` and its two targets in the `proxy-probe` job, with the `pool` and `access` labels of its class ([Classify a new line](#classify-a-new-line)), by hand; `create_xray_service.py` adds only its exporter. The modules take effect after `proxy_accounts.py render` and `docker compose kill -s SIGHUP blackbox-exporter`.
 
@@ -336,7 +336,7 @@ The examples below use a public line's own entry, which needs no account while r
 
 ### Docker daemon
 
-Docker pulls images through the proxy set in a systemd drop-in. Through the HA entry, follow [Docker daemon with an account](#docker-daemon-with-an-account). Through a line's own entry, follow the steps below (the [reference file](../services/system-configurations/etc/systemd/system/docker.service.d/proxy.conf) has the values used on the supplementary services VM).
+Docker pulls images through the proxy set in a systemd drop-in. Through the HA entry, follow [Docker daemon with an account](#docker-daemon-with-an-account). Through a proxy's own entry, follow the steps below (the [reference file](../services/system-configurations/etc/systemd/system/docker.service.d/proxy.conf) has the values used on the supplementary services VM).
 
 1) Create the folder:
 

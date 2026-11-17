@@ -41,8 +41,8 @@ def mode(path):
     return stat.S_IMODE(os.stat(path).st_mode)
 
 
-def raw_line_config():
-    outbound = {"protocol": "freedom", "settings": {}, "tag": "line"}
+def proxy_config():
+    outbound = {"protocol": "freedom", "settings": {}, "tag": "proxy"}
     config = XrayConfigHandler.build_xray_config(outbound, loglevel="none", include_stats_api=True)
     return json.dumps(config, indent=4, ensure_ascii=False)
 
@@ -460,7 +460,7 @@ class RenderTest(_Base):
 
     def test_raw_config_without_inbounds_fails_before_writing(self):
         self.add("svc-monitor", "svc-ha")
-        bad = self.base / "xray/line-b/config/config.json"
+        bad = self.base / "xray/proxy-b/config/config.json"
         bad.parent.mkdir(parents=True)
         bad.write_text('{"inbounds": [{"protocol": "http", "settings": {}}]}')
         run(self.base, "raw-auth", "on")
@@ -794,14 +794,14 @@ class AdminTest(_Base):
 
 class HandlerUsersTest(unittest.TestCase):
     def test_default_output_unchanged(self):
-        outbound = {"protocol": "freedom", "settings": {}, "tag": "line"}
+        outbound = {"protocol": "freedom", "settings": {}, "tag": "proxy"}
         a = XrayConfigHandler.build_xray_config(outbound, include_stats_api=True)
         b = XrayConfigHandler.build_xray_config(outbound, include_stats_api=True, inbound_users=None)
         self.assertEqual(json.dumps(a), json.dumps(b))
         self.assertNotIn("users", json.dumps(a))
 
     def test_users(self):
-        outbound = {"protocol": "freedom", "settings": {}, "tag": "line"}
+        outbound = {"protocol": "freedom", "settings": {}, "tag": "proxy"}
         config = XrayConfigHandler.build_xray_config(outbound, inbound_users=[("alice", "pw")])
         http, socks = config["inbounds"][:2]
         self.assertEqual(http["settings"]["users"], [{"user": "alice", "pass": "pw"}])

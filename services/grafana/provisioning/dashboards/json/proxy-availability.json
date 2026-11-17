@@ -245,9 +245,9 @@
     },
     {
       "type": "stat",
-      "title": "Pool lines passing",
+      "title": "Pool proxies passing",
       "id": 4,
-      "description": "Lines of the ha-general pool whose own SOCKS5 port passes the probe (the HA entry reaches them over SOCKS5), and the lines configured. One passing line leaves no spare. Lines are not necessarily independent failure domains.",
+      "description": "Proxies of the ha-general pool whose own SOCKS5 port passes the probe (the HA entry reaches them over SOCKS5), and the proxies configured. One passing proxy leaves no spare. Proxies are not necessarily independent failure domains.",
       "datasource": {
         "type": "prometheus",
         "uid": "${prometheus_source}"
@@ -1398,7 +1398,7 @@
           {
             "matcher": {
               "id": "byName",
-              "options": "Line"
+              "options": "Proxy"
             },
             "properties": [
               {

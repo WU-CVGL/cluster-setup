@@ -68,7 +68,7 @@ The portal's container mounts the spool and runs as the requester's uid (`id -u 
 | `applying` | taken, in the current batch |
 | `applied` | live and verified; `restarted` lists the services restarted, `changed: false` when nothing had to change |
 | `failed` | not applied; `stage` and `error` say why. `restored: true`: the previous files and running state are back (or nothing was touched). `restored: false`: the rollback did not finish. If the files could not be restored, `proxy-accounts/.apply-backup/` stays, and every run retries it first and applies nothing else until it succeeds (exit 2). Check `journalctl -u proxy-apply` and `docker compose ps xray-ha`, fix the cause, then `sudo systemctl start proxy-apply`. To restore by hand, `manifest.json` in that folder lists each file and its backup |
-| `unconfirmed` | live, and every login that must be refused is refused, but the logins that must pass got no 204 within the verify timeout (all lines or the probe URL may be down). The result file is written |
+| `unconfirmed` | live, and every login that must be refused is refused, but the logins that must pass got no 204 within the verify timeout (all proxies or the probe URL may be down). The result file is written |
 
 `stage` is one of `request` (invalid, or the account does not allow the operation, e.g. `admin-on` for a service account; the other requests of the batch go on), `accounts`, `render`, `test`, `precheck`, `backup`, `swap`, `restart`, `verify`, `commit` or `interrupted`.
 

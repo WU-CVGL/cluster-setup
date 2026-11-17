@@ -123,7 +123,7 @@ class FakeProbe:
         known = users.get(user) == password
         if not known:
             return "status", 407
-        return ("noresponse", None) if self.mode == "nolines" else ("status", 204)
+        return ("noresponse", None) if self.mode == "noproxies" else ("status", 204)
 
 
 class _Base(unittest.TestCase):
@@ -465,7 +465,7 @@ class ApplyTest(_Base):
         self.assertNotIn("svc-docker-node01", self.passwords())
         self.assertNotIn("svc-docker-node01", self.docker.ha_users)
 
-    def test_raw_auth_restarts_the_lines(self):
+    def test_raw_auth_restarts_the_proxies(self):
         accounts = pa.Accounts(self.base)
         accounts.raw_auth = True
         accounts.save()
@@ -477,16 +477,16 @@ class ApplyTest(_Base):
         users = [u["user"] for u in line["inbounds"][0]["settings"]["users"]]
         self.assertNotIn("alice", users)
         self.assertIn("bob", users)
-        self.assertEqual(self.docker.tests(), 2)  # the HA config and the line
+        self.assertEqual(self.docker.tests(), 2)  # the HA config and the proxy
         view = json.loads((self.spool.root / "status.json").read_text())
         self.assertEqual(view["disabled_refused_at"], ["ha-general", "ha-all", "private-lines", "public-lines"])
 
-    def test_raw_auth_line_not_running_is_not_started(self):
+    def test_raw_auth_proxy_not_running_is_not_started(self):
         accounts = pa.Accounts(self.base)
         accounts.raw_auth = True
         accounts.save()
         pa.render(accounts)
-        self.docker.running.discard("xray-" + LINE)
+        self.docker.running.discard("xray-" + PROXY)
         self.request("abcdefgh-1", "disable", "alice")
         self.assertEqual(self.run_applier(), 0)
         self.assertEqual(self.status("abcdefgh-1")["restarted"], ["xray-ha", "xray-" + PRIVATE])
@@ -687,7 +687,7 @@ class FailureTest(_Base):
         self.run_failing("restart", restored=False)
 
     def test_unconfirmed_keeps_the_change_and_delivers(self):
-        self.probe.mode = "nolines"  # logins are taken, no line answers
+        self.probe.mode = "noproxies"  # logins are taken, no proxy answers
         self.request("abcdefgh-1", "disable", "alice")
         self.request("abcdefgh-2", "add", "carol")
         self.assertEqual(self.run_applier(), 0)
