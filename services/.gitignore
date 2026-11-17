@@ -1,6 +1,8 @@
 xray/*/config/*.json
-# The HA entry's runtime config, copied from xray-ha/config.example.json
+# Proxy accounts and the configs rendered from them (xray/scripts/proxy_accounts.py)
+proxy-accounts/
 xray-ha/config/*.json
+blackbox/config/
 nginx/ssl/
 harbor/*
 wandb/vol/

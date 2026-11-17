@@ -100,9 +100,10 @@ ss -ltn | grep ":<port> "
 - 在 `docker-compose.yml` 中最后一个 xray exporter 服务之后添加 xray 服务和 exporter 服务
 - 在 `prometheus/prometheus.yml` 的 v2ray job 中添加 exporter 目标（第一组 targets，`proxy_role: raw`；`xray-ha-exporter` 在另一组）
 
-脚本不会把新线路加入 HA 入口的线路池，也不会为它添加端到端探测：探测需要手动在 `blackbox/blackbox.yml`
+脚本不会把新线路加入 HA 入口的线路池，也不会为它添加端到端探测：探测需要手动在 `blackbox/blackbox.example.yml`
 中添加 `<service_name>_http` 和 `<service_name>_socks` 两个 module，并在 `prometheus.yml` 的 `proxy-probe`
-job 中添加这两个目标（`pool: none`），见 [docs/00](../../../docs/00_Network_Proxy.md#proxy-availability)。
+job 中添加这两个目标（`pool: none`），然后运行 `proxy_accounts.py render` 并
+`docker compose kill -s SIGHUP blackbox-exporter`，见 [docs/00](../../../docs/00_Network_Proxy.md#proxy-availability)。
 
 三个文件的新内容都先在内存中生成并检查（安装了 PyYAML 时还会确认除新增内容外文件没有其他变化），
 全部通过后才写入。写入过程中出错时，已写入的文件会被恢复，新建的目录会被删除。
@@ -150,6 +151,38 @@ python3 xray/scripts/vless_to_config.py "vless://..." -o /tmp/config.json
 如果要把输出用作已有 compose 服务的 `xray/<service_name>/config/config.json`（例如更换节点），
 必须加 `--stats-api`（exporter 需要统计 API），并保持 `--http-port`/`--socks-port` 的默认值：
 这两个是容器内的端口（8889/1089），不是 `docker-compose.yml` 中的主机端口。
+
+## 代理账号: proxy_accounts.py
+
+HA 入口（以及开启后的各线路自身入口）要求代理账号。账号保存在一个文件 `services/proxy-accounts/accounts.json`
+（权限 `0600`，被 gitignore）；所有含密码的配置都由 `render` 从这个文件生成，不手动维护第二份密码
+（用法和上线顺序见 [docs/00](../../../docs/00_Network_Proxy.md#accounts)）：
+
+```bash
+cd services
+python3 xray/scripts/proxy_accounts.py add <name> [--show]      # 新账号，随机密码（secrets）；--show 时输出密码
+python3 xray/scripts/proxy_accounts.py rotate <name> [--show]   # 换密码
+python3 xray/scripts/proxy_accounts.py remove <name>
+python3 xray/scripts/proxy_accounts.py list                     # 只输出账号名
+python3 xray/scripts/proxy_accounts.py raw-auth [on|off]        # 线路自身入口是否要求账号，默认 off
+python3 xray/scripts/proxy_accounts.py render
+```
+
+- 账号名：集群用户名，小写字母、数字、`.`、`_`、`-`，以字母或数字开头，最长 64 个字符。`svc-` 开头的是服务账号，
+  只能是 `svc-ha`（HA 入口登录线路）、`svc-monitor`（探测）和 `svc-docker-<node>`（节点的 Docker daemon）
+- `render` 先在内存中生成全部文件并检查，再逐个原子替换（同目录临时文件 + rename，权限 `0600`），内容未变的文件不写：
+  - `xray-ha/config/config.json`：`xray-ha/config.example.json` 的 HTTP 和 SOCKS5 入站换成除 `svc-ha` 外的所有账号
+    （SOCKS5 `auth: password`）；`raw-auth on` 时 `pool-*` 出站以 `svc-ha` 登录线路
+  - `blackbox/config/blackbox.yml`：`blackbox/blackbox.example.yml` 中经过 `xray-ha` 的 `proxy_url` 带上 `svc-monitor`
+    （percent-encode）；`raw-auth on` 时各线路的 `proxy_url` 也带上
+  - `xray/*/config/config.json`：`raw-auth on` 时入站要求所有账号（含 `svc-ha`），`off` 时带账号的入站恢复为无认证，
+    其他文件不动。
+    修改用的是 `XrayConfigHandler.set_inbound_users`，`build_xray_config(..., inbound_users=...)` 也用它；
+    不传 `inbound_users` 时输出与原来逐字节相同
+- 缺少 `svc-monitor`（`raw-auth on` 时还有 `svc-ha`）或某个线路配置没有 HTTP/SOCKS5 入站时，`render` 报错，不写任何文件
+- 之后重启 `xray-ha`（`raw-auth on` 时连同所有线路一起），并 `docker compose kill -s SIGHUP blackbox-exporter`
+
+`raw-auth on` 时，`create_xray_service.py` 新建的线路在下一次 `render` 时加上账号。
 
 ## 测试
 

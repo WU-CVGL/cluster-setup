@@ -7,6 +7,12 @@
   - [Why a proxy](#why-a-proxy)
   - [The proxies on the supplementary services VM](#the-proxies-on-the-supplementary-services-vm)
   - [The HA entry](#the-ha-entry)
+  - [Accounts](#accounts)
+    - [Manage accounts](#manage-accounts)
+    - [Client settings](#client-settings)
+    - [Docker daemon with an account](#docker-daemon-with-an-account)
+    - [Usage](#usage)
+    - [Accounts on the lines](#accounts-on-the-lines)
   - [Proxy availability](#proxy-availability)
   - [Bootstrap: a temporary proxy on one machine](#bootstrap-a-temporary-proxy-on-one-machine)
   - [Verify a proxy](#verify-a-proxy)
@@ -81,7 +87,7 @@ Add a new proxy from a share link (`vmess://`, `vless://`, `trojan://`, `ss://`)
 | HTTP | `http://192.168.233.8:30889` | `http://10.0.1.68:30889` |
 | SOCKS5 | `192.168.233.8:30089` | `10.0.1.68:30089` |
 
-It forwards each new connection over SOCKS5 to one line of its pool `ha-general`: `xray-usca5-bwh-sla-1tb`, `xray-usca1-bwh-megaboxpro-2tb`, `xray-usca6-bwh-1tb` and `xray-us-west-racknerd-12tb`. Every 15 seconds Xray fetches `https://www.google.com/generate_204` through each line (its observatory). A new connection goes to the line with the lowest latency among those whose last fetch succeeded (the `leastPing` balancer). The private lines are not in the pool.
+Both ports require a proxy [account](#accounts). It forwards each new connection over SOCKS5 to one line of its pool `ha-general`: `xray-usca5-bwh-sla-1tb`, `xray-usca1-bwh-megaboxpro-2tb`, `xray-usca6-bwh-1tb` and `xray-us-west-racknerd-12tb`. Every 15 seconds Xray fetches `https://www.google.com/generate_204` through each line (its observatory). A new connection goes to the line with the lowest latency among those whose last fetch succeeded (the `leastPing` balancer). The private lines are not in the pool.
 
 What it covers and what it does not:
 
@@ -92,23 +98,122 @@ What it covers and what it does not:
 - **Starts closed.** After `xray-ha` starts, it refuses requests until its first fetches through the lines are done, a few seconds.
 - **Not the VM.** The entry, its lines and the monitoring all run on the supplementary services VM, so a failure of the VM or of the management server stops them together.
 
-The configuration is [`services/xray-ha/config.example.json`](../services/xray-ha/config.example.json). The service reads a copy of it at `services/xray-ha/config/config.json`, which is not in git, so that it can later hold credentials:
+The configuration is [`services/xray-ha/config.example.json`](../services/xray-ha/config.example.json). The service reads `services/xray-ha/config/config.json`, which holds the accounts and is not in git: [`proxy_accounts.py`](#manage-accounts) renders it from the example. To set the entry up:
 
 ```sh
 cd ~/ws/cluster-setup/services
-mkdir -p xray-ha/config && cp xray-ha/config.example.json xray-ha/config/config.json
+python3 xray/scripts/proxy_accounts.py add svc-monitor
+python3 xray/scripts/proxy_accounts.py add svc-ha
+python3 xray/scripts/proxy_accounts.py render   # before the first start, or Docker creates the folders as root
 docker compose up -d xray-ha xray-ha-exporter blackbox-exporter
 docker compose kill -s SIGHUP prometheus   # reload the probe job
-docker compose restart grafana             # load the new dashboard provider
+docker compose restart grafana             # load the new dashboard providers
 ```
 
 The pool is explicit, and [`create_xray_service.py`](../services/xray/scripts/README.md) does not add new lines to it. To add a line, give it a SOCKS outbound whose tag starts with `pool-`, as the others have, and set the `pool` label of its probe targets to `ha-general` in [`prometheus.yml`](../services/prometheus/prometheus.yml).
 
-Move clients to the HA entry only after the new ports work from where they are used: run `curl -x http://192.168.233.8:30889 https://www.google.com/generate_204 -w '%{http_code}\n'` on a node and the same with `10.0.1.68` on the login node, then the same with `--socks5-hostname` and port `30089`. Then move one kind of client at a time: environment variables, `pip` and `git` first, then the [Docker daemons](#docker-daemon), one drained node at a time, keeping `NO_PROXY` as it is. The lines keep their own entries, so moving a client back is changing the port back.
+Move clients to the HA entry only after the new ports work from where they are used: run `curl -x http://<user>:<password>@192.168.233.8:30889 https://www.google.com/generate_204 -w '%{http_code}\n'` on a node and the same with `10.0.1.68` on the login node, then the same with `socks5h://` and port `30089`. Then move one kind of client at a time: environment variables, `pip` and `git` first, then the [Docker daemons](#docker-daemon-with-an-account), one drained node at a time, keeping `NO_PROXY` as it is. While the lines keep their own entries without accounts, moving a client back is changing the URL back.
+
+## Accounts
+
+Every cluster user has one proxy account, named after their cluster username. Accounts whose names start with `svc-` are service accounts: `svc-docker-<node>` for the Docker daemon of a node, `svc-monitor` for the [probes](#proxy-availability) and `svc-ha` for the HA entry's connections to the lines.
+
+### Manage accounts
+
+The accounts live in one file on the VM, `services/proxy-accounts/accounts.json` (mode `0600`, not in git). Admins change it with [`proxy_accounts.py`](../services/xray/scripts/README.md#代理账号-proxy_accountspy), and `render` writes every configuration that holds passwords from it: the HA entry's, the probes' and, once the lines require accounts, the lines'. Nothing else holds a copy to keep in step.
+
+```sh
+cd ~/ws/cluster-setup/services
+python3 xray/scripts/proxy_accounts.py add <user> --show      # prints the new password
+python3 xray/scripts/proxy_accounts.py rotate <user> --show   # new password; the old one stops working
+python3 xray/scripts/proxy_accounts.py remove <user>
+python3 xray/scripts/proxy_accounts.py list                   # names only
+python3 xray/scripts/proxy_accounts.py render
+docker compose restart xray-ha
+docker compose kill -s SIGHUP blackbox-exporter
+```
+
+Passwords are random and are printed only by `add` and `rotate` with `--show`; give them to the user privately. Xray reads accounts only when it starts, so each change takes effect with the restart of `xray-ha`, which breaks the connections open through it and resets its traffic counters. While the [lines require accounts](#accounts-on-the-lines), restart them as well.
+
+### Client settings
+
+| Protocol | Proxy URL |
+| :--- | :--- |
+| HTTP | `http://<user>:<password>@192.168.233.8:30889` |
+| SOCKS5 | `socks5h://<user>:<password>@192.168.233.8:30089` |
+
+From the campus network (the login node), use `10.0.1.68`. `socks5h` lets the proxy resolve names. In a URL, a password with characters other than letters, digits and `-._~` must be percent-encoded, for example with `python3 -c 'import sys, urllib.parse; print(urllib.parse.quote(sys.argv[1], safe=""))' '<password>'`; the passwords that `proxy_accounts.py` makes need no encoding. For example:
+
+```bash
+export http_proxy=http://<user>:<password>@192.168.233.8:30889
+export https_proxy=$http_proxy HTTP_PROXY=$http_proxy HTTPS_PROXY=$http_proxy
+```
+
+- **Keep the password to yourself.** Set it in your own shell profile or task environment, never in images, Dockerfiles, shared task templates, notebooks or repositories: whoever has it uses the proxy as you. If it leaks, ask an admin to rotate it.
+- **Not encryption.** The password goes to the proxy in clear text (HTTP basic authentication, SOCKS5 username and password) over the private and campus networks. An account decides who may use the entry and whose usage it is; it does not protect the traffic. HTTPS stays encrypted end to end as usual.
+
+### Docker daemon with an account
+
+The Docker daemon of a node uses the account `svc-docker-<node>`, for example `svc-docker-node01`. Keep its URL in a file only root can read, not in the drop-in itself: every user of the node can see a drop-in's `Environment=` lines with `systemctl show docker`.
+
+```sh
+sudo install -m 600 /dev/null /etc/systemd/system/docker.service.d/proxy.env
+sudoedit /etc/systemd/system/docker.service.d/proxy.env
+```
+
+```conf
+HTTP_PROXY=http://svc-docker-node01:<password>@192.168.233.8:30889
+HTTPS_PROXY=http://svc-docker-node01:<password>@192.168.233.8:30889
+NO_PROXY=localhost,127.0.0.1,nvcr.io,aliyuncs.com,cvgl.lab,harbor.cvgl.lab,10.0.1.68,192.168.233.8
+```
+
+and in `/etc/systemd/system/docker.service.d/proxy.conf`:
+
+```conf
+[Service]
+EnvironmentFile=/etc/systemd/system/docker.service.d/proxy.env
+```
+
+systemd reads an `EnvironmentFile` as written. In an `Environment=` line, `%` starts a specifier, so a percent-encoded password there needs each `%` written as `%%`. Then reload and restart Docker on the drained node as in [Docker daemon](#docker-daemon).
+
+### Usage
+
+The **Proxy Usage** dashboard in Grafana shows the traffic per user, per service account and per line, to everyone who can open Grafana.
+
+- **Users** are counted where they enter the proxies: at the HA entry, and at a line's own entry when they use it directly and it requires accounts. The HA entry reaches the lines as `svc-ha`, so traffic it relays is counted once for the user, at the HA entry, and for `svc-ha` at the line, never twice for the user. There is no per-user breakdown by line.
+- **Service accounts** are shown apart from users.
+- **Lines** show each line's traffic to its upstream server, whichever entry it came through. Traffic that goes out directly (private and Chinese destinations) is not included.
+- **HA entry throughput** is all traffic of the entry's two ports.
+
+The totals are the increase between the samples Prometheus holds for the selected range. Xray's counters restart from zero when Xray restarts, as after every account change. Traffic after the last scrape before a restart is not counted, and neither is a user's traffic up to their first scrape after a restart when the range starts after that restart. Prometheus keeps 30 days of samples (`--storage.tsdb.retention.time` in `docker-compose.yml`), which bounds the range.
+
+### Accounts on the lines
+
+The lines' own entries stay without accounts until no client uses them without one; otherwise a client still on a line breaks. Requiring accounts there is a rollout step:
+
+1. Move the clients to the HA entry with their accounts, and the Docker daemons to their `svc-docker-<node>` accounts, one drained node at a time. A client that keeps using a line directly can add its account to the line's URL beforehand: a line without accounts ignores it.
+2. Turn it on and render:
+
+    ```sh
+    python3 xray/scripts/proxy_accounts.py raw-auth on
+    python3 xray/scripts/proxy_accounts.py render
+    ```
+
+    `render` then puts every account on the HTTP and SOCKS5 entries of every `xray/*/config/config.json`, lets the HA entry log in to the lines as `svc-ha` and the probes as `svc-monitor`.
+3. Restart the lines and `xray-ha` together, and reload the probes:
+
+    ```sh
+    docker compose restart xray-ha $(docker compose config --services | grep '^xray-' | grep -v -e exporter -e '^xray-ha$')
+    docker compose kill -s SIGHUP blackbox-exporter
+    ```
+
+    The HA entry and the lines must agree: the HA entry logging in to a line without accounts, or not logging in to a line with them, fails, and the HA entry fails closed until both sides have restarted.
+
+From then on, every account change restarts the lines too, and a line made with `create_xray_service.py` gets the accounts at the next `render`. `raw-auth off` and the same steps undo it.
 
 ## Proxy availability
 
-The **Proxy Availability** dashboard in Grafana (linked from Flare) shows whether requests get through each entry. Every 30 seconds `blackbox-exporter` fetches `https://www.google.com/generate_204` through the HA entry and through every line's own HTTP and SOCKS5 ports ([`services/blackbox/blackbox.yml`](../services/blackbox/blackbox.yml), the `proxy-probe` job in [`prometheus.yml`](../services/prometheus/prometheus.yml)). A probe passes on a 204 within 8 seconds, without following redirects, with the proxy resolving the name. The lines send `www.google.com` abroad (unlike `www.gstatic.com`, which the `geosite:cn` rule sends out directly), and Google cannot be reached directly from the campus network, so a passing probe shows that the line's way abroad works. A line is always probed through its own entry, never through the HA entry, so a failed line shows as failed while the HA entry carries on.
+The **Proxy Availability** dashboard in Grafana (linked from Flare) shows whether requests get through each entry. Every 30 seconds `blackbox-exporter` fetches `https://www.google.com/generate_204` through the HA entry and through every line's own HTTP and SOCKS5 ports, logging in as `svc-monitor` where the entry requires accounts ([`services/blackbox/blackbox.example.yml`](../services/blackbox/blackbox.example.yml), rendered with the account by `proxy_accounts.py`; the `proxy-probe` job in [`prometheus.yml`](../services/prometheus/prometheus.yml)). A probe passes on a 204 within 8 seconds, without following redirects, with the proxy resolving the name. The lines send `www.google.com` abroad (unlike `www.gstatic.com`, which the `geosite:cn` rule sends out directly), and Google cannot be reached directly from the campus network, so a passing probe shows that the line's way abroad works. A line is always probed through its own entry, never through the HA entry, so a failed line shows as failed while the HA entry carries on.
 
 - **Top row:** the HA entry's HTTP and SOCKS5 status; how many pool lines pass on SOCKS5, the protocol the HA entry uses to reach them, out of how many are configured; the probe duration; the age of the last result; and the probe success rate and coverage over 24 hours.
 - **Lines:** one row per line, with its pool, its HTTP and SOCKS5 status, durations, last result, 24-hour probe success rates and coverage, and the status and traffic from its exporter. The exporter only shows that Xray runs, not that requests get through.
@@ -125,7 +230,7 @@ A status is **Passing**, **Failing** or **Unknown**. Unknown means no result in 
 
 The probes run on the VM. They do not cover the way from a node or the login node to the VM's ports; check that with `curl` as above. Pool lines that pass are not necessarily independent: several lines can share an upstream provider.
 
-A new line needs its two modules in `blackbox.yml` and its two targets in the `proxy-probe` job (with `pool: none`) by hand; `create_xray_service.py` adds only its exporter.
+A new line needs its two modules in `blackbox.example.yml` and its two targets in the `proxy-probe` job (with `pool: none`) by hand; `create_xray_service.py` adds only its exporter. The modules take effect after `proxy_accounts.py render` and `docker compose kill -s SIGHUP blackbox-exporter`.
 
 ## Bootstrap: a temporary proxy on one machine
 
@@ -167,7 +272,7 @@ the proxy works.
 
 ### Docker daemon
 
-Docker pulls images through the proxy set in a systemd drop-in (the [reference file](../services/system-configurations/etc/systemd/system/docker.service.d/proxy.conf) has the values used on the supplementary services VM):
+Docker pulls images through the proxy set in a systemd drop-in. Through the HA entry, the daemon logs in with its own account: see [Docker daemon with an account](#docker-daemon-with-an-account) for the URL and where to keep it. Through a line's own entry without an account (the [reference file](../services/system-configurations/etc/systemd/system/docker.service.d/proxy.conf) has the values used on the supplementary services VM):
 
 1) Create the folder:
 

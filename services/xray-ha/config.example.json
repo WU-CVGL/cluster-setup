@@ -30,7 +30,13 @@
             "protocol": "http",
             "settings": {
                 "allowTransparent": false,
-                "timeout": 300
+                "timeout": 300,
+                "users": [
+                    {
+                        "user": "USERNAME",
+                        "pass": "PASSWORD"
+                    }
+                ]
             },
             "tag": "http_IN"
         },
@@ -39,8 +45,14 @@
             "port": 1089,
             "protocol": "socks",
             "settings": {
-                "auth": "noauth",
-                "udp": true
+                "auth": "password",
+                "udp": true,
+                "users": [
+                    {
+                        "user": "USERNAME",
+                        "pass": "PASSWORD"
+                    }
+                ]
             },
             "tag": "socks_IN"
         },

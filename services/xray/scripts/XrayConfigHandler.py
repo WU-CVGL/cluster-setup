@@ -8,7 +8,7 @@ XrayConfigHandler - 解析 Xray 分享 URL 并生成配置
 import base64
 import json
 import urllib.parse
-from typing import Any, Dict, Iterable, Optional, Tuple
+from typing import Any, Dict, Iterable, Optional, Sequence, Tuple
 
 
 DEFAULT_HTTP_PORT = 8889
@@ -450,6 +450,7 @@ class XrayConfigHandler:
         error_log: Optional[str] = None,
         include_stats_api: bool = False,
         api_port: int = DEFAULT_API_PORT,
+        inbound_users: Optional[Sequence[Tuple[str, str]]] = None,
     ) -> Dict[str, Any]:
         """
         Build a complete Xray config from a single outbound definition.
@@ -458,6 +459,8 @@ class XrayConfigHandler:
         include_stats_api=True, loglevel="none" and /var/log/xray log paths.
         Top-level key order (log, stats, api, dns, policy, inbounds, outbounds,
         routing) matches the files that tool has always written.
+        inbound_users: (user, password) pairs required on the HTTP and SOCKS5
+        inbounds (see set_inbound_users); None leaves both without authentication.
         """
         log_config = {
             "loglevel": loglevel,
@@ -607,6 +610,38 @@ class XrayConfigHandler:
                 },
             )
 
+        if inbound_users is not None:
+            XrayConfigHandler.set_inbound_users(config, inbound_users)
+        return config
+
+    @staticmethod
+    def set_inbound_users(config: Dict[str, Any], users: Optional[Sequence[Tuple[str, str]]]) -> Dict[str, Any]:
+        """
+        Require the given (user, password) pairs on the HTTP and SOCKS5 inbounds of a
+        config, in place, or with users=None remove them again (SOCKS5 back to noauth).
+        Xray counts each user's traffic as user>>>NAME>>>traffic>>>uplink/downlink.
+        Removing restores the key order, so a config built without users is byte-identical
+        after a set and a clear.
+        """
+        if users is not None and not users:
+            raise ValueError("an empty user list would leave the inbounds open")
+        entries = None if users is None else [{"user": name, "pass": password} for name, password in users]
+        found = set()
+        for inbound in config.get("inbounds") or []:
+            protocol = inbound.get("protocol")
+            if protocol not in ("http", "socks"):
+                continue
+            found.add(protocol)
+            settings = inbound.setdefault("settings", {})
+            if protocol == "socks":
+                settings["auth"] = "noauth" if entries is None else "password"
+            if entries is None:
+                settings.pop("users", None)
+            else:
+                settings["users"] = [dict(entry) for entry in entries]
+        missing = {"http", "socks"} - found
+        if missing:
+            raise ValueError(f"config has no {' or '.join(sorted(missing))} inbound")
         return config
 
     @staticmethod
