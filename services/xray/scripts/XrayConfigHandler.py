@@ -8,7 +8,7 @@ XrayConfigHandler - 解析 Xray 分享 URL 并生成配置
 import base64
 import json
 import urllib.parse
-from typing import Any, Dict, Iterable, Optional, Sequence, Tuple
+from typing import Any, Collection, Dict, Iterable, Optional, Sequence, Tuple
 
 
 DEFAULT_HTTP_PORT = 8889
@@ -615,10 +615,12 @@ class XrayConfigHandler:
         return config
 
     @staticmethod
-    def set_inbound_users(config: Dict[str, Any], users: Optional[Sequence[Tuple[str, str]]]) -> Dict[str, Any]:
+    def set_inbound_users(config: Dict[str, Any], users: Optional[Sequence[Tuple[str, str]]],
+                          tags: Optional[Collection[str]] = None) -> Dict[str, Any]:
         """
         Require the given (user, password) pairs on the HTTP and SOCKS5 inbounds of a
         config, in place, or with users=None remove them again (SOCKS5 back to noauth).
+        With tags, only the inbounds with those tags change.
         Xray counts each user's traffic as user>>>NAME>>>traffic>>>uplink/downlink.
         Removing restores the key order, so a config built without users is byte-identical
         after a set and a clear.
@@ -629,7 +631,7 @@ class XrayConfigHandler:
         found = set()
         for inbound in config.get("inbounds") or []:
             protocol = inbound.get("protocol")
-            if protocol not in ("http", "socks"):
+            if protocol not in ("http", "socks") or (tags is not None and inbound.get("tag") not in tags):
                 continue
             found.add(protocol)
             settings = inbound.setdefault("settings", {})
@@ -641,7 +643,8 @@ class XrayConfigHandler:
                 settings["users"] = [dict(entry) for entry in entries]
         missing = {"http", "socks"} - found
         if missing:
-            raise ValueError(f"config has no {' or '.join(sorted(missing))} inbound")
+            where = f" tagged {', '.join(sorted(tags))}" if tags is not None else ""
+            raise ValueError(f"config has no {' or '.join(sorted(missing))} inbound{where}")
         return config
 
     @staticmethod

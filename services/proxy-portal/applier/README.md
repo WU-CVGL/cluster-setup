@@ -28,8 +28,9 @@ The settings come from `/etc/default/proxy-apply` only, never from a request:
 | `PROXY_APPLY_SPOOL` | `/var/lib/proxy-portal/spool` | also fixed in `proxy-apply.path` |
 | `PROXY_APPLY_COMPOSE_FILE` | `<services>/docker-compose.yml` | |
 | `PROXY_APPLY_COMPOSE_PROJECT` | Compose's default | |
-| `PROXY_APPLY_HA_HTTP` | `127.0.0.1:30889` | the HA entry's HTTP port on the host |
-| `PROXY_APPLY_PROBE_URL` | `https://www.google.com/generate_204` | fetched through the HA entry to verify |
+| `PROXY_APPLY_HA_HTTP` | `127.0.0.1:30889` | `ha-general`'s HTTP port on the host |
+| `PROXY_APPLY_HA_ALL_HTTP` | `127.0.0.1:31889` | `ha-all`'s HTTP port on the host |
+| `PROXY_APPLY_PROBE_URL` | `https://www.google.com/generate_204` | fetched through the HA entries to verify |
 | `PROXY_APPLY_VERIFY_TIMEOUT` | `60` | seconds |
 
 `proxy-apply.path` starts the service while a request is waiting; `proxy-apply.timer` runs it every 5 minutes to expire results and to recover an interrupted apply. The service has no start limit, so a burst of quick runs does not stop the path unit; a failed run waits 30 seconds before it ends, so a request it cannot take is retried at that pace. It exits 1 when a rollback did not finish, and 2 when it cannot run (spool, accounts file, requester) or cannot remove a request entry; refused and rolled-back requests are reported in their status files. While a run cannot proceed, stop `proxy-apply.path` (`sudo systemctl stop proxy-apply.path`) until it is fixed. Its log is in `journalctl -u proxy-apply`. Files the applier replaces keep their owner, so the admins' `proxy_accounts.py` keeps working on them.
@@ -52,7 +53,7 @@ The portal's container mounts the spool and runs as the requester's uid (`id -u 
 ```
 
 - **`id`**: 8 to 64 characters, lowercase letters, digits and `-` (a UUID), and the file name without `.json`. An id that already has a status file is dropped. Status files are kept, so an id is applied at most once; the portal must use a new id for every request.
-- **`op`**: `add`, `rotate`, `enable`, `disable` or `remove`. Raw auth and rendering stay with `proxy_accounts.py`.
+- **`op`**: `add`, `rotate`, `enable`, `disable`, `remove`, `admin-on` or `admin-off`. An admin may use `ha-all` and the private lines ([docs/00](../../../docs/00_Network_Proxy.md#admin-entries)); a service account cannot be one (`failed`, stage `request`). Raw auth, rendering and the classification of the lines stay with `proxy_accounts.py` and `xray/public-lines.txt`.
 - **`username`**: the account, checked by the same validator as `proxy_accounts.py`. `svc-ha` and `svc-monitor` are refused: they are changed with `proxy_accounts.py` only.
 - No other key is accepted. A request carries no password, path or command.
 
@@ -69,27 +70,27 @@ The portal's container mounts the spool and runs as the requester's uid (`id -u 
 | `failed` | not applied; `stage` and `error` say why. `restored: true`: the previous files and running state are back (or nothing was touched). `restored: false`: the rollback did not finish. If the files could not be restored, `proxy-accounts/.apply-backup/` stays, and every run retries it first and applies nothing else until it succeeds (exit 2). Check `journalctl -u proxy-apply` and `docker compose ps xray-ha`, fix the cause, then `sudo systemctl start proxy-apply`. To restore by hand, `manifest.json` in that folder lists each file and its backup |
 | `unconfirmed` | live, and every login that must be refused is refused, but the logins that must pass got no 204 within the verify timeout (all lines or the probe URL may be down). The result file is written |
 
-`stage` is one of `request` (invalid, or the account does not allow the operation; the other requests of the batch go on), `accounts`, `render`, `test`, `precheck`, `backup`, `swap`, `restart`, `verify`, `commit` or `interrupted`.
+`stage` is one of `request` (invalid, or the account does not allow the operation, e.g. `admin-on` for a service account; the other requests of the batch go on), `accounts`, `render`, `test`, `precheck`, `backup`, `swap`, `restart`, `verify`, `commit` or `interrupted`.
 
 ## How a batch is applied
 
 The applier holds the accounts lock (`proxy-accounts/.lock`, the one `proxy_accounts.py` takes) for the whole run, and takes up to 64 pending requests at a time, oldest first. A batch ends before a second request for the same account, which goes into the next batch, so every request is verified on its own:
 
 1. Applies the requests to a copy of the accounts in memory; one that cannot apply (e.g. `add` of an existing account) fails alone.
-2. Renders every config in memory. Disabled accounts are left out of every inbound.
+2. Renders every config in memory, refusing an HA example in which `ha-general` could reach a private line. Disabled accounts are left out of every inbound; non-admins out of `ha-all` and the private lines.
 3. Runs `xray run -test` on each changed Xray config, with the image `xray-ha` is pinned to in the Compose file (digest required), the config on stdin and no network.
 4. Checks that `xray-ha` runs, keeps the files it is about to replace in `proxy-accounts/.apply-backup/`, and replaces them atomically: the configs, then the accounts file.
-5. Restarts a fixed set of Compose services: `xray-ha`; with raw auth on, every running line; a line whose config changed; `blackbox-exporter` only if its config changed, which a request cannot cause.
-6. Verifies through the HA entry's HTTP port, fetching the probe URL: `svc-monitor` and every newly added, enabled or rotated account must get 204, while every disabled or removed account, every replaced password and a wrong password must get 407. A running entry answers 407 whatever the lines do.
-7. On a wrong answer, or no 407 within the timeout, it restores the files, restarts the same services and checks `svc-monitor` again (`failed`). When only the 204s are missing, the change stays (`unconfirmed`).
+5. Restarts a fixed set of Compose services: `xray-ha`; with raw auth on, every running line; a line whose config changed, which for a private line is every change to the admins it accepts (`admin-on`, `admin-off`, and `rotate`, `disable`, `enable` or `remove` of an admin); `blackbox-exporter` only if its config changed, which a request cannot cause.
+6. Verifies through the HTTP ports of `ha-general` and `ha-all`, fetching the probe URL. On each entry, `svc-monitor` and every login the entry newly accepts (added, enabled, rotated, and on `ha-all` an admin turned on) must get 204, while every login it no longer accepts (disabled, removed, a replaced password, and on `ha-all` an admin turned off) and a wrong password must get 407. `ha-all` must also refuse with 407 every non-admin the batch changed, and one it did not. A running entry answers 407 whatever the lines do. The private lines' own entries are not probed: their configs are rendered from the same accounts as `ha-all`.
+7. On a wrong answer, or no 407 within the timeout, it restores the files, restarts the same services and checks `svc-monitor` on both entries again (`failed`). When only the 204s are missing, the change stays (`unconfirmed`).
 
 Then it marks the backup committed, writes `proxy-accounts/applied.json`, the results and the statuses, drops the backup and writes `status.json`. `applied.json` holds the hash of the accounts file at the applier's last apply; `status` compares it with the current file (`unapplied_changes`), which differs after a change with `proxy_accounts.py` until the next apply. If the applier is killed after taking a batch and before the commit, the next run restores the files from the backup, if any were replaced, and marks the batch `failed` (`interrupted`). If it is killed after the commit, the next run finishes the batch instead: it writes the remaining statuses and `applied.json`, restarts nothing, and reports a result not yet written as `result: false`. Passwords are never logged or written to a status: errors are scrubbed of every known password.
 
 ## Restart impact
 
-Every change restarts the HA entry, and with raw auth on also every line. Established connections through them drop: downloads break and clients have to retry. Requests that start during the restart fail for a few seconds, as when `xray-ha` starts ([the HA entry](../../../docs/00_Network_Proxy.md#the-ha-entry)). A rollback restarts them once more, and a failed apply can keep the entry down for up to the verify timeout. Requests that arrive together are applied with one restart; each further request for the same account adds one. A request that changes nothing (enabling an enabled account) restarts nothing.
+Every change restarts the HA entry, a change to the admins also the private lines, and with raw auth on every line. Established connections through them drop: downloads break and clients have to retry. Requests that start during the restart fail for a few seconds, as when `xray-ha` starts ([the HA entry](../../../docs/00_Network_Proxy.md#the-ha-entry)). A rollback restarts them once more, and a failed apply can keep the entry down for up to the verify timeout. Requests that arrive together are applied with one restart; each further request for the same account adds one. A request that changes nothing (enabling an enabled account) restarts nothing.
 
-While raw auth is off, disabling an account stops it only at the HA entry: the lines' own entries require no account, so it can still use them.
+While raw auth is off, disabling an account stops it only at the HA entries (and, for an admin, the private lines): the public lines' own entries require no account, so it can still use them.
 
 ## Tests
 
@@ -97,4 +98,4 @@ While raw auth is off, disabling an account stops it only at the HA entry: the l
 cd services/proxy-portal/applier && python3 -B -m unittest discover -s tests -v
 ```
 
-They cover request validation, the spool's handling of links, folders, foreign owners and oversized files, requests that cannot be read or removed, several requests for one account, and the apply steps with injected failures: render, `xray -test`, restart, verification, rollback, and an apply interrupted before and after the commit. Docker and the HA entry are simulated.
+They cover request validation, the spool's handling of links, folders, foreign owners and oversized files, requests that cannot be read or removed, several requests for one account, `admin-on` and `admin-off` with the private line's restart, and the apply steps with injected failures: render, `xray -test`, restart, verification (including an `ha-all` that lets a non-admin in, or refuses a new admin), rollback, and an apply interrupted before and after the commit. Docker and the HA entries are simulated.

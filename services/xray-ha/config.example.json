@@ -53,6 +53,33 @@
         },
         {
             "listen": "0.0.0.0",
+            "port": 8890,
+            "protocol": "http",
+            "settings": {
+                "allowTransparent": false,
+                "timeout": 300,
+                "users": [
+                    {
+                        "user": "RENDER:proxy_accounts.py",
+                        "pass": "PASSWORD"
+                    }
+                ]
+            },
+            "tag": "ha-all_http_IN"
+        },
+        {
+            "listen": "0.0.0.0",
+            "port": 1090,
+            "protocol": "socks",
+            "settings": {
+                "auth": "password",
+                "udp": true,
+                "users": []
+            },
+            "tag": "ha-all_socks_IN"
+        },
+        {
+            "listen": "0.0.0.0",
             "port": 10085,
             "protocol": "dokodemo-door",
             "settings": {
@@ -113,11 +140,72 @@
                     }
                 ]
             }
+        },
+        {
+            "protocol": "socks",
+            "tag": "private-jpty1-bwh-2tb",
+            "settings": {
+                "servers": [
+                    {
+                        "address": "xray-jpty1-bwh-2tb",
+                        "port": 1089
+                    }
+                ]
+            }
+        },
+        {
+            "protocol": "socks",
+            "tag": "private-miyaip-uk-01_relay_jpty1-bwh-2tb",
+            "settings": {
+                "servers": [
+                    {
+                        "address": "xray-miyaip-uk-01_relay_jpty1-bwh-2tb",
+                        "port": 1089
+                    }
+                ]
+            }
+        },
+        {
+            "protocol": "socks",
+            "tag": "private-miyaip-uk-01_relay_usca5-bwh-sla-2tb",
+            "settings": {
+                "servers": [
+                    {
+                        "address": "xray-miyaip-uk-01_relay_usca5-bwh-sla-2tb",
+                        "port": 1089
+                    }
+                ]
+            }
+        },
+        {
+            "protocol": "socks",
+            "tag": "private-miyaip-jp-01_relay_usca5-bwh-sla-2tb",
+            "settings": {
+                "servers": [
+                    {
+                        "address": "xray-miyaip-jp-01_relay_usca5-bwh-sla-2tb",
+                        "port": 1089
+                    }
+                ]
+            }
+        },
+        {
+            "protocol": "socks",
+            "tag": "private-miyaip-jp-01_relay_jpty1-bwh-2tb",
+            "settings": {
+                "servers": [
+                    {
+                        "address": "xray-miyaip-jp-01_relay_jpty1-bwh-2tb",
+                        "port": 1089
+                    }
+                ]
+            }
         }
     ],
     "observatory": {
         "subjectSelector": [
-            "pool-"
+            "pool-",
+            "private-"
         ],
         "probeUrl": "https://www.google.com/generate_204",
         "probeInterval": "15s",
@@ -130,6 +218,17 @@
                 "tag": "ha-general",
                 "selector": [
                     "pool-"
+                ],
+                "strategy": {
+                    "type": "leastPing"
+                },
+                "fallbackTag": "blackhole"
+            },
+            {
+                "tag": "ha-all",
+                "selector": [
+                    "pool-",
+                    "private-"
                 ],
                 "strategy": {
                     "type": "leastPing"
@@ -152,6 +251,14 @@
                     "socks_IN"
                 ],
                 "balancerTag": "ha-general"
+            },
+            {
+                "type": "field",
+                "inboundTag": [
+                    "ha-all_http_IN",
+                    "ha-all_socks_IN"
+                ],
+                "balancerTag": "ha-all"
             }
         ]
     }

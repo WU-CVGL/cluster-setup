@@ -66,7 +66,7 @@ We are currently offering these web services:
 - [PyPI cache](proxpi/README.md) (`proxpi`, port `5000`: pip's default index in Determined tasks)
 - [Determined watchdog](determined-watchdog/README.md) (kills idle GPU shells and JupyterLab notebooks; renews the Determined token for Prometheus)
 - V2Ray Exporter
-- Proxy HA entry `xray-ha` (ports `30889`, `30089`, with [accounts](../docs/00_Network_Proxy.md#accounts)) and `blackbox-exporter`, its probes ([docs/00](../docs/00_Network_Proxy.md#the-ha-entry))
+- Proxy HA entry `xray-ha`: `ha-general` (ports `30889`, `30089`, with [accounts](../docs/00_Network_Proxy.md#accounts)) and, for admins, `ha-all` (ports `31889`, `31089`, [admin entries](../docs/00_Network_Proxy.md#admin-entries)); `blackbox-exporter`, its probes ([docs/00](../docs/00_Network_Proxy.md#the-ha-entry))
 - frp (server `frps`, host network)
 - RustDesk server (`hbbs`, `hbbr`, host network)
 - On every node, from [`node-exporter/`](node-exporter/docker-compose.yaml) (see [7.](#7-set-up-endpoints-for-node-exporter-and-other-monitoring-services)):

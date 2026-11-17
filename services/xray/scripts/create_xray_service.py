@@ -32,7 +32,7 @@ except ImportError:  # 没有 PyYAML 时使用基于正则的简单解析
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 from XrayConfigHandler import DEFAULT_API_PORT, DEFAULT_HTTP_PORT, DEFAULT_SOCKS_PORT, XrayConfigHandler
-from proxy_accounts import Accounts
+from proxy_accounts import PUBLIC_LINES_FILE, Accounts, public_lines
 
 
 # 容器内固定端口 (现有 compose 服务和 exporter 都依赖这些值)
@@ -197,6 +197,7 @@ class XrayServiceCreator:
         self.xray_dir = self.base_dir / "xray"
         self.docker_compose_file = self.base_dir / "docker-compose.yml"
         self.prometheus_file = self.base_dir / "prometheus" / "prometheus.yml"
+        self.public_lines_file = self.base_dir / PUBLIC_LINES_FILE
 
     def check_port_available(self, port: int) -> Tuple[bool, Optional[str]]:
         """
@@ -212,18 +213,27 @@ class XrayServiceCreator:
         owner = host_port_owners(services).get(port)
         return owner is None, owner
 
-    def raw_inbound_users(self) -> Optional[List[Tuple[str, str]]]:
+    def raw_inbound_users(self, private: bool) -> Optional[List[Tuple[str, str]]]:
         """
-        proxy-accounts/accounts.json 中 raw_auth 为 true 时返回所有账号 (线路入站要求的账号，
-        与 proxy_accounts.py render 写入的相同)，否则返回 None (入站不要求认证)
+        新线路入站要求的账号，与 proxy_accounts.py render 写入的相同 (Accounts.line_users)：
+        私有线路始终要求账号 (启用的管理员、svc-ha、svc-monitor)；公共线路在 raw_auth 为 true 时
+        要求所有启用的账号，否则返回 None (入站不要求认证)
         """
         accounts = Accounts(self.base_dir)
-        if not accounts.raw_auth:
-            return None
-        users = accounts.pairs()
-        if not users:
+        if private:
+            missing = [name for name in ("svc-ha", "svc-monitor") if name not in accounts.accounts]
+            if missing:
+                raise ValueError(f"私有线路要求账号，但 {accounts.path} 中没有 {', '.join(missing)}")
+        users = accounts.line_users(private)
+        if users is not None and not users:
             raise ValueError(f"raw-auth 已开启，但 {accounts.path} 中没有账号")
         return users
+
+    def render_public_lines(self, text: str, service_name: str) -> str:
+        """返回把 service_name 加到 xray/public-lines.txt 末尾之后的内容 (不写文件)"""
+        if text and not text.endswith("\n"):
+            text += "\n"
+        return text + service_name + "\n"
 
     def generate_xray_config(
         self,
@@ -497,12 +507,14 @@ class XrayServiceCreator:
         share_url: str,
         service_name: str,
         http_port: int,
-        socks_port: int
+        socks_port: int,
+        *,
+        private: bool
     ) -> None:
         """
         创建完整的 xray 服务
 
-        先校验参数、生成并检查全部三个文件的新内容，全部通过后才写入；
+        先校验参数、生成并检查全部文件的新内容，全部通过后才写入；
         写入过程中出错时恢复已写入的文件。
 
         Args:
@@ -510,8 +522,12 @@ class XrayServiceCreator:
             service_name: 简短的服务名称（如: jp-osaka-xuqi）
             http_port: HTTP 代理端口
             socks_port: SOCKS5 代理端口
+            private: 必须明确给出，没有默认值。True: 私有线路 (只有管理员可用，始终要求账号)；
+                False: 公共线路，加入 xray/public-lines.txt
         """
-        print(f"正在创建 xray 服务: {service_name}")
+        if not isinstance(private, bool):
+            raise ValueError("必须明确指定线路类型: --public 或 --private")
+        print(f"正在创建 xray 服务: {service_name} ({'私有，只有管理员可用' if private else '公共'})")
         print(f"HTTP 端口: {http_port}, SOCKS5 端口: {socks_port}")
 
         # 检查参数
@@ -524,6 +540,12 @@ class XrayServiceCreator:
             raise FileNotFoundError(f"找不到 prometheus.yml: {self.prometheus_file}")
         compose_text = self._read_text(self.docker_compose_file)
         prometheus_text = self._read_text(self.prometheus_file)
+        if not self.public_lines_file.exists():
+            raise FileNotFoundError(f"找不到 {PUBLIC_LINES_FILE}: {self.public_lines_file}")
+        public_text = self._read_text(self.public_lines_file)
+        listed = service_name in public_lines(self.base_dir)
+        if private and listed:
+            raise ValueError(f"{service_name} 已列在 {PUBLIC_LINES_FILE} 中 (公共线路)，不能创建为私有线路")
         if yaml is None:
             print("⚠  未安装 PyYAML，使用简单的正则解析 docker-compose.yml")
         services = compose_services(compose_text)
@@ -545,10 +567,12 @@ class XrayServiceCreator:
 
         print("✓ 端口检查通过")
 
-        # raw-auth 开启时，新线路的入站要求所有代理账号 (见 proxy_accounts.py)
-        inbound_users = self.raw_inbound_users()
+        # 私有线路始终要求账号；公共线路在 raw-auth 开启时要求所有代理账号 (见 proxy_accounts.py)
+        inbound_users = self.raw_inbound_users(private)
         if inbound_users is not None:
-            print(f"✓ raw-auth 已开启: 入站要求 {len(inbound_users)} 个代理账号")
+            reason = "私有线路" if private else "raw-auth 已开启"
+            print(f"✓ {reason}: 入站要求 {len(inbound_users)} 个代理账号")
+        new_public_text = None if private or listed else self.render_public_lines(public_text, service_name)
 
         # 解析分享 URL
         print("正在解析分享 URL...")
@@ -600,6 +624,12 @@ class XrayServiceCreator:
                 written_files.append((self.prometheus_file, prometheus_text))
                 self._write_text(self.prometheus_file, new_prometheus_text)
                 print("✓ 已更新 prometheus.yml")
+
+            # 公共线路: 加入 xray/public-lines.txt
+            if new_public_text is not None:
+                written_files.append((self.public_lines_file, public_text))
+                self._write_text(self.public_lines_file, new_public_text)
+                print(f"✓ 已加入 {PUBLIC_LINES_FILE}")
         except BaseException:
             print("❌ 写入失败，正在恢复已修改的文件...", file=sys.stderr)
             for path, original in reversed(written_files):
@@ -618,6 +648,8 @@ class XrayServiceCreator:
         print(f"  1. 检查配置文件: {config_file}")
         print(f"  2. 启动服务: docker compose up -d xray-{service_name} xray-{service_name}-exporter")
         print("  3. 重新加载 Prometheus 配置: docker compose kill -s SIGHUP prometheus")
+        if private:
+            print("     私有线路: 只有管理员可用，入站始终要求账号；只有 ha-all 能经过它")
         login = "<user>:<password>@" if inbound_users is not None else ""
         print(f"  4. 验证代理: curl -x http://{login}localhost:{http_port} -I https://www.google.com")
         socks = f"-x socks5h://{login}localhost:{socks_port}" if login else f"--socks5-hostname localhost:{socks_port}"
@@ -630,8 +662,8 @@ def main():
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""
 示例:
-  %(prog)s vmess://... jp-tokyo 56889 56089
-  %(prog)s vless://... us-east 41889 41089
+  %(prog)s vmess://... jp-tokyo 56889 56089 --private
+  %(prog)s vless://... us-east 41889 41089 --public
         """
     )
 
@@ -657,6 +689,16 @@ def main():
         help='SOCKS5 代理端口'
     )
 
+    access = parser.add_mutually_exclusive_group(required=True)
+    access.add_argument(
+        '--public', dest='private', action='store_false',
+        help='公共线路: 所有用户可用，加入 xray/public-lines.txt'
+    )
+    access.add_argument(
+        '--private', dest='private', action='store_true',
+        help='私有线路: 只有管理员可用，入站始终要求账号'
+    )
+
     parser.add_argument(
         '--base-dir',
         type=str,
@@ -672,7 +714,8 @@ def main():
             args.share_url,
             args.service_name,
             args.http_port,
-            args.socks_port
+            args.socks_port,
+            private=args.private
         )
     except Exception as e:
         print(f"❌ 错误: {e}", file=sys.stderr)

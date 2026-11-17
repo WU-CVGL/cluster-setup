@@ -13,9 +13,9 @@ The spool (default /var/lib/proxy-portal/spool):
                        the requester deletes it after reading, run deletes it after RESULT_TTL seconds
   status.json          the accounts without passwords, for the portal
 
-A request is {"id": ..., "op": "add|rotate|enable|disable|remove", "username": ...} and nothing else.
-Passwords are generated here, never taken from a request. svc-ha and svc-monitor are managed with
-proxy_accounts.py only. Settings come from the environment (PROXY_APPLY_*) or the options below, never
+A request is {"id": ..., "op": "add|rotate|enable|disable|remove|admin-on|admin-off", "username": ...}
+and nothing else. Passwords are generated here, never taken from a request. svc-ha and svc-monitor are
+managed with proxy_accounts.py only; service accounts are never admins. Settings come from the environment (PROXY_APPLY_*) or the options below, never
 from a request. Python 3.8+, standard library only.
 """
 
@@ -43,7 +43,7 @@ sys.path.insert(0, str(SERVICES_DIR / "xray" / "scripts"))
 import proxy_accounts as pa  # noqa: E402
 
 DEFAULT_SPOOL = Path("/var/lib/proxy-portal/spool")
-OPS = ("add", "rotate", "enable", "disable", "remove")
+OPS = ("add", "rotate", "enable", "disable", "remove", "admin-on", "admin-off")
 REQUEST_KEYS = {"id", "op", "username"}
 ID_RE = re.compile(r"[a-z0-9][a-z0-9-]{7,63}")
 REQUEST_FILE_RE = re.compile(r"([a-z0-9][a-z0-9-]{7,63})\.json")
@@ -58,7 +58,9 @@ BACKUP_DIR = Path("proxy-accounts/.apply-backup")
 MANIFEST = "manifest.json"
 
 Run = Callable[[Sequence[str], Optional[str], float], Tuple[int, str, str]]
-Probe = Callable[[str, str], Tuple[str, Optional[int]]]
+Probe = Callable[[str, str, str], Tuple[str, Optional[int]]]  # (entry, user, password): ha-general or ha-all
+ENTRIES = (pa.GENERAL, pa.ALL)
+Login = Tuple[str, str, str, str]  # (label, entry, user, password)
 
 
 class RequestError(Exception):
@@ -132,6 +134,8 @@ def apply_op(accounts: pa.Accounts, request: Dict[str, str]) -> Tuple[bool, Opti
     if op == "remove":
         accounts.remove(name)
         return True, None
+    if op in ("admin-on", "admin-off"):
+        return accounts.set_admin(name, op == "admin-on"), None
     return accounts.set_enabled(name, op == "enable"), None
 
 
@@ -512,6 +516,7 @@ class Applier:
             return self.finish(records, {}, [])
         old_passwords = dict(accounts.accounts)
         old_enabled = {name for name in accounts.accounts if accounts.enabled(name)}
+        old_admins = set(accounts.admins)
         passwords = {}  # type: Dict[str, str]
         active, changed_any = [], False
         for request, uid in batch:
@@ -561,7 +566,7 @@ class Applier:
                 raise ApplyError("swap", f"{type(e).__name__}: {e.strerror or e}")
             log(f"files replaced; restarting {' '.join(restart)}")
             self.compose.restart(restart)
-            accept, refuse = self.expectations(old_passwords, old_enabled, accounts)
+            accept, refuse = self.expectations(old_passwords, old_enabled, old_admins, accounts)
             outcome, detail = self.verify(accept, refuse)
             if outcome == "failed":
                 raise ApplyError("verify", detail)
@@ -641,7 +646,10 @@ class Applier:
                 self.delivered[record["username"]] = request_id
 
     def restart_set(self, accounts: pa.Accounts, outputs: List[Tuple[Path, str]]) -> List[str]:
-        """xray-ha; the lines, with raw auth or when their config changed; blackbox-exporter when its config did."""
+        """
+        xray-ha; every line with raw auth, and a line whose config changed (a private line whenever the admins
+        it accepts change); blackbox-exporter when its config did.
+        """
         running = self.compose.running()
         if HA_SERVICE not in running:
             raise ApplyError("precheck", f"{HA_SERVICE} is not running")
@@ -657,37 +665,60 @@ class Applier:
         return restart
 
     @staticmethod
-    def expectations(old_passwords: Dict[str, str], old_enabled: Set[str], accounts: pa.Accounts):
-        """(accept, refuse): (label, user, password) logins through the HA entry that must get 204 or 407."""
-        def on_ha(name):
-            return name != pa.RELAY
-        accept = [(pa.MONITOR, pa.MONITOR, accounts.accounts[pa.MONITOR])]
-        refuse = []
-        for name in sorted(set(old_passwords) | set(accounts.accounts)):
-            if not on_ha(name) or name == pa.MONITOR:
+    def expectations(old_passwords: Dict[str, str], old_enabled: Set[str], old_admins: Set[str],
+                     accounts: pa.Accounts) -> Tuple[List[Login], List[Login]]:
+        """
+        (accept, refuse): logins through the HA entries that must get 204 or 407. On ha-general and on
+        ha-all, as on each the accounts it accepts: svc-monitor passes; a new, enabled or rotated login
+        passes; a disabled or removed one, or a replaced password, is refused. ha-all also refuses every
+        non-admin this batch changed, and one non-admin it did not, so each apply shows that ha-all keeps
+        non-admins out.
+        """
+        pw = accounts.accounts
+        accept = [(f"{pa.MONITOR} on {entry}", entry, pa.MONITOR, pw[pa.MONITOR]) for entry in ENTRIES]
+        refuse = []  # type: List[Login]
+        non_admin_refused = False
+        for name in sorted(set(old_passwords) | set(pw)):
+            if name in pa.PROTECTED:
                 continue
-            was = name in old_enabled
-            now = accounts.enabled(name)
-            if was and (not now or accounts.accounts[name] != old_passwords[name]):
-                label = name if not now else f"{name} (previous password)"
-                refuse.append((label, name, old_passwords[name]))
-            if now and (not was or accounts.accounts[name] != old_passwords[name]):
-                accept.append((name, name, accounts.accounts[name]))
+            old, new = old_passwords.get(name), pw.get(name)
+            rotated = old is not None and new is not None and old != new
+            states = {pa.GENERAL: (name in old_enabled, accounts.enabled(name)),
+                      pa.ALL: (name in old_enabled and name in old_admins, accounts.is_admin(name))}
+            for entry, (was, now) in states.items():
+                if was and (not now or rotated):
+                    label = name if not now else f"{name} (previous password)"
+                    refuse.append((f"{label} on {entry}", entry, name, old))
+                if now and (not was or rotated):
+                    accept.append((f"{name} on {entry}", entry, name, new))
+            changed = old is None or rotated or (name in old_enabled) != accounts.enabled(name) \
+                or (name in old_admins) != (name in accounts.admins)
+            if new is not None and accounts.enabled(name) and not accounts.is_admin(name):
+                if changed and (pa.ALL, name, new) not in [(e, u, p) for _, e, u, p in refuse]:
+                    refuse.append((f"{name} (not an admin) on {pa.ALL}", pa.ALL, name, new))
+                non_admin_refused |= changed
+        if not non_admin_refused:
+            other = next((name for name in sorted(pw) if name not in pa.PROTECTED and accounts.enabled(name)
+                          and not accounts.is_admin(name)), None)
+            if other is not None:
+                refuse.append((f"{other} (not an admin) on {pa.ALL}", pa.ALL, other, pw[other]))
         return accept, refuse
 
-    def verify(self, accept, refuse) -> Tuple[str, str]:
+    def verify(self, accept: List[Login], refuse: List[Login]) -> Tuple[str, str]:
         """
         ("ok"|"failed"|"unconfirmed", detail). A login that must be refused gets 407 from a running entry
-        whatever the lines do, and a wrong password always must (the canary): no 407 by the deadline is a
-        failure. A login that must pass needs a working line for its 204: no answer by then is unconfirmed.
+        whatever the lines do, and a wrong password always must (the canary, on each entry): no 407 by the
+        deadline is a failure. A login that must pass needs a working line for its 204: no answer by then
+        is unconfirmed.
         """
         deadline = self.clock() + self.verify_timeout
         accept = list(accept)
-        refuse = list(refuse) + [("a wrong password", pa.MONITOR, "wrong-" + pa.new_password())]
+        refuse = list(refuse) + [(f"a wrong password on {entry}", entry, pa.MONITOR, "wrong-" + pa.new_password())
+                                 for entry in ENTRIES]
         last = {}
         while True:
             for item in list(refuse):
-                kind, code = self.probe(item[1], item[2])
+                kind, code = self.probe(item[1], item[2], item[3])
                 if kind == "status" and code == 407:
                     refuse.remove(item)
                 elif kind == "status":
@@ -695,7 +726,7 @@ class Applier:
                 else:
                     last[item[0]] = kind
             for item in list(accept):
-                kind, code = self.probe(item[1], item[2])
+                kind, code = self.probe(item[1], item[2], item[3])
                 if kind == "status" and code == 204:
                     accept.remove(item)
                 elif kind == "status" and code == 407:
@@ -707,8 +738,8 @@ class Applier:
             if self.clock() >= deadline:
                 if refuse:
                     return "failed", f"no 407 from {HA_SERVICE} in {self.verify_timeout:.0f} s for " + \
-                        ", ".join(f"{label} ({last.get(label, '-')})" for label, _, _ in refuse)
-                return "unconfirmed", "no 204 for " + ", ".join(f"{p} ({last.get(p, '-')})" for p, _, _ in accept)
+                        ", ".join(f"{label} ({last.get(label, '-')})" for label, _, _, _ in refuse)
+                return "unconfirmed", "no 204 for " + ", ".join(f"{p} ({last.get(p, '-')})" for p, _, _, _ in accept)
             self.sleep(self.verify_interval)
 
     # -- backup, rollback, recovery
@@ -746,7 +777,7 @@ class Applier:
                 os.chmod(str(path), mode)
 
     def rollback(self, snapshot, restart: List[str]) -> bool:
-        """Restore the files and restart the same services; True when the HA entry answers svc-monitor again."""
+        """Restore the files and restart the same services; True when both HA entries answer svc-monitor again."""
         try:
             self.restore_files(snapshot)
         except OSError as e:
@@ -757,7 +788,9 @@ class Applier:
             if restart:
                 self.compose.restart(restart)
                 accounts = pa.Accounts(self.base)
-                outcome, detail = self.verify([(pa.MONITOR, pa.MONITOR, accounts.accounts[pa.MONITOR])], [])
+                monitor = accounts.accounts[pa.MONITOR]
+                outcome, detail = self.verify([(f"{pa.MONITOR} on {entry}", entry, pa.MONITOR, monitor)
+                                               for entry in ENTRIES], [])
                 log(f"rollback: {outcome} {detail}".rstrip())
                 return outcome != "failed"
             return True
@@ -856,7 +889,10 @@ def main(argv: Optional[List[str]] = None) -> int:
     parser.add_argument("--compose-file", type=Path, default=env("PROXY_APPLY_COMPOSE_FILE"),
                         help="default: <services-dir>/docker-compose.yml")
     parser.add_argument("--compose-project", default=env("PROXY_APPLY_COMPOSE_PROJECT") or None)
-    parser.add_argument("--ha-http", type=host_port, default=env("PROXY_APPLY_HA_HTTP") or "127.0.0.1:30889")
+    parser.add_argument("--ha-http", type=host_port, default=env("PROXY_APPLY_HA_HTTP") or "127.0.0.1:30889",
+                        help="ha-general's HTTP port")
+    parser.add_argument("--ha-all-http", type=host_port, default=env("PROXY_APPLY_HA_ALL_HTTP") or "127.0.0.1:31889",
+                        help="ha-all's HTTP port")
     parser.add_argument("--probe-url", default=env("PROXY_APPLY_PROBE_URL") or "https://www.google.com/generate_204")
     parser.add_argument("--verify-timeout", type=float, default=float(env("PROXY_APPLY_VERIFY_TIMEOUT") or 60))
     parser.add_argument("command", choices=("init", "run", "status"))
@@ -878,8 +914,10 @@ def main(argv: Optional[List[str]] = None) -> int:
         return 0
     compose = Compose(args.compose_file or args.services_dir / "docker-compose.yml", args.compose_project)
 
-    def probe(user, password):
-        return proxy_probe(args.ha_http, args.probe_url, user, password)
+    entries = {pa.GENERAL: args.ha_http, pa.ALL: args.ha_all_http}
+
+    def probe(entry, user, password):
+        return proxy_probe(entries[entry], args.probe_url, user, password)
 
     try:
         return Applier(args.services_dir, spool, compose, probe, verify_timeout=args.verify_timeout).run()

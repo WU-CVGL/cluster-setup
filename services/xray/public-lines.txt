@@ -1,0 +1,9 @@
+# The public lines: their own entries are open to every user (with an account once raw auth is on), and the
+# HA entry ha-general balances over them. Every line not listed here is private: its own entry always
+# requires an account and accepts only admins (and svc-ha, svc-monitor), and only ha-all reaches it.
+# A forgotten line is therefore private, never public. One line name (xray/<name>/) per line.
+# Read by xray/scripts/proxy_accounts.py and xray/scripts/create_xray_service.py (docs/00_Network_Proxy.md).
+usca5-bwh-sla-1tb
+usca1-bwh-megaboxpro-2tb
+usca6-bwh-1tb
+us-west-racknerd-12tb

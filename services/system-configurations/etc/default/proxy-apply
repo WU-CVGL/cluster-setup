@@ -4,8 +4,10 @@ PROXY_APPLY_SERVICES_DIR=/home/<admin>/ws/cluster-setup/services
 # The user that writes the requests: the portal's uid.
 PROXY_APPLY_REQUESTER=proxy-portal
 PROXY_APPLY_SPOOL=/var/lib/proxy-portal/spool
-# The HA entry's HTTP port on this host, and the URL fetched through it to verify a change.
+# The HTTP ports of the HA entries ha-general and ha-all on this host, and the URL fetched through them
+# to verify a change.
 PROXY_APPLY_HA_HTTP=127.0.0.1:30889
+PROXY_APPLY_HA_ALL_HTTP=127.0.0.1:31889
 PROXY_APPLY_PROBE_URL=https://www.google.com/generate_204
 PROXY_APPLY_VERIFY_TIMEOUT=60
 # Optional: PROXY_APPLY_COMPOSE_FILE (default <services>/docker-compose.yml), PROXY_APPLY_COMPOSE_PROJECT.

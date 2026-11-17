@@ -104,22 +104,24 @@ class _TempServicesMixin:
         self.prometheus_file = self.base / 'prometheus' / 'prometheus.yml'
         shutil.copyfile(str(self.compose_source), str(self.compose_file))
         shutil.copyfile(str(self.prometheus_source), str(self.prometheus_file))
+        self.public_file = self.base / 'xray' / 'public-lines.txt'
+        shutil.copyfile(str(REPO_SERVICES_DIR / 'xray' / 'public-lines.txt'), str(self.public_file))
         self.creator = XrayServiceCreator(base_dir=str(self.base))
 
     def snapshot(self):
         tree = sorted(str(p.relative_to(self.base)) for p in (self.base / 'xray').rglob('*'))
-        return read(self.compose_file), read(self.prometheus_file), tree
+        return read(self.compose_file), read(self.prometheus_file), tree, read(self.public_file)
 
-    def create(self, name, http_port, socks_port, url=VLESS_URL):
+    def create(self, name, http_port, socks_port, url=VLESS_URL, private=False):
         out = io.StringIO()
         with contextlib.redirect_stdout(out), contextlib.redirect_stderr(io.StringIO()):
-            self.creator.create_service(url, name, http_port, socks_port)
+            self.creator.create_service(url, name, http_port, socks_port, private=private)
         return out.getvalue()
 
-    def assertRejected(self, name, http_port, socks_port, message, exc=ValueError):
+    def assertRejected(self, name, http_port, socks_port, message, exc=ValueError, private=False):
         before = self.snapshot()
         with self.assertRaises(exc) as ctx:
-            self.create(name, http_port, socks_port)
+            self.create(name, http_port, socks_port, private=private)
         self.assertIn(message, str(ctx.exception))
         self.assertEqual(self.snapshot(), before, "拒绝时不能修改任何文件")
 
@@ -238,7 +240,7 @@ class CreateServiceYamlTest(_TempServicesMixin, unittest.TestCase):
 
     def test_create_service_with_underscore_name(self):
         name = 'csr_new-node_01'
-        old_compose, old_prometheus, _ = self.snapshot()
+        old_compose, old_prometheus, _, old_public = self.snapshot()
         output = self.create(name, 56889, 56089)
 
         # 两个服务块与旧模板逐字一致，插在最后一个 xray exporter (名字带 '_') 之后
@@ -256,6 +258,8 @@ class CreateServiceYamlTest(_TempServicesMixin, unittest.TestCase):
         self.assertIn('docker compose kill -s SIGHUP prometheus', output)
         self.assertIn('curl -x http://localhost:56889', output)
         self.assertNotIn('docker-compose ', output)
+        # a public line: added to the public lines
+        self.assertEqual(read(self.public_file), old_public + name + '\n')
 
         # 再次运行同名服务: 拒绝，文件不变
         self.assertRejected(name, 57889, 57089, '已存在')
@@ -299,12 +303,67 @@ class CreateServiceYamlTest(_TempServicesMixin, unittest.TestCase):
                 self.create('csr-rollback', 56889, 56089)
         self.assertEqual(self.snapshot(), before)
 
+    def test_failure_writing_public_lines_restores_everything(self):
+        before = self.snapshot()
+        with self._fail_on_write(self.public_file):
+            with self.assertRaises(OSError):
+                self.create('csr-rollback', 56889, 56089)
+        self.assertEqual(self.snapshot(), before)
+
     def test_failure_writing_config_restores_everything(self):
         before = self.snapshot()
         with self._fail_on_write(self.base / 'xray' / 'csr-rollback' / 'config' / 'config.json'):
             with self.assertRaises(OSError):
                 self.create('csr-rollback', 56889, 56089)
         self.assertEqual(self.snapshot(), before)
+
+    def test_class_is_required(self):
+        with self.assertRaises(TypeError):
+            self.creator.create_service(VLESS_URL, 'csr-x', 56889, 56089)
+        for private in (None, 0, 'yes'):
+            self.assertRejected('csr-x', 56889, 56089, '--public', private=private)
+        for argv in ([], ['--public', '--private']):
+            with mock.patch.object(sys, 'argv', ['create_xray_service.py', VLESS_URL, 'csr-x', '56889', '56089',
+                                                 '--base-dir', str(self.base)] + argv), \
+                    contextlib.redirect_stderr(io.StringIO()), self.assertRaises(SystemExit) as ctx:
+                cxs.main()
+            self.assertEqual(ctx.exception.code, 2)
+        self.assertFalse((self.base / 'xray' / 'csr-x').exists())
+
+    def test_private_line_requires_admin_accounts(self):
+        self.write_accounts(False, {'alice': 'pw-a', 'boss': 'pw-b', 'svc-ha': 'pw-h', 'svc-monitor': 'pw-m'})
+        data = json.loads(read(self.base / 'proxy-accounts' / 'accounts.json'))
+        data = {'version': 3, 'raw_auth': False, 'accounts': {
+            name: {'password': pw, 'enabled': True, 'admin': name == 'boss'} for name, pw in data['accounts'].items()}}
+        (self.base / 'proxy-accounts' / 'accounts.json').write_text(json.dumps(data))
+        public = read(self.public_file)
+        output = self.create('csr-private', 56889, 56089, private=True)
+        path = self.base / 'xray' / 'csr-private' / 'config' / 'config.json'
+        self.assertEqual(stat.S_IMODE(os.stat(path).st_mode), 0o600)
+        config = json.loads(read(path))
+        users = [{'user': 'boss', 'pass': 'pw-b'}, {'user': 'svc-ha', 'pass': 'pw-h'},
+                 {'user': 'svc-monitor', 'pass': 'pw-m'}]
+        for inbound in config['inbounds'][:2]:
+            self.assertEqual(inbound['settings']['users'], users)
+        self.assertEqual(read(self.public_file), public)  # not listed: private
+        self.assertIn('ha-all', output)
+        self.assertNotIn('pw-', output)
+
+    def test_private_line_without_service_accounts_rejected(self):
+        self.write_accounts(False, {'alice': 'pw-a', 'svc-monitor': 'pw-m'})
+        self.assertRejected('csr-private', 56889, 56089, 'svc-ha', private=True)
+
+    def test_private_line_listed_as_public_rejected(self):
+        self.write_accounts(False, {'svc-ha': 'pw-h', 'svc-monitor': 'pw-m'})
+        self.public_file.write_text(read(self.public_file) + 'csr-listed\n')
+        self.assertRejected('csr-listed', 56889, 56089, 'public-lines.txt', private=True)
+
+    def test_missing_public_lines_file_rejected(self):
+        self.public_file.unlink()
+        before = (read(self.compose_file), read(self.prometheus_file))
+        with self.assertRaises(FileNotFoundError):
+            self.create('csr-x', 56889, 56089)
+        self.assertEqual((read(self.compose_file), read(self.prometheus_file)), before)
 
     def write_accounts(self, raw_auth, accounts):
         path = self.base / 'proxy-accounts' / 'accounts.json'
@@ -437,7 +496,7 @@ class RepoFilesYamlTest(_TempServicesMixin, unittest.TestCase):
     prometheus_source = REPO_SERVICES_DIR / 'prometheus' / 'prometheus.yml'
 
     def test_create_after_last_exporter(self):
-        old_compose, old_prometheus, _ = self.snapshot()
+        old_compose, old_prometheus, _, _ = self.snapshot()
         owners = host_port_owners(compose_services(old_compose))
         http_port, socks_port = next(pair for pair in [(56889, 56089), (41889, 41089), (46889, 46089)]
                                      if not set(pair) & set(owners))
@@ -481,6 +540,20 @@ class RepoFilesYamlTest(_TempServicesMixin, unittest.TestCase):
                 self.assertRejected(name, 56889, 56089, '已存在')
 
 
+    def test_ha_entry_ports(self):
+        # ha-general on 30089/30889 and ha-all on 31089/31889: x089 SOCKS5 and x889 HTTP, below the Linux
+        # ephemeral range (32768-60999), each published once and by xray-ha only, and not reserved
+        services = compose_services(read(self.compose_file))
+        for port in (30089, 30889, 31089, 31889):
+            with self.subTest(port=port):
+                publishers = [name for name, entries in services.items()
+                              for entry in entries if port in published_host_ports(entry)]
+                self.assertEqual(publishers, ['xray-ha'])
+                self.assertNotIn(port, cxs.RESERVED_HOST_PORTS)
+                self.assertLess(port, 32768)
+                self.assertRejected('csr-new', port, 56089, 'xray-ha')
+
+
 class RepoFilesRegexTest(RepoFilesYamlTest):
     use_yaml = False
 
@@ -505,8 +578,9 @@ class DefaultBaseDirTest(unittest.TestCase):
             shutil.copyfile(str(SCRIPTS_DIR / name), str(scripts / name))
         shutil.copyfile(str(FIXTURES_DIR / 'compose_sample.yml'), str(base / 'docker-compose.yml'))
         shutil.copyfile(str(FIXTURES_DIR / 'prometheus_sample.yml'), str(base / 'prometheus' / 'prometheus.yml'))
+        shutil.copyfile(str(REPO_SERVICES_DIR / 'xray' / 'public-lines.txt'), str(base / 'xray' / 'public-lines.txt'))
         result = subprocess.run(
-            [sys.executable, script, VLESS_URL, self.NAME, '56889', '56089'],
+            [sys.executable, script, VLESS_URL, self.NAME, '56889', '56089', '--public'],
             cwd=str(base.joinpath(*cwd_parts)), env=dict(os.environ, PYTHONDONTWRITEBYTECODE='1'),
             stdout=subprocess.PIPE, stderr=subprocess.PIPE, universal_newlines=True, timeout=120,
         )
@@ -526,7 +600,8 @@ class DefaultBaseDirTest(unittest.TestCase):
                 self.assertIn(f'          - "xray-{self.NAME}-exporter:9550"\n',
                               read(base / 'prometheus' / 'prometheus.yml'))
                 self.assertTrue((base / 'xray' / self.NAME / 'config' / 'config.json').is_file())
-                self.assertEqual(sorted(p.name for p in (base / 'xray').iterdir()), sorted([self.NAME, 'scripts']))
+                self.assertEqual(sorted(p.name for p in (base / 'xray').iterdir()),
+                                 sorted([self.NAME, 'public-lines.txt', 'scripts']))
 
 
 if __name__ == '__main__':

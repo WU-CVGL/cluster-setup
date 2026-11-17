@@ -7,23 +7,33 @@ Proxy accounts: one protected accounts file, from which every authenticated prox
     proxy_accounts.py remove NAME
     proxy_accounts.py disable NAME           keep the account, refuse it at the entries that require accounts
     proxy_accounts.py enable NAME
-    proxy_accounts.py list                   account names, without passwords
-    proxy_accounts.py status [--json]        names, kinds, enabled, raw auth and the last applied file hash
-    proxy_accounts.py raw-auth [on|off]      show or set authentication on the raw lines (off by default)
+    proxy_accounts.py admin NAME on|off      admin accounts may use ha-all and the private lines
+    proxy_accounts.py list                   account names, admins marked, without passwords
+    proxy_accounts.py status [--json]        accounts, lines, raw auth and the last applied file hash
+    proxy_accounts.py raw-auth [on|off]      show or set authentication on the public lines (off by default)
     proxy_accounts.py render                 write the configs below from the accounts file
+
+Lines: xray/public-lines.txt lists the public lines. Every other line (xray/<name>/) is private: admins only.
+
+The HA entry xray-ha has two entries: ha-general (inbounds http_IN, socks_IN) over the pool-* outbounds, which
+must all lead to public lines, and ha-all (inbounds ha-all_http_IN, ha-all_socks_IN) over the pool-* and private-*
+outbounds, every line.
 
 render writes, relative to services/ (all gitignored, mode 0600, replaced atomically):
   xray-ha/config/config.json     xray-ha/config.example.json with every enabled account except svc-ha required
-                                 on both inbounds; with raw auth, the pool outbounds log in to the lines as svc-ha
+                                 on ha-general, and the enabled admins and svc-monitor on ha-all; the outbounds
+                                 log in as svc-ha to every line that requires accounts
   blackbox/config/blackbox.yml   blackbox/blackbox.example.yml with svc-monitor in the proxy URLs of the HA
-                                 entry, and of the raw lines with raw auth
-  xray/*/config/config.json      with raw auth, every enabled account required on the raw lines' inbounds; without
-                                 it, inbounds that carry accounts back to no authentication, other files untouched
+                                 entries and the private lines, and of the public lines with raw auth
+  xray/*/config/config.json      private lines: the enabled admins, svc-ha and svc-monitor, always. Public lines:
+                                 with raw auth, every enabled account; without it, inbounds that carry accounts
+                                 back to no authentication, other files untouched
 
 Account names are cluster usernames; names starting with svc- are service accounts:
 svc-ha (the HA entry's login to the lines), svc-monitor (the probes), svc-docker-<node> (a node's Docker daemon).
-svc-ha and svc-monitor cannot be disabled or removed. A disabled account is left out of every rendered config:
-with raw auth off, only the HA entry requires accounts, so only the HA entry refuses it.
+svc-ha and svc-monitor cannot be disabled or removed; service accounts are never admins. A disabled account is
+left out of every rendered config: with raw auth off, the public lines' own entries require no account, so a
+disabled account can still use them.
 
 The commands that change the accounts file or render hold an exclusive lock (proxy-accounts/.lock), which the
 portal's applier (proxy-portal/applier/proxy_apply.py) holds for a whole apply.
@@ -50,20 +60,28 @@ SERVICES_DIR = Path(__file__).resolve().parents[2]
 ACCOUNTS_FILE = Path("proxy-accounts/accounts.json")
 LOCK_FILE = Path("proxy-accounts/.lock")
 APPLIED_FILE = Path("proxy-accounts/applied.json")  # written by the portal's applier after an apply
-ACCOUNTS_VERSION = 2
+ACCOUNTS_VERSION = 3
 HA_EXAMPLE = Path("xray-ha/config.example.json")
 HA_CONFIG = Path("xray-ha/config/config.json")
 BLACKBOX_EXAMPLE = Path("blackbox/blackbox.example.yml")
 BLACKBOX_CONFIG = Path("blackbox/config/blackbox.yml")
 RAW_CONFIG_GLOB = "xray/*/config/config.json"
+PUBLIC_LINES_FILE = Path("xray/public-lines.txt")
 
 RELAY = "svc-ha"
 MONITOR = "svc-monitor"
 PROTECTED = (RELAY, MONITOR)
-POOL_PREFIX = "pool-"
+POOL_PREFIX = "pool-"          # outbounds to public lines: ha-general and ha-all
+PRIVATE_PREFIX = "private-"    # outbounds to private lines: ha-all only
+GENERAL = "ha-general"
+ALL = "ha-all"
+GENERAL_INBOUNDS = ("http_IN", "socks_IN")
+ALL_INBOUNDS = ("ha-all_http_IN", "ha-all_socks_IN")
 HA_HOST = "xray-ha"
+LINE_HOST_PREFIX = "xray-"
 
 NAME_RE = re.compile(r"[a-z0-9][a-z0-9._-]{0,63}")
+LINE_RE = re.compile(r"[a-z0-9][a-z0-9_-]*")  # create_xray_service.py's service names
 SERVICE_RE = re.compile(r"svc-(?:ha|monitor|docker-[a-z0-9][a-z0-9._-]*)")
 PROXY_URL_RE = re.compile(r"^(\s*proxy_url:\s*)(https?|socks5h?)://(?:[^@/\s]*@)?([A-Za-z0-9._-]+)(:\d+\s*)$")
 
@@ -84,6 +102,34 @@ def validate_name(name: str) -> str:
 
 def new_password() -> str:
     return secrets.token_urlsafe(24)
+
+
+def public_lines(base_dir: Path) -> Set[str]:
+    """
+    The public lines, from xray/public-lines.txt: one line name per line, '#' starts a comment. A line not listed
+    is private, so a line nobody classified is admin-only. A missing file is an error, not an empty list.
+    """
+    path = Path(base_dir) / PUBLIC_LINES_FILE
+    try:
+        text = path.read_text(encoding="utf-8")
+    except FileNotFoundError:
+        raise AccountsError(f"{PUBLIC_LINES_FILE} is missing: it lists the public lines")
+    names = set()  # type: Set[str]
+    for number, line in enumerate(text.splitlines(), 1):
+        name = line.split("#", 1)[0].strip()
+        if not name:
+            continue
+        if not LINE_RE.fullmatch(name):
+            raise AccountsError(f"{PUBLIC_LINES_FILE}:{number}: invalid line name {name!r}")
+        if name in names:
+            raise AccountsError(f"{PUBLIC_LINES_FILE}:{number}: {name} is listed twice")
+        names.add(name)
+    return names
+
+
+def line_names(base_dir: Path) -> List[str]:
+    """The lines that have a config: xray/<name>/config/config.json."""
+    return sorted(path.parent.parent.name for path in Path(base_dir).glob(RAW_CONFIG_GLOB))
 
 
 def _keep_owner(fd: int, path: Path) -> None:
@@ -142,10 +188,11 @@ def sha256_text(text: str) -> str:
 
 class Accounts:
     """
-    The accounts file, version 2: {"version": 2, "raw_auth": bool,
-    "accounts": {name: {"password": str, "enabled": bool}}}.
-    A file without "version" is version 1, {"raw_auth": bool, "accounts": {name: password}}: it is read with
-    every account enabled and written back as version 2.
+    The accounts file, version 3: {"version": 3, "raw_auth": bool,
+    "accounts": {name: {"password": str, "enabled": bool, "admin": bool}}}.
+    Older files are read and written back as version 3 at the next change: version 2 ({"password", "enabled"}
+    entries) with no admins, and a file without "version", version 1 ({name: password}), with every account
+    enabled and no admins.
     """
 
     def __init__(self, base_dir: Path):
@@ -154,6 +201,7 @@ class Accounts:
         self.raw_auth = False
         self.accounts = {}  # type: Dict[str, str]
         self.disabled = set()  # type: Set[str]
+        self.admins = set()  # type: Set[str]
         self.loaded_text = None  # type: Optional[str]
         if self.path.exists():
             self.loaded_text = self.path.read_text(encoding="utf-8")
@@ -167,26 +215,33 @@ class Accounts:
         entries = data.get("accounts") or {}
         if not isinstance(entries, dict):
             raise AccountsError(f"{ACCOUNTS_FILE}: accounts is not an object")
-        accounts, disabled = {}, set()
+        keys = {2: {"password", "enabled"}, 3: {"password", "enabled", "admin"}}.get(version)
+        accounts, disabled, admins = {}, set(), set()
         for name, entry in entries.items():
             validate_name(name)
             if version == 1 and isinstance(entry, str):
                 accounts[name] = entry
-            elif (version == ACCOUNTS_VERSION and isinstance(entry, dict) and isinstance(entry.get("password"), str)
-                  and isinstance(entry.get("enabled"), bool)):
+            elif (keys is not None and isinstance(entry, dict) and set(entry) == keys
+                  and isinstance(entry["password"], str) and isinstance(entry["enabled"], bool)
+                  and isinstance(entry.get("admin", False), bool)):
                 accounts[name] = entry["password"]
                 if not entry["enabled"]:
                     disabled.add(name)
+                if entry.get("admin", False):
+                    admins.add(name)
             else:
                 raise AccountsError(f"{ACCOUNTS_FILE}: unknown version {version!r} or entry format for {name!r}")
         for name in PROTECTED:
             if name in disabled:
                 raise AccountsError(f"{ACCOUNTS_FILE}: {name} cannot be disabled")
+        for name in admins:
+            if kind(name) == "service":
+                raise AccountsError(f"{ACCOUNTS_FILE}: service account {name} cannot be an admin")
         self.raw_auth = bool(data.get("raw_auth", False))
-        self.accounts, self.disabled = accounts, disabled
+        self.accounts, self.disabled, self.admins = accounts, disabled, admins
 
     def text(self) -> str:
-        entries = {name: {"password": pw, "enabled": name not in self.disabled}
+        entries = {name: {"password": pw, "enabled": name not in self.disabled, "admin": name in self.admins}
                    for name, pw in sorted(self.accounts.items())}
         data = {"version": ACCOUNTS_VERSION, "raw_auth": self.raw_auth, "accounts": entries}
         return json.dumps(data, indent=2) + "\n"
@@ -214,17 +269,52 @@ class Accounts:
             self.disabled.add(name)
         return True
 
+    def set_admin(self, name: str, admin: bool) -> bool:
+        """Make an account an admin or not; returns whether anything changed."""
+        self.require(name)
+        if admin and kind(name) == "service":
+            raise AccountsError(f"{name} is a service account and cannot be an admin")
+        if (name in self.admins) == admin:
+            return False
+        if admin:
+            self.admins.add(name)
+        else:
+            self.admins.discard(name)
+        return True
+
+    def is_admin(self, name: str) -> bool:
+        """An enabled admin: may use ha-all and the private lines."""
+        return self.enabled(name) and name in self.admins
+
     def remove(self, name: str) -> None:
         self.require(name)
         if name in PROTECTED:
             raise AccountsError(f"{name} cannot be removed")
         del self.accounts[name]
         self.disabled.discard(name)
+        self.admins.discard(name)
 
     def pairs(self, exclude: Tuple[str, ...] = ()) -> List[Tuple[str, str]]:
         """The enabled accounts, without those in exclude."""
         return [(name, pw) for name, pw in sorted(self.accounts.items())
                 if name not in exclude and name not in self.disabled]
+
+    def admin_pairs(self) -> List[Tuple[str, str]]:
+        """The enabled admins."""
+        return [(name, pw) for name, pw in sorted(self.accounts.items()) if self.is_admin(name)]
+
+    def ha_all_users(self) -> List[Tuple[str, str]]:
+        """Who may log in to ha-all: the enabled admins and svc-monitor."""
+        return sorted(self.admin_pairs() + [(MONITOR, self.accounts[MONITOR])])
+
+    def line_users(self, private: bool) -> Optional[List[Tuple[str, str]]]:
+        """
+        Who may log in to a line's own entry: on a private line the enabled admins, svc-ha and svc-monitor, always;
+        on a public line every enabled account with raw auth, else nobody needs to (None).
+        """
+        if private:
+            return sorted(self.admin_pairs() + [(name, self.accounts[name]) for name in PROTECTED])
+        return self.pairs() if self.raw_auth else None
 
 
 def kind(name: str) -> str:
@@ -242,34 +332,127 @@ def status(accounts: Accounts) -> dict:
         applied = {"error": f"{APPLIED_FILE} is not valid JSON"}
     current = sha256_text(accounts.loaded_text) if accounts.loaded_text is not None else None
     applied_sha = applied.get("accounts_sha256") if isinstance(applied, dict) else None
+    lines = line_names(accounts.base_dir)
+    public = public_lines(accounts.base_dir) if lines else set()
     return {
         "raw_auth": accounts.raw_auth,
-        # Where a disabled account is refused: only the HA entry while the lines require no accounts
-        "disabled_refused_at": "ha-entry-and-lines" if accounts.raw_auth else "ha-entry",
+        # The entries that refuse a disabled account: while raw auth is off, the public lines' own entries
+        # require no account, so they do not
+        "disabled_refused_at": [GENERAL, ALL, "private-lines"] + (["public-lines"] if accounts.raw_auth else []),
         "accounts": [{"name": name, "kind": kind(name), "enabled": accounts.enabled(name),
-                      "protected": name in PROTECTED} for name in sorted(accounts.accounts)],
+                      "admin": name in accounts.admins, "protected": name in PROTECTED}
+                     for name in sorted(accounts.accounts)],
+        "lines": [{"name": name, "access": "public" if name in public else "admin"}
+                  for name in lines],
         "accounts_sha256": current,
         "applied": applied,
         "unapplied_changes": None if applied_sha is None else current != applied_sha,
     }
 
 
-def render_ha(example: dict, accounts: Accounts) -> dict:
+def _line_of(outbound: dict) -> str:
+    """The line a pool-* or private-* outbound leads to: one SOCKS server xray-<line>:1089."""
+    servers = (outbound.get("settings") or {}).get("servers") or []
+    address = servers[0].get("address", "") if len(servers) == 1 and isinstance(servers[0], dict) else ""
+    if outbound.get("protocol") != "socks" or not address.startswith(LINE_HOST_PREFIX) or address == HA_HOST:
+        raise AccountsError(f"{HA_EXAMPLE}: outbound {outbound.get('tag')!r} must be SOCKS to one xray-<line>")
+    return address[len(LINE_HOST_PREFIX):]
+
+
+def check_ha(config: dict, public: Set[str]) -> Dict[str, str]:
+    """
+    Check that no path of the HA example lets ha-general reach a private line; returns {outbound tag: line}.
+    The first outbound (Xray's default) is the blackhole; every outbound is the blackhole, pool-* to a public
+    line or private-* to a private line; ha-general selects only pool-* outbounds and ha-all every line; each
+    HTTP/SOCKS inbound is ha-general's or ha-all's and is routed, by its tag alone, to its own balancer;
+    the observatory covers every line.
+    """
+    def fail(message):
+        raise AccountsError(f"{HA_EXAMPLE}: {message}")
+
+    outbounds = config.get("outbounds") or []
+    if not outbounds or outbounds[0].get("protocol") != "blackhole" or outbounds[0].get("tag") != "blackhole":
+        fail("the first outbound must be the blackhole, tagged blackhole")
+    lines = {}  # type: Dict[str, str]
+    for outbound in outbounds[1:]:
+        tag = str(outbound.get("tag", ""))
+        if tag.startswith(POOL_PREFIX) or tag.startswith(PRIVATE_PREFIX):
+            line = _line_of(outbound)
+            if tag.startswith(POOL_PREFIX) and line not in public:
+                fail(f"{tag} leads to {line}, which is not in {PUBLIC_LINES_FILE}: private lines take {PRIVATE_PREFIX}*")
+            if tag.startswith(PRIVATE_PREFIX) and line in public:
+                fail(f"{tag} leads to the public line {line}: public lines take {POOL_PREFIX}*")
+            lines[tag] = line
+        else:
+            fail(f"unexpected outbound {tag!r}: only the blackhole, {POOL_PREFIX}* and {PRIVATE_PREFIX}*")
+    if not any(t.startswith(POOL_PREFIX) for t in lines):
+        fail(f"no {POOL_PREFIX}* outbounds")
+
+    proxies = [i for i in config.get("inbounds") or [] if i.get("protocol") in ("http", "socks")]
+    tags = [i.get("tag") for i in proxies]
+    if sorted(tags, key=str) != sorted(GENERAL_INBOUNDS + ALL_INBOUNDS):
+        fail(f"the HTTP and SOCKS5 inbounds must be exactly {', '.join(GENERAL_INBOUNDS + ALL_INBOUNDS)}")
+
+    routing = config.get("routing") or {}
+    balancers = {b.get("tag"): b for b in routing.get("balancers") or []}
+    if set(balancers) != {GENERAL, ALL}:
+        fail(f"the balancers must be exactly {GENERAL} and {ALL}")
+    for name, balancer in balancers.items():
+        if balancer.get("fallbackTag") != "blackhole":
+            fail(f"{name} must fall back to the blackhole")
+        selected = {t for t in lines if any(t.startswith(str(s)) for s in balancer.get("selector") or [])}
+        if name == GENERAL and (not selected or any(not t.startswith(POOL_PREFIX) for t in selected)):
+            fail(f"{GENERAL} must select only {POOL_PREFIX}* outbounds")
+        if name == ALL and selected != set(lines):
+            fail(f"{ALL} must select every line: missing {', '.join(sorted(set(lines) - selected))}")
+    observed = {t for t in lines if any(t.startswith(str(s)) for s in
+                                         (config.get("observatory") or {}).get("subjectSelector") or [])}
+    if observed != set(lines):
+        fail(f"the observatory must cover every line: missing {', '.join(sorted(set(lines) - observed))}")
+
+    routed = {}  # type: Dict[str, str]
+    for rule in routing.get("rules") or []:
+        inbound_tags = rule.get("inboundTag")
+        if not inbound_tags:
+            fail("every routing rule must name its inbounds (inboundTag)")
+        for tag in inbound_tags:
+            if tag in routed:
+                fail(f"inbound {tag} is in more than one rule")
+            routed[tag] = rule.get("balancerTag") or rule.get("outboundTag") or ""
+        proxy_tags = set(inbound_tags) & set(GENERAL_INBOUNDS + ALL_INBOUNDS)
+        if proxy_tags:
+            want = GENERAL if proxy_tags <= set(GENERAL_INBOUNDS) else ALL if proxy_tags <= set(ALL_INBOUNDS) else None
+            if want is None or set(rule) - {"type", "ruleTag"} != {"inboundTag", "balancerTag"} \
+                    or rule["balancerTag"] != want:
+                fail(f"the rule for {', '.join(sorted(proxy_tags))} must send them, by inboundTag only, "
+                     f"to the balancer {want or 'of their own entry'}")
+    missing = [t for t in GENERAL_INBOUNDS + ALL_INBOUNDS if t not in routed]
+    if missing:
+        fail(f"no routing rule for {', '.join(missing)}")
+    return lines
+
+
+def render_ha(example: dict, accounts: Accounts, public: Set[str]) -> dict:
     config = json.loads(json.dumps(example))
-    XrayConfigHandler.set_inbound_users(config, accounts.pairs(exclude=(RELAY,)))
-    pool = [o for o in config.get("outbounds") or [] if str(o.get("tag", "")).startswith(POOL_PREFIX)]
-    if not pool:
-        raise AccountsError(f"{HA_EXAMPLE} has no {POOL_PREFIX}* outbounds")
-    for outbound in pool:
-        for server in outbound["settings"]["servers"]:
-            if accounts.raw_auth:
-                server["users"] = [{"user": RELAY, "pass": accounts.accounts[RELAY]}]
-            else:
-                server.pop("users", None)
+    lines = check_ha(config, public)
+    try:
+        XrayConfigHandler.set_inbound_users(config, accounts.pairs(exclude=(RELAY,)), tags=GENERAL_INBOUNDS)
+        XrayConfigHandler.set_inbound_users(config, accounts.ha_all_users(), tags=ALL_INBOUNDS)
+    except ValueError as e:
+        raise AccountsError(f"{HA_EXAMPLE}: {e}")
+    for outbound in config["outbounds"]:
+        line = lines.get(outbound.get("tag"))
+        if line is None:
+            continue
+        server = outbound["settings"]["servers"][0]
+        if line not in public or accounts.raw_auth:  # the line requires accounts
+            server["users"] = [{"user": RELAY, "pass": accounts.accounts[RELAY]}]
+        else:
+            server.pop("users", None)
     return config
 
 
-def render_blackbox(example: str, accounts: Accounts) -> str:
+def render_blackbox(example: str, accounts: Accounts, public: Set[str]) -> str:
     userinfo = (urllib.parse.quote(MONITOR, safe="") + ":"
                 + urllib.parse.quote(accounts.accounts[MONITOR], safe="") + "@")
     lines, ha_urls = [], 0
@@ -278,7 +461,8 @@ def render_blackbox(example: str, accounts: Accounts) -> str:
         if match:
             prefix, scheme, host, rest = match.groups()
             ha_urls += host == HA_HOST
-            auth = host == HA_HOST or (accounts.raw_auth and host.startswith("xray-"))
+            line = host[len(LINE_HOST_PREFIX):] if host.startswith(LINE_HOST_PREFIX) and host != HA_HOST else None
+            auth = host == HA_HOST or (line is not None and (line not in public or accounts.raw_auth))
             line = f"{prefix}{scheme}://{userinfo if auth else ''}{host}{rest}\n"
         elif "proxy_url:" in line:
             raise AccountsError(f"{BLACKBOX_EXAMPLE}: cannot parse {line.strip()!r}")
@@ -293,21 +477,21 @@ def render_blackbox(example: str, accounts: Accounts) -> str:
 def render_outputs(accounts: Accounts) -> List[Tuple[Path, str]]:
     """Render every config in memory; returns the (path, text) of those that differ from the files."""
     base = accounts.base_dir
-    needed = [MONITOR] + ([RELAY] if accounts.raw_auth else [])
-    for name in needed:
+    for name in (MONITOR, RELAY):  # svc-ha: the private lines always require accounts
         if name not in accounts.accounts:
             raise AccountsError(f"service account {name} is missing: run 'add {name}' first")
+    public = public_lines(base)
     outputs = []  # type: List[Tuple[Path, str]]
-    ha = render_ha(json.loads((base / HA_EXAMPLE).read_text(encoding="utf-8")), accounts)
+    ha = render_ha(json.loads((base / HA_EXAMPLE).read_text(encoding="utf-8")), accounts, public)
     outputs.append((base / HA_CONFIG, json.dumps(ha, indent=4) + "\n"))
     outputs.append((base / BLACKBOX_CONFIG,
-                    render_blackbox((base / BLACKBOX_EXAMPLE).read_text(encoding="utf-8"), accounts)))
-    raw_users = accounts.pairs() if accounts.raw_auth else None
+                    render_blackbox((base / BLACKBOX_EXAMPLE).read_text(encoding="utf-8"), accounts, public)))
     for path in sorted(base.glob(RAW_CONFIG_GLOB)):
+        raw_users = accounts.line_users(private=path.parent.parent.name not in public)
         old = json.loads(path.read_text(encoding="utf-8"))
         if raw_users is None and not any("users" in (i.get("settings") or {}) for i in old.get("inbounds") or []
                                          if i.get("protocol") in ("http", "socks")):
-            continue  # raw auth off and no accounts there: leave the line's config as it is
+            continue  # a public line, raw auth off and no accounts there: leave its config as it is
         new = json.loads(json.dumps(old))
         try:
             XrayConfigHandler.set_inbound_users(new, raw_users)
@@ -339,6 +523,9 @@ def main(argv: Optional[List[str]] = None) -> int:
         p.add_argument("--show", action="store_true", help="print the new password")
     for command in ("remove", "enable", "disable"):
         sub.add_parser(command).add_argument("name")
+    p = sub.add_parser("admin")
+    p.add_argument("name")
+    p.add_argument("state", choices=("on", "off"))
     sub.add_parser("list")
     sub.add_parser("status").add_argument("--json", action="store_true", help="machine-readable, for the portal")
     sub.add_parser("raw-auth").add_argument("state", nargs="?", choices=("on", "off"))
@@ -350,7 +537,7 @@ def main(argv: Optional[List[str]] = None) -> int:
             return read_command(Accounts(args.base_dir), args)
         with accounts_lock(args.base_dir):
             accounts = Accounts(args.base_dir)
-            if args.command in ("add", "rotate", "remove", "enable", "disable"):
+            if args.command in ("add", "rotate", "remove", "enable", "disable", "admin"):
                 name = validate_name(args.name)
                 if args.command == "add" and name in accounts.accounts:
                     raise AccountsError(f"account {name!r} exists; use rotate")
@@ -358,6 +545,8 @@ def main(argv: Optional[List[str]] = None) -> int:
                     accounts.remove(name)
                 elif args.command in ("enable", "disable"):
                     accounts.set_enabled(name, args.command == "enable")
+                elif args.command == "admin":
+                    accounts.set_admin(name, args.state == "on")
                 else:
                     if args.command == "rotate":
                         accounts.require(name)
@@ -367,12 +556,14 @@ def main(argv: Optional[List[str]] = None) -> int:
                     print(accounts.accounts[name])
                 note = ""
                 if args.command == "disable" and not accounts.raw_auth:
-                    note = " (raw auth is off: only the HA entry refuses it)"
-                print(f"{args.command}: {name}{note}; run render, then restart the proxies", file=sys.stderr)
+                    note = " (raw auth is off: the public lines' own entries still accept it)"
+                what = f"admin {args.state}" if args.command == "admin" else args.command
+                print(f"{what}: {name}{note}; run render, then restart the proxies whose configs it writes",
+                      file=sys.stderr)
             elif args.command == "raw-auth":
                 accounts.raw_auth = args.state == "on"
                 accounts.save()
-                print(f"raw-auth: {args.state}; run render, then restart the lines and xray-ha together",
+                print(f"raw-auth: {args.state}; run render, then restart the public lines and xray-ha together",
                       file=sys.stderr)
             elif args.command == "render":
                 written = render(accounts)
@@ -389,18 +580,23 @@ def main(argv: Optional[List[str]] = None) -> int:
 def read_command(accounts: Accounts, args: argparse.Namespace) -> int:
     if args.command == "list":
         for name in sorted(accounts.accounts):
-            print(name)
+            print(f"{name} admin" if name in accounts.admins else name)
     elif args.command == "raw-auth":
         print("on" if accounts.raw_auth else "off")
     elif args.json:
         print(json.dumps(status(accounts), indent=2))
     else:
         view = status(accounts)
-        scope = "the HA entry and the lines" if accounts.raw_auth else "the HA entry only (raw auth is off)"
+        scope = ("every entry" if accounts.raw_auth else
+                 "ha-general, ha-all and the private lines; the public lines' own entries still accept them "
+                 "(raw auth is off)")
         print(f"raw auth: {'on' if accounts.raw_auth else 'off'}; disabled accounts are refused at {scope}")
         for entry in view["accounts"]:
             state = "enabled" if entry["enabled"] else "disabled"
-            print(f"{entry['name']:<32} {entry['kind']:<8} {state}{'  protected' if entry['protected'] else ''}")
+            flags = ("  admin" if entry["admin"] else "") + ("  protected" if entry["protected"] else "")
+            print(f"{entry['name']:<32} {entry['kind']:<8} {state}{flags}")
+        for line in view["lines"]:
+            print(f"line {line['name']:<40} {'public' if line['access'] == 'public' else 'admins only'}")
         applied = view["applied"] or {}
         print(f"accounts file sha256: {view['accounts_sha256']}")
         print(f"last applied sha256:  {applied.get('accounts_sha256')} {applied.get('applied_at') or ''}".rstrip())
