@@ -111,7 +111,7 @@ def new_password() -> str:
 def public_proxies(base_dir: Path) -> Set[str]:
     """
     The public proxies, from xray/public-proxies.txt: one proxy name per line, '#' starts a comment. A proxy not
-    listed is private, so a proxy nobody classified is private too. A missing file is an error, not an empty list.
+    listed, including one nobody classified, is private. A missing file is an error, not an empty list.
     """
     path = Path(base_dir) / PUBLIC_PROXIES_FILE
     try:
@@ -369,9 +369,9 @@ def check_ha(config: dict, public: Set[str]) -> Dict[str, str]:
     Check that no path of the HA example lets ha-general reach a private proxy; returns {outbound tag: proxy}.
     The first outbound (Xray's default) is the blackhole; every outbound is the blackhole, pool-* to a public
     proxy or private-* to a private proxy, with no other keys (no proxySettings or streamSettings to chain it);
-    ha-general selects only pool-* outbounds and ha-private every proxy; the inbounds are exactly the four proxy
-    inbounds and the API's dokodemo-door; each proxy inbound is routed, by its tag alone, to its own entry's
-    balancer, and the API inbound only to the API; the observatory covers every proxy.
+    ha-general selects only pool-* outbounds and ha-private every proxy; the inbounds are exactly the four entry
+    inbounds (ha-general_* and ha-private_*) and the API's dokodemo-door; each entry inbound is routed, by its tag
+    alone, to its own entry's balancer, and the API inbound only to the API; the observatory covers every proxy.
     """
     def fail(message):
         raise AccountsError(f"{HA_EXAMPLE}: {message}")
@@ -405,10 +405,10 @@ def check_ha(config: dict, public: Set[str]) -> Dict[str, str]:
     if not any(t.startswith(POOL_PREFIX) for t in proxies):
         fail(f"no {POOL_PREFIX}* outbounds")
 
-    proxy_inbounds = GENERAL_INBOUNDS + HA_PRIVATE_INBOUNDS
+    entry_inbounds = GENERAL_INBOUNDS + HA_PRIVATE_INBOUNDS
     inbounds = config.get("inbounds") or []
-    if sorted((str(i.get("tag")) for i in inbounds)) != sorted(proxy_inbounds + (API_TAG,)):
-        fail(f"the inbounds must be exactly {', '.join(proxy_inbounds)} and {API_TAG}")
+    if sorted((str(i.get("tag")) for i in inbounds)) != sorted(entry_inbounds + (API_TAG,)):
+        fail(f"the inbounds must be exactly {', '.join(entry_inbounds)} and {API_TAG}")
     for inbound in inbounds:
         tag, protocol = inbound["tag"], inbound.get("protocol")
         want = API_PROTOCOLS if tag == API_TAG else ("http",) if tag.endswith("http_IN") else ("socks",)
@@ -441,8 +441,8 @@ def check_ha(config: dict, public: Set[str]) -> Dict[str, str]:
             if tag in routed:
                 fail(f"inbound {tag} is in more than one rule")
             routed[tag] = rule.get("balancerTag") or rule.get("outboundTag") or ""
-        proxy_tags = set(inbound_tags) & set(proxy_inbounds)
-        if proxy_tags:
+        entry_tags = set(inbound_tags) & set(entry_inbounds)
+        if entry_tags:
             tags = set(inbound_tags)
             want = (GENERAL if tags <= set(GENERAL_INBOUNDS)
                     else HA_PRIVATE if tags <= set(HA_PRIVATE_INBOUNDS) else None)
@@ -451,9 +451,9 @@ def check_ha(config: dict, public: Set[str]) -> Dict[str, str]:
                 fail(f"the rule for {', '.join(sorted(tags))} must send them, by inboundTag only, "
                      f"to the balancer {want or 'of their own entry'}")
         elif rule != {"type": "field", "inboundTag": [API_TAG], "outboundTag": API_TAG}:
-            fail(f"the only rule for inbounds other than the proxy inbounds must send {API_TAG}, "
+            fail(f"the only rule for inbounds other than the entry inbounds must send {API_TAG}, "
                  f"by inboundTag only, to the outbound {API_TAG}")
-    missing = [t for t in proxy_inbounds if t not in routed]
+    missing = [t for t in entry_inbounds if t not in routed]
     if missing:
         fail(f"no routing rule for {', '.join(missing)}")
     return proxies

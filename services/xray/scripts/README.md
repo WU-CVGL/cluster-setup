@@ -22,9 +22,9 @@ python3 xray/scripts/create_xray_service.py <share_url> <service_name> <http_por
 - `socks_port`: SOCKS5 代理的主机端口（容器内固定使用 1089）
 - `--public` 或 `--private`（必须二选一，没有默认值）：
   - `--public`：公共代理，所有用户可用，脚本把它加入 `xray/public-proxies.txt`
-  - `--private`：私有代理，只有管理员可用；入站始终要求账号（启用的管理员、`svc-ha`、`svc-monitor`），
+  - `--private`：私有代理，只有管理员账号可用；入站始终要求账号（启用的管理员账号、`svc-ha`、`svc-monitor`），
     要求账号文件中已有 `svc-ha` 和 `svc-monitor`。名称已列在 `public-proxies.txt` 中时拒绝
-  - 没有列在 `xray/public-proxies.txt` 中的代理都是私有代理，所以漏掉分类的代理只对管理员开放
+  - 没有列在 `xray/public-proxies.txt` 中的代理都是私有代理，所以漏掉分类的代理只对管理员账号开放
     （[docs/00](../../../docs/00_Network_Proxy.md#classify-a-new-proxy)）
 - `--base-dir`: 服务根目录（默认为脚本所在的 `services/`；可指向一个副本先试运行）
 
