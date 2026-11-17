@@ -6,19 +6,19 @@ Proxy accounts: one protected accounts file, from which every authenticated prox
     proxy_accounts.py rotate NAME [--show]   new password for an account
     proxy_accounts.py remove NAME
     proxy_accounts.py list                   account names, without passwords
-    proxy_accounts.py raw-auth [on|off]      show or set authentication on the raw lines (off by default)
+    proxy_accounts.py raw-auth [on|off]      show or set authentication on the proxies (off by default)
     proxy_accounts.py render                 write the configs below from the accounts file
 
 render writes, relative to services/ (all gitignored, mode 0600, replaced atomically):
   xray-ha/config/config.json     xray-ha/config.example.json with every account except svc-ha required on
-                                 both inbounds; with raw auth, the pool outbounds log in to the lines as svc-ha
+                                 both inbounds; with raw auth, the pool outbounds log in to the proxies as svc-ha
   blackbox/config/blackbox.yml   blackbox/blackbox.example.yml with svc-monitor in the proxy URLs of the HA
-                                 entry, and of the raw lines with raw auth
-  xray/*/config/config.json      with raw auth, every account required on the raw lines' inbounds; without
+                                 entry, and of the proxies with raw auth
+  xray/*/config/config.json      with raw auth, every account required on the proxies' inbounds; without
                                  it, inbounds that carry accounts back to no authentication, other files untouched
 
 Account names are cluster usernames; names starting with svc- are service accounts:
-svc-ha (the HA entry's login to the lines), svc-monitor (the probes), svc-docker-<node> (a node's Docker daemon).
+svc-ha (the HA entry's login to the proxies), svc-monitor (the probes), svc-docker-<node> (a node's Docker daemon).
 """
 
 import argparse
@@ -168,7 +168,7 @@ def render(accounts: Accounts) -> List[Path]:
         old = json.loads(path.read_text(encoding="utf-8"))
         if raw_users is None and not any("users" in (i.get("settings") or {}) for i in old.get("inbounds") or []
                                          if i.get("protocol") in ("http", "socks")):
-            continue  # raw auth off and no accounts there: leave the line's config as it is
+            continue  # raw auth off and no accounts there: leave the proxy's config as it is
         new = json.loads(json.dumps(old))
         try:
             XrayConfigHandler.set_inbound_users(new, raw_users)
@@ -225,7 +225,7 @@ def main(argv: Optional[List[str]] = None) -> int:
             else:
                 accounts.raw_auth = args.state == "on"
                 accounts.save()
-                print(f"raw-auth: {args.state}; run render, then restart the lines and xray-ha together",
+                print(f"raw-auth: {args.state}; run render, then restart the proxies and xray-ha together",
                       file=sys.stderr)
         elif args.command == "render":
             written = render(accounts)

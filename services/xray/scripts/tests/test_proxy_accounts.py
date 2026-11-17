@@ -38,8 +38,8 @@ def mode(path):
     return stat.S_IMODE(os.stat(path).st_mode)
 
 
-def raw_line_config():
-    outbound = {"protocol": "freedom", "settings": {}, "tag": "line"}
+def proxy_config():
+    outbound = {"protocol": "freedom", "settings": {}, "tag": "proxy"}
     config = XrayConfigHandler.build_xray_config(outbound, loglevel="none", include_stats_api=True)
     return json.dumps(config, indent=4, ensure_ascii=False)
 
@@ -112,9 +112,9 @@ class AccountsFileTest(_Base):
 class RenderTest(_Base):
     def setUp(self):
         super().setUp()
-        self.raw = self.base / "xray/line-a/config/config.json"
+        self.raw = self.base / "xray/proxy-a/config/config.json"
         self.raw.parent.mkdir(parents=True)
-        self.raw_text = raw_line_config()
+        self.raw_text = proxy_config()
         self.raw.write_text(self.raw_text)
 
     def ha(self):
@@ -144,7 +144,7 @@ class RenderTest(_Base):
         self.add("alice", "bob", "svc-monitor", "svc-ha")
         code, out, _ = run(self.base, "render")
         self.assertEqual(code, 0)
-        self.assertEqual(out.split(), [str(pa.HA_CONFIG), str(pa.BLACKBOX_CONFIG)])  # raw line untouched
+        self.assertEqual(out.split(), [str(pa.HA_CONFIG), str(pa.BLACKBOX_CONFIG)])  # proxy untouched
         self.assertEqual(self.raw.read_text(), self.raw_text)
         accounts = self.accounts()["accounts"]
         ha = self.ha()
@@ -170,7 +170,7 @@ class RenderTest(_Base):
         run(self.base, "raw-auth", "on")
         code, out, _ = run(self.base, "render")
         self.assertEqual(code, 0)
-        self.assertIn("xray/line-a/config/config.json", out.split())
+        self.assertIn("xray/proxy-a/config/config.json", out.split())
         accounts = self.accounts()["accounts"]
         raw = json.loads(self.raw.read_text())
         self.assertEqual(self.inbound_users(raw), {"http": accounts, "socks": accounts})
@@ -186,13 +186,13 @@ class RenderTest(_Base):
 
         run(self.base, "raw-auth", "off")
         code, out, _ = run(self.base, "render")
-        self.assertIn("xray/line-a/config/config.json", out.split())
+        self.assertIn("xray/proxy-a/config/config.json", out.split())
         self.assertEqual(self.raw.read_text(), self.raw_text)  # byte-identical to the generated file
         self.assertNotIn("users", json.dumps(self.ha()["outbounds"]))
 
     def test_raw_config_without_inbounds_fails_before_writing(self):
         self.add("svc-monitor", "svc-ha")
-        bad = self.base / "xray/line-b/config/config.json"
+        bad = self.base / "xray/proxy-b/config/config.json"
         bad.parent.mkdir(parents=True)
         bad.write_text('{"inbounds": [{"protocol": "http", "settings": {}}]}')
         run(self.base, "raw-auth", "on")
@@ -204,14 +204,14 @@ class RenderTest(_Base):
 
     def test_raw_auth_off_leaves_other_configs_alone(self):
         self.add("svc-monitor")
-        odd = self.base / "xray/line-b/config/config.json"
+        odd = self.base / "xray/proxy-b/config/config.json"
         odd.parent.mkdir(parents=True)
         text = '{"inbounds": [{"protocol": "socks", "settings": {"udp": true}}, {"protocol": "vmess"}]}'
         odd.write_text(text)
         odd.chmod(0o644)
         code, out, _ = run(self.base, "render")
         self.assertEqual(code, 0)
-        self.assertNotIn("xray/line-b/config/config.json", out.split())
+        self.assertNotIn("xray/proxy-b/config/config.json", out.split())
         self.assertEqual(odd.read_text(), text)
         self.assertEqual(mode(odd), 0o644)
 
@@ -252,14 +252,14 @@ class ExampleTest(unittest.TestCase):
 
 class HandlerUsersTest(unittest.TestCase):
     def test_default_output_unchanged(self):
-        outbound = {"protocol": "freedom", "settings": {}, "tag": "line"}
+        outbound = {"protocol": "freedom", "settings": {}, "tag": "proxy"}
         a = XrayConfigHandler.build_xray_config(outbound, include_stats_api=True)
         b = XrayConfigHandler.build_xray_config(outbound, include_stats_api=True, inbound_users=None)
         self.assertEqual(json.dumps(a), json.dumps(b))
         self.assertNotIn("users", json.dumps(a))
 
     def test_users(self):
-        outbound = {"protocol": "freedom", "settings": {}, "tag": "line"}
+        outbound = {"protocol": "freedom", "settings": {}, "tag": "proxy"}
         config = XrayConfigHandler.build_xray_config(outbound, inbound_users=[("alice", "pw")])
         http, socks = config["inbounds"][:2]
         self.assertEqual(http["settings"]["users"], [{"user": "alice", "pass": "pw"}])

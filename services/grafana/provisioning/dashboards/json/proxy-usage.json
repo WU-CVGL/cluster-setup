@@ -1,7 +1,7 @@
 {
   "uid": "proxy-usage",
   "title": "Proxy Usage",
-  "description": "Proxy traffic per user, service account and line (docs/00_Network_Proxy.md#usage).",
+  "description": "Proxy traffic per user, service account and proxy (docs/00_Network_Proxy.md#usage).",
   "tags": [
     "proxy"
   ],
@@ -133,7 +133,7 @@
         "type": "prometheus",
         "uid": "${prometheus_source}"
       },
-      "description": "Each user where the user enters the proxies: the HA entry, and a line's own entry when it requires accounts. Traffic the HA entry relays to a line is counted once, at the HA entry.",
+      "description": "Each user where the user enters the proxies: the HA entry, and a proxy's own entry when it requires accounts. Traffic the HA entry relays to a proxy is counted once, at the HA entry.",
       "gridPos": {
         "h": 10,
         "w": 24,
@@ -334,7 +334,7 @@
         "type": "prometheus",
         "uid": "${prometheus_source}"
       },
-      "description": "svc-ha is the HA entry's relay to the lines, counted on the lines.",
+      "description": "svc-ha is the HA entry's relay to the proxies, counted on the proxies.",
       "gridPos": {
         "h": 9,
         "w": 14,
@@ -516,7 +516,7 @@
     },
     {
       "type": "row",
-      "title": "Lines",
+      "title": "Proxies",
       "id": 9,
       "collapsed": false,
       "gridPos": {
@@ -529,13 +529,13 @@
     },
     {
       "type": "timeseries",
-      "title": "Lines",
+      "title": "Proxies",
       "id": 10,
       "datasource": {
         "type": "prometheus",
         "uid": "${prometheus_source}"
       },
-      "description": "Each line's traffic to its upstream server, whichever entry it came through.",
+      "description": "Each proxy's traffic to its upstream server, whichever entry it came through.",
       "gridPos": {
         "h": 9,
         "w": 14,
@@ -548,8 +548,8 @@
             "type": "prometheus",
             "uid": "${prometheus_source}"
           },
-          "expr": "sum by (line) (label_replace(rate(v2ray_traffic_downlink_bytes_total{job=\"v2ray\",proxy_role=\"raw\",dimension=\"outbound\",target!~\"DIRECT|BLACKHOLE|api\"}[$__rate_interval]), \"line\", \"$1\", \"instance\", \"xray-(.+)-exporter:9550\")) * 8",
-          "legendFormat": "{{line}} download",
+          "expr": "sum by (proxy) (label_replace(rate(v2ray_traffic_downlink_bytes_total{job=\"v2ray\",proxy_role=\"raw\",dimension=\"outbound\",target!~\"DIRECT|BLACKHOLE|api\"}[$__rate_interval]), \"proxy\", \"$1\", \"instance\", \"xray-(.+)-exporter:9550\")) * 8",
+          "legendFormat": "{{proxy}} download",
           "refId": "A"
         },
         {
@@ -557,8 +557,8 @@
             "type": "prometheus",
             "uid": "${prometheus_source}"
           },
-          "expr": "sum by (line) (label_replace(rate(v2ray_traffic_uplink_bytes_total{job=\"v2ray\",proxy_role=\"raw\",dimension=\"outbound\",target!~\"DIRECT|BLACKHOLE|api\"}[$__rate_interval]), \"line\", \"$1\", \"instance\", \"xray-(.+)-exporter:9550\")) * 8",
-          "legendFormat": "{{line}} upload",
+          "expr": "sum by (proxy) (label_replace(rate(v2ray_traffic_uplink_bytes_total{job=\"v2ray\",proxy_role=\"raw\",dimension=\"outbound\",target!~\"DIRECT|BLACKHOLE|api\"}[$__rate_interval]), \"proxy\", \"$1\", \"instance\", \"xray-(.+)-exporter:9550\")) * 8",
+          "legendFormat": "{{proxy}} upload",
           "refId": "B"
         }
       ],
@@ -590,7 +590,7 @@
     },
     {
       "type": "table",
-      "title": "Line totals",
+      "title": "Proxy totals",
       "id": 11,
       "datasource": {
         "type": "prometheus",
@@ -609,7 +609,7 @@
             "type": "prometheus",
             "uid": "${prometheus_source}"
           },
-          "expr": "sum by (line) (label_replace(increase(v2ray_traffic_downlink_bytes_total{job=\"v2ray\",proxy_role=\"raw\",dimension=\"outbound\",target!~\"DIRECT|BLACKHOLE|api\"}[$__range]), \"line\", \"$1\", \"instance\", \"xray-(.+)-exporter:9550\"))",
+          "expr": "sum by (proxy) (label_replace(increase(v2ray_traffic_downlink_bytes_total{job=\"v2ray\",proxy_role=\"raw\",dimension=\"outbound\",target!~\"DIRECT|BLACKHOLE|api\"}[$__range]), \"proxy\", \"$1\", \"instance\", \"xray-(.+)-exporter:9550\"))",
           "legendFormat": "",
           "refId": "A",
           "instant": true,
@@ -621,7 +621,7 @@
             "type": "prometheus",
             "uid": "${prometheus_source}"
           },
-          "expr": "sum by (line) (label_replace(increase(v2ray_traffic_uplink_bytes_total{job=\"v2ray\",proxy_role=\"raw\",dimension=\"outbound\",target!~\"DIRECT|BLACKHOLE|api\"}[$__range]), \"line\", \"$1\", \"instance\", \"xray-(.+)-exporter:9550\"))",
+          "expr": "sum by (proxy) (label_replace(increase(v2ray_traffic_uplink_bytes_total{job=\"v2ray\",proxy_role=\"raw\",dimension=\"outbound\",target!~\"DIRECT|BLACKHOLE|api\"}[$__range]), \"proxy\", \"$1\", \"instance\", \"xray-(.+)-exporter:9550\"))",
           "legendFormat": "",
           "refId": "B",
           "instant": true,
@@ -633,7 +633,7 @@
             "type": "prometheus",
             "uid": "${prometheus_source}"
           },
-          "expr": "sum by (line) (label_replace(increase(v2ray_traffic_downlink_bytes_total{job=\"v2ray\",proxy_role=\"raw\",dimension=\"outbound\",target!~\"DIRECT|BLACKHOLE|api\"}[$__range]), \"line\", \"$1\", \"instance\", \"xray-(.+)-exporter:9550\")) + sum by (line) (label_replace(increase(v2ray_traffic_uplink_bytes_total{job=\"v2ray\",proxy_role=\"raw\",dimension=\"outbound\",target!~\"DIRECT|BLACKHOLE|api\"}[$__range]), \"line\", \"$1\", \"instance\", \"xray-(.+)-exporter:9550\"))",
+          "expr": "sum by (proxy) (label_replace(increase(v2ray_traffic_downlink_bytes_total{job=\"v2ray\",proxy_role=\"raw\",dimension=\"outbound\",target!~\"DIRECT|BLACKHOLE|api\"}[$__range]), \"proxy\", \"$1\", \"instance\", \"xray-(.+)-exporter:9550\")) + sum by (proxy) (label_replace(increase(v2ray_traffic_uplink_bytes_total{job=\"v2ray\",proxy_role=\"raw\",dimension=\"outbound\",target!~\"DIRECT|BLACKHOLE|api\"}[$__range]), \"proxy\", \"$1\", \"instance\", \"xray-(.+)-exporter:9550\"))",
           "legendFormat": "",
           "refId": "C",
           "instant": true,
@@ -645,7 +645,7 @@
         {
           "id": "joinByField",
           "options": {
-            "byField": "line",
+            "byField": "proxy",
             "mode": "outer"
           }
         },
@@ -659,13 +659,13 @@
               "Time 3": true
             },
             "renameByName": {
-              "line": "Line",
+              "proxy": "Proxy",
               "Value #A": "Download",
               "Value #B": "Upload",
               "Value #C": "Total"
             },
             "indexByName": {
-              "line": 0,
+              "proxy": 0,
               "Value #A": 1,
               "Value #B": 2,
               "Value #C": 3
@@ -696,7 +696,7 @@
           {
             "matcher": {
               "id": "byName",
-              "options": "Line"
+              "options": "Proxy"
             },
             "properties": [
               {
