@@ -41,7 +41,7 @@ The default proxy of the cluster is `xray-usca5-bwh-sla-1tb`:
 | HTTP | `http://192.168.233.8:59889` | `http://10.0.1.68:59889` |
 | SOCKS5 | `192.168.233.8:59880` | `10.0.1.68:59880` |
 
-Four lines are public, open to every user: `xray-usca5-bwh-sla-1tb`, `xray-usca1-bwh-megaboxpro-2tb`, `xray-usca6-bwh-1tb` and `xray-us-west-racknerd-12tb`. They work the same way, on other ports. The other lines are private, for admins only ([Admin entries](#admin-entries)). To list the services, on the VM:
+Four lines are public, open to every user: `xray-usca5-bwh-sla-1tb`, `xray-usca1-bwh-megaboxpro-2tb`, `xray-usca6-bwh-1tb` and `xray-us-west-racknerd-12tb`. They work the same way, on other ports. The other lines are private, for admin accounts only ([Admin entries](#admin-entries)). To list the services, on the VM:
 
 ```sh
 cd ~/ws/cluster-setup/services
@@ -91,12 +91,12 @@ Add a new proxy from a share link (`vmess://`, `vless://`, `trojan://`, `ss://`)
 | HTTP | `http://192.168.233.8:30889` | `http://10.0.1.68:30889` |
 | SOCKS5 | `192.168.233.8:30089` | `10.0.1.68:30089` |
 
-Both ports require a proxy [account](#accounts). It forwards each new connection over SOCKS5 to one line of its pool `ha-general`, the four public lines: `xray-usca5-bwh-sla-1tb`, `xray-usca1-bwh-megaboxpro-2tb`, `xray-usca6-bwh-1tb` and `xray-us-west-racknerd-12tb`. Every 15 seconds Xray fetches `https://www.google.com/generate_204` through each line (its observatory). A new connection goes to the line with the lowest latency among those whose last fetch succeeded (the `leastPing` balancer). The private lines are not in the pool; admins have a second entry over every line, [`ha-all`](#admin-entries).
+Both ports require a proxy [account](#accounts). It forwards each new connection over SOCKS5 to one line of its pool `ha-general`, the four public lines: `xray-usca5-bwh-sla-1tb`, `xray-usca1-bwh-megaboxpro-2tb`, `xray-usca6-bwh-1tb` and `xray-us-west-racknerd-12tb`. Every 15 seconds Xray fetches `https://www.google.com/generate_204` through each line (its observatory). A new connection goes to the line with the lowest latency among those whose last fetch succeeded (the `leastPing` balancer). The private lines are not in the pool; admin accounts have a second entry over every line, [`ha-all`](#admin-entries).
 
 What it covers and what it does not:
 
 - **A failed line**, whether its server, its route abroad or its `xray-<name>` service: new connections go to another line once the next fetch through it has failed, so within about one probe interval. Requests that start in between can fail.
-- **No fixed order.** The pool has no primary and backup: the line, and with it the exit address, can change from one connection to the next. To pin a line, use its own entry (the table above and `docker compose ps`).
+- **No fixed order.** The pool has no primary and backup: the line, and with it the exit address, can change from one connection to the next. To pin a line, use a public line's own entry (the table above and `docker compose ps`).
 - **Open connections stay on their line.** A download through a line that fails breaks, and the client has to retry.
 - **Fails closed.** When no line of the pool passes, the entry refuses every request, also for destinations in China, instead of going out directly. The entry has no route of its own: private and Chinese destinations go out directly at the line, as through the line's own entry.
 - **Starts closed.** After `xray-ha` starts, it refuses requests until its first fetches through the lines are done, a few seconds.
@@ -114,48 +114,48 @@ docker compose kill -s SIGHUP prometheus   # reload the probe job
 docker compose restart grafana             # load the new dashboard providers
 ```
 
-The pool is explicit, and [`create_xray_service.py`](../services/xray/scripts/README.md) does not add new lines to it. To add a public line, give it a SOCKS outbound whose tag starts with `pool-`, as the others have, and set the `pool` label of its probe targets to `ha-general` in [`prometheus.yml`](../services/prometheus/prometheus.yml). `render` refuses a `pool-` outbound to a line that is not public.
+The pool is explicit, and [`create_xray_service.py`](../services/xray/scripts/README.md) does not add new lines to it. To add a public line to the pool, follow [Classify a new line](#classify-a-new-line); `render` refuses a `pool-` outbound to a line not listed in `public-lines.txt`.
 
-Move clients to the HA entry only after its ports work from where they are used: run `curl -x http://<user>:<password>@192.168.233.8:30889 https://www.google.com/generate_204 -w '%{http_code}\n'` on a node and the same with `10.0.1.68` on the login node, then the same with `socks5h://` and port `30089`. Then move one kind of client at a time: environment variables, `pip` and `git` first, then the [Docker daemons](#docker-daemon-with-an-account), one drained node at a time, keeping `NO_PROXY` as it is. While the lines keep their own entries without accounts, moving a client back is changing the URL back.
+Move clients to the HA entry only after its ports work from where they are used: run `curl -x http://<user>:<password>@192.168.233.8:30889 https://www.google.com/generate_204 -w '%{http_code}\n'` on a node and the same with `10.0.1.68` on the login node, then the same with `socks5h://` and port `30089`. Then move one kind of client at a time: environment variables, `pip` and `git` first, then the [Docker daemons](#docker-daemon-with-an-account), one drained node at a time, keeping `NO_PROXY` as it is. While the public lines' own entries require no account, moving a client back is changing the URL back.
 
 ## Admin entries
 
-These entries accept only admin accounts. Regular users use `ha-general` and the public lines.
+Who may use which entry: `ha-all` and the private lines' own entries accept only admin accounts; regular users use `ha-general` and the public lines.
 
 | Entry | Lines | Who may log in | HTTP | SOCKS5 |
 | :--- | :--- | :--- | :--- | :--- |
 | `ha-general` | the four public lines | every enabled account | `30889` | `30089` |
-| `ha-all` | all nine lines, public and private | enabled admins | `31889` | `31089` |
+| `ha-all` | every line, public and private | enabled admin accounts | `31889` | `31089` |
 | a public line's own entry | that line | everyone; with [raw auth](#accounts-on-the-lines), every enabled account | its own | its own |
-| a private line's own entry | that line | enabled admins, always | its own | its own |
+| a private line's own entry | that line | enabled admin accounts, always | its own | its own |
 
-The ports are on `192.168.233.8` and `10.0.1.68`, as for `ha-general`. The private lines are `xray-jpty1-bwh-2tb` and the four `xray-miyaip-*` relays; `docker compose ps` on the VM shows their ports. Client settings are those of [`ha-general`](#client-settings) with the `ha-all` ports.
+The ports are on `192.168.233.8` and `10.0.1.68`, as for `ha-general`. The private lines are every line not listed in `services/xray/public-lines.txt`; `proxy_accounts.py status` shows each line's access and `docker compose ps` on the VM their ports. Client settings are those of [`ha-general`](#client-settings) with the `ha-all` ports.
 
-- **`ha-all`** runs in the same `xray-ha` service as `ha-general`, on two more ports, and balances over all nine lines in the same way (`leastPing`, the same observatory, failing closed when no line passes). `ha-general` keeps its own pool and users, and `render` checks that it can reach no private line.
-- **Private lines** always require an account, whatever raw auth says. Besides the admins, they accept `svc-ha` (the HA entry's connections) and `svc-monitor` (the probes).
-- **A disabled admin** is refused everywhere accounts are required, like any disabled account. While raw auth is off, the public lines' own entries still accept them.
+- **`ha-all`** runs in the same `xray-ha` service as `ha-general`, on its own two ports, and balances over every line in the same way (`leastPing`, the same observatory, failing closed when no line passes). `ha-general` has its own pool and users, and `render` checks that it can reach no private line.
+- **Private lines** always require an account, whatever raw auth says. Besides the admin accounts, they accept `svc-ha` (the HA entry's connections) and `svc-monitor` (the probes).
+- **A disabled admin account** is refused everywhere accounts are required, like any disabled account. While raw auth is off, the public lines' own entries still accept them.
 
 ### Admin accounts
 
-An admin is an account with the admin flag. Service accounts cannot be admins.
+An admin account is a proxy account with the admin flag: it may use `ha-all` and the private lines' own entries. The flag is set per account, with `proxy_accounts.py admin` or the portal's `admin-on` and `admin-off`, and does not follow the Determined admin role. Service accounts cannot be admin accounts.
 
 ```sh
 cd ~/ws/cluster-setup/services
 python3 xray/scripts/proxy_accounts.py admin <user> on    # or off
-python3 xray/scripts/proxy_accounts.py render
-docker compose restart xray-ha xray-jpty1-bwh-2tb $(docker compose config --services | grep '^xray-miyaip-' | grep -v exporter)
+python3 xray/scripts/proxy_accounts.py render \
+  | sed -n 's#^xray/\([^/]*\)/config/config.json$#xray-\1#p; s#^xray-ha/.*#xray-ha#p' | xargs -r docker compose restart
 ```
 
-`render` lists the files it wrote; restart the services they belong to. A change to an admin (on, off, a new password, disable, enable, remove) changes the configs of `xray-ha` and every private line. The [portal](#changes-from-the-portal) does the same with `admin-on` and `admin-off` requests. `list` marks the admins and `status` shows the flag of each account and the access of each line.
+`render` lists the files it wrote, and the pipeline restarts the services they belong to. A change to an admin account (on, off, a new password, disable, enable, remove) changes the configs of `xray-ha` and every private line. The [portal](#changes-from-the-portal) does the same with `admin-on` and `admin-off` requests. `list` marks the admin accounts and `status` shows the flag of each account and the access of each line.
 
-To set `ha-all` up on a VM that runs `ha-general`: stop the [applier](#changes-from-the-portal) (`sudo systemctl stop proxy-apply.path proxy-apply.timer`), since it verifies through `ha-all` and would roll back every request until the new ports are published; `render`, then `docker compose up -d xray-ha` (a restart does not publish new ports), restart the private lines, and `docker compose kill -s SIGHUP blackbox-exporter prometheus`. From the private lines' restart on, their own entries refuse every client without an admin account: move such clients to `ha-general` first. Then start the applier again (`sudo systemctl start proxy-apply.path proxy-apply.timer`).
+The [applier](#changes-from-the-portal) verifies through both entries, so `xray-ha` must publish the `ha-all` ports before the applier runs, or it rolls back every request. A new port needs `docker compose up -d xray-ha`; a restart does not publish it. A private line's own entry refuses every client without an admin account.
 
 ### Classify a new line
 
 [`services/xray/public-lines.txt`](../services/xray/public-lines.txt) lists the public lines; every line not listed is private. A line nobody classified is therefore admin-only, never open to everyone. [`create_xray_service.py`](../services/xray/scripts/README.md) requires `--public` (it adds the line to the list) or `--private`. A private line requires accounts from its creation.
 
 - **Public line:** listed; for `ha-general` and `ha-all`, a `pool-<line>` outbound in [`config.example.json`](../services/xray-ha/config.example.json) and the probe targets with `pool: ha-general`, `access: public`.
-- **Private line:** not listed; for `ha-all`, a `private-<line>` outbound and the probe targets with `pool: ha-all`, `access: admin-only`. Its probe modules in `blackbox.example.yml` carry `svc-monitor:PASSWORD@`.
+- **Private line:** not listed; for `ha-all`, a `private-<line>` outbound and the probe targets with `pool: ha-all`, `access: admin-only`. `render` adds `svc-monitor` to its probe modules; the example shows it as `svc-monitor:PASSWORD@`.
 
 To reclassify a line, edit the list, move its outbound between `pool-` and `private-`, update its probe labels, then `render` and restart `xray-ha` and the line.
 
@@ -175,14 +175,14 @@ python3 xray/scripts/proxy_accounts.py remove <user>
 python3 xray/scripts/proxy_accounts.py disable <user>         # keeps the account and its password
 python3 xray/scripts/proxy_accounts.py enable <user>
 python3 xray/scripts/proxy_accounts.py admin <user> on|off    # admin entries
-python3 xray/scripts/proxy_accounts.py list                   # names, admins marked
+python3 xray/scripts/proxy_accounts.py list                   # names, admin accounts marked
 python3 xray/scripts/proxy_accounts.py status                 # accounts and lines; --json for the portal
 python3 xray/scripts/proxy_accounts.py render                 # lists the files it wrote
 docker compose restart xray-ha                                # and the private lines when render wrote theirs
 docker compose kill -s SIGHUP blackbox-exporter
 ```
 
-Passwords are random and are printed only by `add` and `rotate` with `--show`; give them to the user privately. A disabled account is left out of every rendered configuration, so every entry that requires accounts refuses it. While the [public lines require no accounts](#accounts-on-the-lines) (the default), that is the HA entries and the private lines: a disabled user can still use a public line's own entry. `svc-ha` and `svc-monitor` cannot be disabled or removed. The accounts file (format version 3) records for each account whether it is enabled and whether it is an admin; an older file is read with no admins (version 2), or with every account enabled and no admins (version 1), and is rewritten as version 3 at the next change. Xray reads accounts only when it starts, so each change takes effect with the restart of `xray-ha`, which breaks the connections open through it and resets its traffic counters. While the [lines require accounts](#accounts-on-the-lines), restart them as well.
+Passwords are random and are printed only by `add` and `rotate` with `--show`; give them to the user privately. A disabled account is left out of every rendered configuration, so every entry that requires accounts refuses it. While the [public lines require no accounts](#accounts-on-the-lines) (the default), that is the HA entries and the private lines: a disabled user can still use a public line's own entry. `svc-ha` and `svc-monitor` cannot be disabled or removed. The accounts file (format version 3) records for each account whether it is enabled and whether it is an admin account; an older file is read with no admin accounts (version 2), or with every account enabled and no admin accounts (version 1), and is rewritten as version 3 at the next change. Xray reads accounts only when it starts, so a change takes effect when the services whose configs `render` wrote restart: always `xray-ha`, the private lines after a change to an admin account, and every line while [raw auth](#accounts-on-the-lines) is on. A restart breaks the connections open through the service and resets its traffic counters.
 
 ### Client settings
 
@@ -269,7 +269,7 @@ The proxy portal does not change accounts itself. It writes a request per change
 - **Requests:** `{"id": "<id>", "op": "add|rotate|enable|disable|remove|admin-on|admin-off", "username": "<account>"}` in `requests/<id>.json`, nothing else; `<id>` is 8 to 64 lowercase letters, digits and `-` (a UUID fits), new for every request. `svc-ha` and `svc-monitor` are refused; admins change them only with `proxy_accounts.py` ([Manage accounts](#manage-accounts)). `admin-on` for a service account fails. For `add` and `rotate`, the applier generates the password and writes it once to `results/<id>.json` (mode `0400`, owned by the portal's user), which the portal deletes after showing it.
 - **Statuses** in `status/<id>.json`: `applying` while its batch runs, then `applied` (live and verified), `failed` (not applied; the previous files and services are restored, `restored: false` if the rollback did not finish: the [applier README](../services/proxy-portal/applier/README.md#statuses) has the recovery), or `unconfirmed` (live and every refused login gets 407, but the logins that must pass got no 204 in time, e.g. while the lines are down).
 - **How:** the applier holds the accounts lock and applies the pending requests in batches, a second request for the same account going into the next batch: it renders in memory, tests every changed Xray config with `xray run -test`, replaces the files atomically, restarts the services and verifies through `ha-general` and `ha-all` that `svc-monitor` and every newly accepted login pass (204), and that every disabled or removed account, replaced password, admin turned off, a non-admin on `ha-all` and a wrong password are refused (407). A wrong answer rolls everything back.
-- **Restart impact:** every change restarts `xray-ha`, a change to an admin also the private lines, and with raw auth on every line. Established connections through them drop, and new ones fail for a few seconds. Requests that arrive together share one restart; each further request for the same account adds one.
+- **Restart impact:** every change restarts `xray-ha`, a change to an admin account also the private lines, and with raw auth on every line. Established connections through them drop, and new ones fail for a few seconds. Requests that arrive together share one restart; each further request for the same account adds one.
 
 While raw auth is off, turning a user's access off in the portal stops it only at the HA entries (and the private lines); the public lines' own entries stay open to them.
 
@@ -277,7 +277,7 @@ While raw auth is off, turning a user's access off in the portal stops it only a
 
 The **Proxy Availability** dashboard in Grafana (linked from Flare) shows whether requests get through each entry. Every 30 seconds `blackbox-exporter` fetches `https://www.google.com/generate_204` through both HA entries and through every line's own HTTP and SOCKS5 ports, logging in as `svc-monitor` where the entry requires accounts ([`services/blackbox/blackbox.example.yml`](../services/blackbox/blackbox.example.yml), rendered with the account by `proxy_accounts.py`; the `proxy-probe` job in [`prometheus.yml`](../services/prometheus/prometheus.yml)). A probe passes on a 204 within 8 seconds, without following redirects, with the proxy resolving the name. The lines send `www.google.com` abroad (unlike `www.gstatic.com`, which the `geosite:cn` rule sends out directly), and Google cannot be reached directly from the campus network, so a passing probe shows that the line's way abroad works. A line is always probed through its own entry, never through the HA entry, so a failed line shows as failed while the HA entry carries on.
 
-- **Top rows**, one for `ha-general` and one for `ha-all` (admins only): the entry's HTTP and SOCKS5 status; how many of its lines pass on SOCKS5, the protocol the HA entry uses to reach them, out of how many are configured (the four public lines; all nine); the probe duration; the age of the last result; and the probe success rate and coverage over 24 hours.
+- **Top rows**, one for `ha-general` and one for `ha-all` (admins only): the entry's HTTP and SOCKS5 status; how many of its lines pass on SOCKS5, the protocol the HA entry uses to reach them, out of how many are configured (the public lines for `ha-general`; every line for `ha-all`); the probe duration; the age of the last result; and the probe success rate and coverage over 24 hours.
 - **Lines:** one row per line, with its access (Public or Admins only), its pool, its HTTP and SOCKS5 status, durations, last result, 24-hour probe success rates and coverage, and the status and traffic from its exporter. The exporter only shows that Xray runs, not that requests get through.
 - **History:** probe results over time (a gap is a time without results), durations, the hourly probe success rate, the results per 5 minutes (10 expected; fewer means the exporter or Prometheus did not run) and the HA entry's traffic through each line, from its own counters (with Xray's small probe fetches through every line).
 
@@ -332,7 +332,7 @@ the proxy works.
 
 ## Use the proxy
 
-The examples below use a line's own entry, which needs no account while the lines do not require accounts. Through the HA entry, use the URL with your account from [Client settings](#client-settings) instead.
+The examples below use a public line's own entry, which needs no account while raw auth is off. Through the HA entry, use the URL with your account from [Client settings](#client-settings) instead.
 
 ### Docker daemon
 

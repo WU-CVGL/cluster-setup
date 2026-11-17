@@ -200,7 +200,9 @@ python3 xray/scripts/proxy_accounts.py render
     （`http_IN`、`socks_IN`）换成除 `svc-ha` 外的所有启用账号，`ha-all` 的入站（`ha-all_http_IN`、`ha-all_socks_IN`）
     换成启用的管理员和 `svc-monitor`（SOCKS5 `auth: password`）；`private-*` 出站始终、`pool-*` 出站在
     `raw-auth on` 时以 `svc-ha` 登录线路。写入前检查 `ha-general` 不能到达任何私有线路：`pool-*` 出站只能指向
-    公共线路，`ha-general` 只选择 `pool-*`，每个入站只按 `inboundTag` 路由到自己的 balancer，第一个出站是 blackhole
+    公共线路，`ha-general` 只选择 `pool-*`，每个入站只按 `inboundTag` 路由到自己的 balancer，第一个出站是 blackhole；
+    入站只有这四个和 API 的 dokodemo-door（`api`，只路由到 API），出站只有 blackhole、`pool-*` 和 `private-*`，
+    且不带 `proxySettings`、`streamSettings` 等可以串联到其他出站的设置
   - `blackbox/config/blackbox.yml`：`blackbox/blackbox.example.yml` 中经过 `xray-ha` 和私有线路的 `proxy_url` 带上
     `svc-monitor`（percent-encode）；`raw-auth on` 时公共线路的 `proxy_url` 也带上
   - `xray/*/config/config.json`：私有线路的入站始终要求启用的管理员、`svc-ha` 和 `svc-monitor`；公共线路在

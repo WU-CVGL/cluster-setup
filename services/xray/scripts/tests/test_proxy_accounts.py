@@ -556,6 +556,9 @@ class IsolationTest(unittest.TestCase):
     def rule(self, config, tag):
         return next(r for r in config["routing"]["rules"] if tag in r["inboundTag"])
 
+    def inbound(self, config, tag):
+        return next(i for i in config["inbounds"] if i["tag"] == tag)
+
     def balancer(self, config, tag):
         return next(b for b in config["routing"]["balancers"] if b["tag"] == tag)
 
@@ -639,6 +642,76 @@ class IsolationTest(unittest.TestCase):
         def relay_through_ha(c):
             self.outbound(c, "private-jpty1-bwh-2tb")["settings"]["servers"][0]["address"] = "xray-ha"
         self.refused(relay_through_ha, "SOCKS to one xray-<line>")
+
+    def test_paths_besides_the_proxy_inbounds_refused(self):
+        def tunnel_to_all(c):
+            c["inbounds"].append({"protocol": "dokodemo-door", "port": 2000, "tag": "fwd",
+                                  "settings": {"address": "target", "port": 80}})
+            c["routing"]["rules"].append({"type": "field", "inboundTag": ["fwd"], "balancerTag": "ha-all"})
+        self.refused(tunnel_to_all, "the inbounds must be exactly")
+
+        def mixed_inbound_to_all(c):
+            c["inbounds"].append({"protocol": "mixed", "port": 1091, "tag": "mixed_IN", "settings": {}})
+            c["routing"]["rules"].append({"type": "field", "inboundTag": ["mixed_IN"], "balancerTag": "ha-all"})
+        self.refused(mixed_inbound_to_all, "the inbounds must be exactly")
+
+        def duplicate_inbound(c):
+            c["inbounds"].append(json.loads(json.dumps(c["inbounds"][2])))
+            c["inbounds"][-1]["port"] = 8891
+        self.refused(duplicate_inbound, "the inbounds must be exactly")
+
+        def proxy_tag_on_other_protocol(c):
+            c["inbounds"][2]["protocol"] = "mixed"
+        self.refused(proxy_tag_on_other_protocol, "must be http")
+
+        def api_as_open_proxy(c):
+            self.inbound(c, "api")["protocol"] = "http"
+        self.refused(api_as_open_proxy, "must be dokodemo-door or tunnel")
+
+        def api_rule_to_all(c):
+            rule = self.rule(c, "api")
+            del rule["outboundTag"]
+            rule["balancerTag"] = "ha-all"
+        self.refused(api_rule_to_all, "the only rule for inbounds other than the proxy inbounds")
+
+        def api_rule_to_private(c):
+            self.rule(c, "api")["outboundTag"] = "private-jpty1-bwh-2tb"
+        self.refused(api_rule_to_private, "the only rule for inbounds other than the proxy inbounds")
+
+        def api_in_proxy_rule(c):
+            c["routing"]["rules"].remove(self.rule(c, "api"))
+            self.rule(c, "ha-all_http_IN")["inboundTag"].append("api")
+        self.refused(api_in_proxy_rule, "by inboundTag only")
+
+        def unknown_tag_rule(c):
+            c["routing"]["rules"].insert(0, {"type": "field", "inboundTag": ["ghost"],
+                                             "outboundTag": "private-jpty1-bwh-2tb"})
+        self.refused(unknown_tag_rule, "the only rule for inbounds other than the proxy inbounds")
+
+        def api_retagged(c):
+            c["api"]["tag"] = "private-x"
+        self.refused(api_retagged, "the API must be tagged api")
+
+        def reverse_portal(c):
+            c["reverse"] = {"portals": [{"tag": "pool-portal", "domain": "example.com"}]}
+        self.refused(reverse_portal, "unexpected top-level keys reverse")
+
+        def dialer_proxy(c):
+            self.outbound(c, "pool-usca5-bwh-sla-1tb")["streamSettings"] = {
+                "sockopt": {"dialerProxy": "private-jpty1-bwh-2tb"}}
+        self.refused(dialer_proxy, "may set only protocol, tag and settings")
+
+        def proxy_settings(c):
+            self.outbound(c, "pool-usca5-bwh-sla-1tb")["proxySettings"] = {"tag": "private-jpty1-bwh-2tb"}
+        self.refused(proxy_settings, "may set only protocol, tag and settings")
+
+        def server_users(c):
+            self.outbound(c, "pool-usca5-bwh-sla-1tb")["settings"]["servers"][0]["users"] = [{"user": "u"}]
+        self.refused(server_users, "may set only protocol, tag and settings")
+
+        def blackhole_chained(c):
+            c["outbounds"][0]["proxySettings"] = {"tag": "private-jpty1-bwh-2tb"}
+        self.refused(blackhole_chained, "the blackhole may set only")
 
     def test_unlisted_line_is_private(self):
         # Take a public line off the list: its pool-* outbound is refused, so it cannot stay in ha-general
