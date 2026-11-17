@@ -33,6 +33,7 @@ import stat
 import subprocess
 import sys
 import time
+import traceback
 import urllib.parse
 from pathlib import Path
 from typing import Callable, Dict, List, Optional, Sequence, Set, Tuple
@@ -93,7 +94,7 @@ def parse_request(raw: bytes) -> Dict[str, str]:
 
     try:
         data = json.loads(raw.decode("utf-8"), object_pairs_hook=no_duplicates)
-    except (UnicodeDecodeError, ValueError) as e:
+    except (UnicodeDecodeError, ValueError, RecursionError) as e:  # deep nesting raises RecursionError on 3.8
         raise RequestError(f"not UTF-8 JSON: {type(e).__name__}")
     if not isinstance(data, dict) or set(data) != REQUEST_KEYS:
         raise RequestError(f"must be an object with exactly the keys {sorted(REQUEST_KEYS)}")
@@ -192,7 +193,10 @@ class Spool:
                 if name.endswith(".json"):
                     entries.append((st.st_mtime_ns, name))
                 elif time.time() - st.st_mtime > STALE_TEMP:
-                    self._discard(dfd, name)
+                    try:
+                        self._discard(dfd, name)
+                    except OSError as e:
+                        log(f"temp file {name!r}: not removed: {type(e).__name__}")
             return [name for _, name in sorted(entries)]
         finally:
             os.close(dfd)
@@ -207,8 +211,16 @@ class Spool:
         except PermissionError:  # a folder, on systems where unlink says EPERM
             shutil.rmtree(str(self.requests / name))
 
-    def take(self, name: str) -> Tuple[Optional[Dict[str, str]], Optional[str], Optional[int]]:
-        """Read and remove requests/<name>: (request, error, owner uid). Every entry is removed."""
+    def discard(self, name: str) -> None:
+        """Remove requests/<name>, whatever it is. Raises OSError when it cannot."""
+        dfd = _dir_fd(self.requests)
+        try:
+            self._discard(dfd, name)
+        finally:
+            os.close(dfd)
+
+    def read(self, name: str) -> Tuple[Optional[Dict[str, str]], Optional[str], Optional[int]]:
+        """Read requests/<name> without removing it: (request, error, owner uid)."""
         dfd = _dir_fd(self.requests)
         try:
             try:
@@ -240,7 +252,6 @@ class Spool:
                 return None, "id does not match the file name", st.st_uid
             return request, None, st.st_uid
         finally:
-            self._discard(dfd, name)
             os.close(dfd)
 
     def status_path(self, request_id: str) -> Path:
@@ -415,43 +426,70 @@ class Applier:
         self.sleep = sleep
         self.clock = clock
         self.keep_backup = False  # set when a rollback could not restore the files: the next run retries
+        self.delivered = {}  # type: Dict[str, str]  # username -> id of the last result written in this run
 
     # -- entry point
 
     def run(self) -> int:
         """
         Apply every pending request, one batch at a time, holding the accounts lock throughout.
-        Exit status 1 when a rollback did not finish (a status with restored: false), else 0: refused and
-        rolled-back requests are reported in their status files, not as a failure of the service.
+        Exit status 1 when a rollback did not finish (a status with restored: false), 2 when a request entry
+        could not be removed, else 0: refused and rolled-back requests are reported in their status files,
+        not as a failure of the service.
         """
         self.spool.check()
         failures = 0
+        stuck = set()  # type: Set[str]
         with pa.accounts_lock(self.base):
             self.recover()
             self.spool.expire_results()
             while True:
-                names = self.spool.pending()[:MAX_BATCH]
+                names = [name for name in self.spool.pending() if name not in stuck][:MAX_BATCH]
                 if not names:
                     break
-                batch = []
-                for name in names:
-                    request, error, uid = self.spool.take(name)
-                    match = REQUEST_FILE_RE.fullmatch(name)
-                    request_id = match.group(1) if match else None
-                    if request_id and self.spool.status_path(request_id).exists():
-                        log(f"request {request_id}: id already used, dropped")
-                        continue
-                    if error is not None:
-                        log(f"request {name!r}: refused: {error}")
-                        if request_id:
-                            self.spool.write_status(request_id, {"id": request_id, "status": "failed",
-                                                                 "stage": "request", "error": error, "restored": True})
-                        continue
-                    batch.append((request, uid))
+                batch = self.take(names, stuck)
                 if batch:
                     failures += self.apply_batch(batch)
             self.write_portal_status()
-        return 1 if failures else 0
+        if stuck:
+            log(f"{len(stuck)} request entries could not be removed")
+        return 1 if failures else 2 if stuck else 0
+
+    def take(self, names: List[str], stuck: Set[str]) -> List[Tuple[Dict[str, str], int]]:
+        """
+        Take the next batch, oldest first. An entry is removed only once its status is written (applying, or
+        failed when refused), so no request disappears without one. A batch ends before a second request
+        for the same account; that one waits for the next batch, so every request has its own outcome.
+        """
+        batch = []  # type: List[Tuple[Dict[str, str], int]]
+        usernames = set()  # type: Set[str]
+        for name in names:
+            match = REQUEST_FILE_RE.fullmatch(name)
+            request_id = match.group(1) if match else None
+            if request_id and self.spool.status_path(request_id).exists():
+                log(f"request {request_id}: id already used, dropped")
+            else:
+                try:
+                    request, error, uid = self.spool.read(name)
+                except Exception as e:  # an unexpected error refuses the request, it does not lose it
+                    request, error, uid = None, f"cannot read: {type(e).__name__}", None
+                if request is not None and request["username"] in usernames:
+                    break
+                if request is None:
+                    log(f"request {name!r}: refused: {error}")
+                    if request_id:
+                        self.spool.write_status(request_id, {"id": request_id, "status": "failed",
+                                                             "stage": "request", "error": error, "restored": True})
+                else:
+                    self.spool.write_status(request["id"], dict(request, status="applying"))
+                    usernames.add(request["username"])
+                    batch.append((request, uid))
+            try:
+                self.spool.discard(name)
+            except OSError as e:
+                log(f"request entry {name!r}: not removed: {type(e).__name__}")
+                stuck.add(name)
+        return batch
 
     def write_portal_status(self) -> None:
         view = pa.status(pa.Accounts(self.base))
@@ -461,10 +499,7 @@ class Applier:
     # -- one batch
 
     def apply_batch(self, batch: List[Tuple[Dict[str, str], int]]) -> int:
-        records = {}  # type: Dict[str, dict]
-        for request, _ in batch:
-            records[request["id"]] = dict(request, status="applying")
-            self.spool.write_status(request["id"], records[request["id"]])
+        records = {request["id"]: dict(request, status="applying") for request, _ in batch}  # type: Dict[str, dict]
         log("batch: " + ", ".join(f"{r['id']} {r['op']} {r['username']}" for r, _ in batch))
 
         try:
@@ -528,6 +563,15 @@ class Applier:
             outcome, detail = self.verify(accept, refuse)
             if outcome == "failed":
                 raise ApplyError("verify", detail)
+            status = "applied" if outcome == "ok" else "unconfirmed"
+            for request, _ in active:
+                records[request["id"]].update(status=status, restarted=restart)
+                if status == "unconfirmed":
+                    records[request["id"]].update(stage="verify", error=detail)
+            try:
+                self.commit(records, list(passwords), accounts_text)
+            except OSError as e:
+                raise ApplyError("commit", f"{type(e).__name__}: {e.strerror or e}")
         except ApplyError as e:
             error = scrub(str(e), secrets_seen)
             log(f"failed at {e.stage}: {error}")
@@ -535,18 +579,25 @@ class Applier:
             if snapshot is not None:
                 restored = self.rollback(snapshot, restart)
             for request, _ in active:
+                records[request["id"]].pop("restarted", None)
                 records[request["id"]].update(status="failed", stage=e.stage, error=error, restored=restored)
             return self.finish(records, {}, active)
 
-        status = "applied" if outcome == "ok" else "unconfirmed"
-        pa.write_private(self.base / pa.APPLIED_FILE, json.dumps(
-            {"accounts_sha256": pa.sha256_text(accounts_text), "applied_at": now_iso()}, indent=2) + "\n")
-        for request, _ in active:
-            records[request["id"]].update(status=status, restarted=restart)
-            if status == "unconfirmed":
-                records[request["id"]].update(stage="verify", error=detail)
+        self.write_applied(pa.sha256_text(accounts_text), now_iso())
         log(f"{status}{': ' + detail if detail else ''}")
         return self.finish(records, passwords, active)
+
+    def commit(self, records: Dict[str, dict], result_ids: List[str], accounts_text: str) -> None:
+        """Mark the backup as committed: from here on, an interrupted apply is finished, not rolled back."""
+        manifest = self.base / BACKUP_DIR / MANIFEST
+        data = json.loads(manifest.read_text(encoding="utf-8"))
+        data.update(committed=True, records=list(records.values()), results=result_ids,
+                    accounts_sha256=pa.sha256_text(accounts_text), applied_at=now_iso())
+        pa.write_private(manifest, json.dumps(data) + "\n")
+
+    def write_applied(self, accounts_sha256: str, applied_at: str) -> None:
+        pa.write_private(self.base / pa.APPLIED_FILE, json.dumps(
+            {"accounts_sha256": accounts_sha256, "applied_at": applied_at}, indent=2) + "\n")
 
     def finish(self, records: Dict[str, dict], passwords: Dict[str, str],
                active: List[Tuple[Dict[str, str], int]]) -> int:
@@ -566,7 +617,26 @@ class Applier:
         if not self.keep_backup:
             shutil.rmtree(str(self.base / BACKUP_DIR), ignore_errors=True)
         self.keep_backup = False
+        self.supersede(records)
         return sum(record["status"] == "failed" and not record.get("restored") for record in records.values())
+
+    def supersede(self, records: Dict[str, dict]) -> None:
+        """A live add, rotate or remove replaces the password of an earlier result of this run: drop that result."""
+        for request_id, record in records.items():
+            if record["status"] not in ("applied", "unconfirmed") or not record.get("changed"):
+                continue
+            if record["op"] in ("add", "rotate", "remove"):
+                earlier = self.delivered.pop(record["username"], None)
+                if earlier is not None:
+                    self.spool.drop_result(earlier)
+                    try:
+                        previous = json.loads(self.spool.status_path(earlier).read_text(encoding="utf-8"))
+                    except (OSError, ValueError):
+                        previous = {"id": earlier}
+                    self.spool.write_status(earlier, dict(previous, result=False, superseded_by=request_id))
+                    log(f"request {earlier}: result superseded by {request_id}")
+            if record.get("result"):
+                self.delivered[record["username"]] = request_id
 
     def restart_set(self, accounts: pa.Accounts, outputs: List[Tuple[Path, str]]) -> List[str]:
         """xray-ha; the lines, with raw auth or when their config changed; blackbox-exporter when its config did."""
@@ -702,6 +772,11 @@ class Applier:
             self.fail_stale_applying()
             return
         data = json.loads(manifest.read_text(encoding="utf-8"))
+        if data.get("committed"):
+            self.finish_committed(data)
+            shutil.rmtree(str(folder), ignore_errors=True)
+            self.fail_stale_applying()
+            return
         snapshot = []
         for entry in data["files"]:
             path = (self.base / entry["path"]).resolve()
@@ -720,6 +795,18 @@ class Applier:
                                                      "error": "the apply was interrupted", "restored": restored})
         shutil.rmtree(str(folder), ignore_errors=True)
         self.fail_stale_applying()
+
+    def finish_committed(self, data: dict) -> None:
+        """The interrupted apply was verified and live: write what it had not written yet, restart nothing."""
+        log("finishing an interrupted apply that was already live")
+        self.write_applied(str(data["accounts_sha256"]), str(data["applied_at"]))
+        results = {i for i in data.get("results", []) if isinstance(i, str)}
+        for record in data["records"]:
+            if not isinstance(record, dict) or not ID_RE.fullmatch(str(record.get("id", ""))):
+                continue
+            if record["id"] in results:  # a result not written by then is lost: result false
+                record["result"] = (self.spool.results / f"{record['id']}.json").exists()
+            self.spool.write_status(record["id"], record)
 
     def fail_stale_applying(self) -> None:
         """Requests left at applying without a backup never reached the file swap: nothing changed."""
@@ -745,7 +832,10 @@ def scrub(text: str, secrets: Sequence[str]) -> str:
 def requester_ids(value: str) -> Tuple[int, int]:
     if value.isdigit():
         return int(value), int(value)
-    entry = pwd.getpwnam(value)
+    try:
+        entry = pwd.getpwnam(value)
+    except KeyError:
+        raise ValueError(f"no user {value!r} (PROXY_APPLY_REQUESTER)")
     return entry.pw_uid, entry.pw_gid
 
 
@@ -775,7 +865,11 @@ def main(argv: Optional[List[str]] = None) -> int:
         return 0
     if not args.requester:
         parser.error("--requester (PROXY_APPLY_REQUESTER) is required")
-    uid, gid = requester_ids(args.requester)
+    try:
+        uid, gid = requester_ids(args.requester)
+    except ValueError as e:
+        print(f"error: {e}", file=sys.stderr)
+        return 2
     spool = Spool(args.spool, uid)
     if args.command == "init":
         spool.init(gid)
@@ -789,6 +883,9 @@ def main(argv: Optional[List[str]] = None) -> int:
         return Applier(args.services_dir, spool, compose, probe, verify_timeout=args.verify_timeout).run()
     except (OSError, pa.AccountsError, ValueError) as e:
         print(f"error: {type(e).__name__}: {e}", file=sys.stderr)
+        return 2
+    except Exception:  # exit 1 stays reserved for an unfinished rollback
+        traceback.print_exc()
         return 2
 
 

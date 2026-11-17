@@ -19,6 +19,7 @@ import tempfile
 import threading
 import unittest
 from pathlib import Path
+from unittest import mock
 
 sys.dont_write_bytecode = True
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
@@ -203,6 +204,7 @@ class ParseRequestTest(unittest.TestCase):
             b'["abcdefgh-1", "add", "alice"]', b"not json", b"\xff\xfe", b"",
             self.ok(username="a" * 5000),
             b" " * (ap.MAX_REQUEST_BYTES + 1),
+            b"[" * 4000, b'{"a": ' * 680,  # deep nesting: RecursionError on Python 3.8 to 3.11
         ]
         for raw in bad:
             with self.assertRaises(ap.RequestError, msg=raw[:80]):
@@ -288,6 +290,55 @@ class SpoolTest(_Base):
         self.run_applier()
         self.assertFalse(result.exists())
 
+    def test_nested_json_next_to_a_valid_request(self):
+        self.request("abcdefgh-1", "disable", "alice")
+        os.utime(str(self.spool.requests / "abcdefgh-1.json"), (1, 1))
+        self.request("abcdefgh-2", "", "", raw=b"[" * 4000)
+        self.assertEqual(self.run_applier(), 0)
+        self.assertEqual(os.listdir(self.spool.requests), [])
+        self.assertEqual(self.status("abcdefgh-1")["status"], "applied")
+        self.assertEqual((self.status("abcdefgh-2")["status"], self.status("abcdefgh-2")["stage"]),
+                         ("failed", "request"))
+        self.assertFalse(pa.Accounts(self.base).enabled("alice"))
+
+    def test_unexpected_read_error_refuses_the_request(self):
+        self.request("abcdefgh-1", "disable", "alice")
+        with mock.patch.object(ap, "parse_request", side_effect=MemoryError):
+            self.assertEqual(self.run_applier(), 0)
+        self.assertEqual(os.listdir(self.spool.requests), [])
+        self.assertEqual(self.status("abcdefgh-1")["error"], "cannot read: MemoryError")
+
+    def test_entry_kept_until_its_status_is_written(self):
+        self.request("abcdefgh-1", "disable", "alice")
+        os.chmod(str(self.spool.status), 0o555)
+        self.addCleanup(os.chmod, str(self.spool.status), 0o755)
+        if os.access(str(self.spool.status), os.W_OK):
+            self.skipTest("needs a non-root user")
+        with self.assertRaises(OSError):
+            self.run_applier()
+        self.assertEqual(os.listdir(self.spool.requests), ["abcdefgh-1.json"])
+
+    def test_killed_after_take_is_failed_next_run(self):
+        self.request("abcdefgh-1", "disable", "alice")
+        with mock.patch.object(ap.Applier, "apply_batch", side_effect=Crash):
+            with self.assertRaises(Crash):
+                self.run_applier()
+        self.assertEqual(os.listdir(self.spool.requests), [])
+        self.assertEqual(self.status("abcdefgh-1")["status"], "applying")
+        self.run_applier()
+        record = self.status("abcdefgh-1")
+        self.assertEqual((record["status"], record["stage"], record["restored"]), ("failed", "interrupted", True))
+        self.assertTrue(pa.Accounts(self.base).enabled("alice"))
+
+    def test_entry_that_cannot_be_removed_ends_the_run(self):
+        self.request("abcdefgh-1", "disable", "alice")
+        with mock.patch.object(ap.Spool, "discard", side_effect=PermissionError):
+            self.assertEqual(self.run_applier(), 2)
+        self.assertEqual(self.status("abcdefgh-1")["status"], "applied")
+        self.assertEqual(self.docker.restarts(), [["xray-ha"]])
+        self.assertEqual(self.run_applier(), 0)  # dropped as a used id
+        self.assertEqual(os.listdir(self.spool.requests), [])
+
     def test_reused_id_dropped(self):
         self.request("abcdefgh-1", "disable", "alice")
         self.run_applier()
@@ -351,6 +402,45 @@ class ApplyTest(_Base):
         self.assertEqual(self.docker.ha_users["carol"], passwords["carol"])
         self.assertEqual(self.docker.restarts(), [["xray-ha"]])  # one batch, one restart
         self.assert_no_leaks()
+
+    def results_live(self):
+        """Every result file left holds a password the HA entry accepts."""
+        for path in self.spool.results.iterdir():
+            result = json.loads(path.read_text())
+            self.assertEqual(self.docker.ha_users.get(result["username"]), result["password"], path.name)
+
+    def same_account(self, *ops, batches=2):
+        for i, (op, name) in enumerate(ops, 1):
+            self.request(f"abcdefgh-{i}", op, name)
+            os.utime(str(self.spool.requests / f"abcdefgh-{i}.json"), (i, i))
+        self.assertEqual(self.run_applier(), 0)
+        self.assertEqual(len(self.docker.restarts()), batches)  # one verified restart per batch
+        self.results_live()
+        self.assert_no_leaks()
+
+    def test_same_account_add_then_rotate(self):
+        self.same_account(("add", "carol"), ("rotate", "carol"))
+        first, second = self.status("abcdefgh-1"), self.status("abcdefgh-2")
+        self.assertEqual((first["status"], first["result"], first["superseded_by"]), ("applied", False, "abcdefgh-2"))
+        self.assertEqual((second["status"], second["result"]), ("applied", True))
+        self.assertEqual(os.listdir(self.spool.results), ["abcdefgh-2.json"])
+
+    def test_same_account_rotate_then_remove(self):
+        self.same_account(("rotate", "bob"), ("remove", "bob"))
+        self.assertEqual((self.status("abcdefgh-1")["result"], self.status("abcdefgh-1")["superseded_by"]),
+                         (False, "abcdefgh-2"))
+        self.assertEqual(self.status("abcdefgh-2")["status"], "applied")
+        self.assertEqual(os.listdir(self.spool.results), [])
+        self.assertNotIn("bob", self.passwords())
+
+    def test_same_account_disable_then_enable(self):
+        alice = self.passwords()["alice"]
+        self.same_account(("disable", "alice"), ("enable", "alice"), ("disable", "bob"))
+        for request_id in ("abcdefgh-1", "abcdefgh-2", "abcdefgh-3"):
+            self.assertEqual(self.status(request_id)["restarted"], ["xray-ha"])
+        self.assertEqual(self.docker.ha_users["alice"], alice)
+        self.assertNotIn("bob", self.docker.ha_users)  # the third request joined the second batch
+        self.assertIn("alice", self.probe.calls)
 
     def test_remove(self):
         self.request("abcdefgh-1", "remove", "svc-docker-node01")
@@ -496,6 +586,44 @@ class FailureTest(_Base):
         self.assertFalse((self.base / ap.BACKUP_DIR).exists())
         self.assertEqual(self.docker.restarts(), [["xray-ha"], ["xray-ha"]])  # the interrupted one, the recovery
 
+    def test_killed_after_commit_is_finished_not_rolled_back(self):
+        real_rmtree = shutil.rmtree
+
+        def rmtree(path, *args, **kwargs):
+            manifest = Path(path) / ap.MANIFEST
+            if manifest.exists() and json.loads(manifest.read_text()).get("committed"):
+                raise Crash()
+            return real_rmtree(path, *args, **kwargs)
+        self.request("abcdefgh-1", "disable", "alice")
+        with mock.patch.object(ap.shutil, "rmtree", rmtree):
+            with self.assertRaises(Crash):
+                self.run_applier()
+        self.assertEqual(self.status("abcdefgh-1")["status"], "applied")
+        self.assertEqual(self.run_applier(), 0)
+        self.assertEqual(self.status("abcdefgh-1")["status"], "applied")
+        self.assertFalse(pa.Accounts(self.base).enabled("alice"))
+        self.assertNotIn("alice", self.docker.ha_users)
+        self.assertFalse((self.base / ap.BACKUP_DIR).exists())
+        self.assertEqual(self.docker.restarts(), [["xray-ha"]])  # no rollback restart
+        view = json.loads((self.spool.root / "status.json").read_text())
+        self.assertIs(view["unapplied_changes"], False)
+
+    def test_killed_before_the_results_loses_only_the_result(self):
+        self.request("abcdefgh-1", "add", "carol")
+        self.request("abcdefgh-2", "disable", "alice")
+        with mock.patch.object(ap.Spool, "write_result", side_effect=Crash):
+            with self.assertRaises(Crash):
+                self.run_applier()
+        self.assertEqual(self.run_applier(), 0)
+        first, second = self.status("abcdefgh-1"), self.status("abcdefgh-2")
+        self.assertEqual((first["status"], first["result"]), ("applied", False))
+        self.assertEqual((second["status"], second["restarted"]), ("applied", ["xray-ha"]))
+        self.assertNotIn("result", second)
+        self.assertIn("carol", self.passwords())
+        self.assertEqual(os.listdir(self.spool.results), [])
+        self.assertEqual(self.docker.restarts(), [["xray-ha"]])
+        self.assert_no_leaks()
+
     def test_applying_without_backup_is_failed(self):
         self.spool.write_status("abcdefgh-1", {"id": "abcdefgh-1", "status": "applying"})
         self.run_applier()
@@ -604,6 +732,11 @@ class CommandLineTest(unittest.TestCase):
         p = subprocess.run([sys.executable, "-I", "-B", str(script), "status"], env=env, check=True,
                            stdout=subprocess.PIPE, universal_newlines=True)
         self.assertEqual(json.loads(p.stdout)["accounts"], [])
+        env["PROXY_APPLY_REQUESTER"] = "no-such-user-proxy-apply"
+        p = subprocess.run([sys.executable, "-I", "-B", str(script), "run"], env=env, stderr=subprocess.PIPE,
+                           universal_newlines=True)
+        self.assertEqual((p.returncode, p.stderr), (2, "error: no user 'no-such-user-proxy-apply' "
+                                                        "(PROXY_APPLY_REQUESTER)\n"))
 
 
 if __name__ == "__main__":

@@ -1,16 +1,19 @@
 # Applies the proxy portal's account change requests (services/proxy-portal/applier/README.md).
-# Started by proxy-apply.path when a request arrives, and by proxy-apply.timer to expire one-time results.
+# Started by proxy-apply.path when a request arrives, and by proxy-apply.timer to expire one-time results and
+# recover an interrupted apply.
 [Unit]
 Description=Apply proxy account change requests
 After=docker.service
 Requires=docker.service
-# Requests can come in bursts, and each run can end in a second: no start limit, or the path unit stops
+# No start limit: a burst of requests starts many short runs, and hitting the limit would stop proxy-apply.path.
+# A failed run waits 30 s instead (ExecStopPost), so a request it cannot take is retried at that pace.
 StartLimitIntervalSec=0
 
 [Service]
 Type=oneshot
 EnvironmentFile=/etc/default/proxy-apply
 ExecStart=/usr/bin/python3 -I -B ${PROXY_APPLY_SERVICES_DIR}/proxy-portal/applier/proxy_apply.py run
+ExecStopPost=/bin/sh -c '[ "$$SERVICE_RESULT" = success ] || sleep 30'
 UMask=0077
 TimeoutStartSec=15min
 NoNewPrivileges=yes
