@@ -6,7 +6,7 @@
 
 | Page | JSON | Who | Content |
 | :--- | :--- | :--- | :--- |
-| Status `/` | `/api/status` | everyone | a headline of what the probes mean for users; `ha-general` HTTP and SOCKS5 with its proxies passing out of configured; `ha-private` and the private proxies; the public proxies; the last check; a 30-day history of `ha-general`'s probe success rate; incidents |
+| Status `/` | `/api/status` | everyone | a headline of what the probes mean for users; `ha-general` HTTP and SOCKS5 with its pool proxies passing out of configured; `ha-private` and the private proxies; the public proxies; the last check; a 30-day history of `ha-general`'s probe success rate; incidents |
 | My access `/access` | `/api/me/access` | signed in | the user's proxy account, the one named as their Determined username (none, on or off, admin or not), the entries it may use with their addresses on the private (`192.168.233.8`) and campus (`10.0.1.68`) networks, and client settings with `<password>` in place of the password |
 | My usage `/usage` | `/api/me/usage` | signed in | the user's observed download, upload and total over 24 hours, 7 days and 30 days, and a trend chart |
 
