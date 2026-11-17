@@ -488,7 +488,7 @@ class RepoFilesRegexTest(RepoFilesYamlTest):
 class DefaultBaseDirTest(unittest.TestCase):
     """
     不带 --base-dir、以相对路径运行脚本时，也要找到脚本所在的 services/ 目录。
-    Python 3.8 (supp VM) 下 __main__ 的 __file__ 是命令行上输入的相对路径 (3.9 起为绝对路径)，
+    Python 3.8 (附属服务 VM) 下 __main__ 的 __file__ 是命令行上输入的相对路径 (3.9 起为绝对路径)，
     所以只有在 Python 3.8 下运行这个测试才能发现问题。
     """
 

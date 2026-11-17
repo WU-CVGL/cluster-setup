@@ -5,14 +5,14 @@ Xray 服务创建器
 自动创建 xray 服务配置，更新 docker-compose.yml 和 prometheus.yml
 
 端口检查只能看到 docker-compose.yml 中各服务发布到主机的端口 (ports:)。
-下列服务占用 supp VM 的主机端口，但在 docker-compose.yml 的 ports: 中看不到，
+下列服务占用 附属服务 VM 的主机端口，但在 docker-compose.yml 的 ports: 中看不到，
 因此登记在 RESERVED_HOST_PORTS 中 (端口变化时请同步更新):
   - frps (network_mode: host): bind_port / quic_bind_port 7000、dashboard_port 7500 (见 frp/frps.ini)
   - rustdesk hbbs/hbbr (network_mode: host): 21115-21119 (rustdesk 默认端口)
   - Harbor (独立的 docker compose，不在本文件中): 50000 (见 harbor/harbor.yml 的 http.port)
   - node-exporter (services/node-exporter/docker-compose.yaml，独立的 docker compose): 9100
 frp 用户隧道的 remote_port 由用户自行选择，脚本无法得知；
-必要时在 supp VM 上用 `ss -ltn | grep :<port>` 再确认一次。
+必要时在附属服务 VM 上用 `ss -ltn | grep :<port>` 再确认一次。
 """
 
 import os
@@ -24,7 +24,7 @@ from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
 
 try:
-    import yaml  # PyYAML (supp VM 上为 5.3.1)
+    import yaml  # PyYAML (附属服务 VM 上为 5.3.1)
 except ImportError:  # 没有 PyYAML 时使用基于正则的简单解析
     yaml = None
 
@@ -188,7 +188,7 @@ class XrayServiceCreator:
         """
         if base_dir is None:
             # 默认: services/xray/scripts -> services/
-            # 先 resolve()：Python 3.8 (supp VM) 下 __file__ 是相对路径 (如 create_xray_service.py)，
+            # 先 resolve()：Python 3.8 (附属服务 VM) 下 __file__ 是相对路径 (如 create_xray_service.py)，
             # 否则在 scripts/ 或 xray/ 下运行时会找不到 docker-compose.yml
             self.base_dir = Path(__file__).resolve().parent.parent.parent
         else:

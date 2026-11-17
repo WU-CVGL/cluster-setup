@@ -20,7 +20,7 @@
 
 - ...
 
-The `config/config.json` files are gitignored; they only exist on the supp VM.
+The `config/config.json` files are gitignored; they only exist on the supplementary services VM.
 
 
 ## Tools

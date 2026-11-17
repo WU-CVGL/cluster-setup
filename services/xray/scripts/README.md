@@ -87,7 +87,7 @@ python3 xray/scripts/create_xray_service.py \
 如果服务或端口已被占用，脚本会报错并显示占用该端口的服务名。
 
 脚本看不到的端口：frp 用户隧道的 `remote_port`（由用户自行选择）以及 Docker 随机分配的主机端口。
-在 supp VM 上可以再确认一次：
+在 附属服务 VM（supplementary services VM） 上可以再确认一次：
 
 ```bash
 ss -ltn | grep ":<port> "
@@ -253,5 +253,5 @@ python3 xray/scripts/create_xray_service.py <url> <name> 46889 46089
 
 如果生成的配置文件有问题：
 - 检查 `xray/<service_name>/config/config.json`
-- 参考 supp VM 上其他服务的配置文件（`xray/<name>/config/config.json`，被 gitignore，不在仓库中）
+- 参考 附属服务 VM（supplementary services VM） 上其他服务的配置文件（`xray/<name>/config/config.json`，被 gitignore，不在仓库中）
 - 手动修复后重新启动服务
