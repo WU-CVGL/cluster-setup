@@ -31,10 +31,10 @@ class LanguageTest(PortalTestCase):
         page = self.client.get("/", HTTP_ACCEPT_LANGUAGE="zh-CN,zh;q=0.9,en;q=0.5")
         self.assertContains(page, '<html lang="zh-Hans">')
         self.assertContains(page, "代理服务状态")
-        self.assertContains(page, "默认代理可用；1 个代理未通过探测，故障切换正常")
+        self.assertContains(page, "默认代理可用；代理池中 1 个代理未通过探测，故障切换正常")
         self.assertNotContains(page, "Default proxy available")
         api = self.client.get("/api/status", HTTP_ACCEPT_LANGUAGE="zh-CN").json()
-        self.assertEqual(api["headline"]["text"], "默认代理可用；1 个代理未通过探测，故障切换正常")
+        self.assertEqual(api["headline"]["text"], "默认代理可用；代理池中 1 个代理未通过探测，故障切换正常")
 
     def test_switch(self):
         response = self.client.post("/language", {"language": "zh-hans", "next": "/"})

@@ -74,11 +74,11 @@ def build(username):
     enabled = account is not None and account.enabled
     admin = enabled and account.admin
     general_ports = {k: v or DEFAULT_PORTS["ha-general"][k] for k, v in status.entry_ports["ha-general"].items()}
-    all_ports = {k: v or DEFAULT_PORTS["ha-private"][k] for k, v in status.entry_ports["ha-private"].items()}
+    private_ports = {k: v or DEFAULT_PORTS["ha-private"][k] for k, v in status.entry_ports["ha-private"].items()}
     show_admin = account is not None and account.admin
     entries = [_entry("ha-general", "ha", True, general_ports, enabled, True)]
     if show_admin:
-        entries.append(_entry("ha-private", "ha", False, all_ports, admin, True))
+        entries.append(_entry("ha-private", "ha", False, private_ports, admin, True))
     for proxy in status.proxies:
         if proxy.public:
             # without raw auth, a public proxy's own entry takes no account: anyone may use it

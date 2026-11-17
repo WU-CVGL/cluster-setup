@@ -19,17 +19,19 @@ class HeadlineTest(SimpleTestCase):
     def test_table(self):
         cases = [
             # http, socks, passing, configured -> level, text
-            (PASSING, PASSING, 4, 4, "ok", "Default proxy available; all 4 proxies passing"),
-            (PASSING, PASSING, 3, 4, "degraded", "Default proxy available; 1 proxy not passing, failover working"),
-            (PASSING, PASSING, 2, 4, "degraded", "Default proxy available; 2 proxies not passing, failover working"),
-            (PASSING, PASSING, 1, 4, "degraded", "Default proxy available on its last passing proxy, without a spare"),
-            (PASSING, PASSING, 0, 4, "degraded", "Default proxy answering, but no proxy passes its probe"),
+            (PASSING, PASSING, 4, 4, "ok", "Default proxy available; all 4 pool proxies passing"),
+            (PASSING, PASSING, 3, 4, "degraded", "Default proxy available; 1 pool proxy not passing, failover working"),
+            (PASSING, PASSING, 2, 4, "degraded",
+             "Default proxy available; 2 pool proxies not passing, failover working"),
+            (PASSING, PASSING, 1, 4, "degraded",
+             "Default proxy available on its last passing pool proxy, without a spare"),
+            (PASSING, PASSING, 0, 4, "degraded", "Default proxy answering, but no pool proxy passes its probe"),
             (PASSING, PASSING, None, None, "ok", "Default proxy available"),
             (FAILING, PASSING, 4, 4, "degraded", "HTTP entry failing, SOCKS5 still available"),
             (PASSING, FAILING, 4, 4, "degraded", "SOCKS5 entry failing, HTTP still available"),
             (FAILING, FAILING, 3, 4, "down",
-             "Default proxy failing while its proxies pass: the HA entry itself is down"),
-            (FAILING, FAILING, 0, 4, "down", "Default proxy failing: no proxy passes its probe"),
+             "Default proxy failing while its pool proxies pass: the HA entry itself is down"),
+            (FAILING, FAILING, 0, 4, "down", "Default proxy failing: no pool proxy passes its probe"),
             (FAILING, FAILING, None, None, "down", "Default proxy failing"),
             (UNKNOWN, UNKNOWN, 4, 4, "unknown", "Status unknown: no recent probe results for the default proxy"),
             (PASSING, UNKNOWN, 4, 4, "degraded", "HTTP entry available; SOCKS5 status unknown"),
@@ -77,7 +79,7 @@ class StatusTest(PortalTestCase):
     def test_page_is_public(self):
         response = self.client.get("/")
         self.assertEqual(response.status_code, 200)
-        self.assertContains(response, "Default proxy available; 1 proxy not passing, failover working")
+        self.assertContains(response, "Default proxy available; 1 pool proxy not passing, failover working")
         self.assertContains(response, "Private proxies")
         self.assertContains(response, "us-west-racknerd-12tb")
         self.assert_only_fixed_queries()

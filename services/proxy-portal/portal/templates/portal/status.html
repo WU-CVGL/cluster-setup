@@ -1,7 +1,7 @@
 {% extends "portal/base.html" %}{% load i18n portal %}
 {% block title %}{% translate "Status" %}{% endblock %}
 {% block content %}
-{% with general=data.entries|get:"ha-general" admin_entry=data.entries|get:"ha-private" %}
+{% with general=data.entries|get:"ha-general" %}
 <div class="hero-head">
   <div>
     <div class="eyebrow">{% translate "Service health" %}</div>

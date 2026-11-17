@@ -24,20 +24,21 @@ def headline(http, socks, passing, configured):
             return OK, _("Default proxy available")
         failing = configured - passing  # failing or unknown: not passing
         if failing <= 0:
-            return OK, ngettext("Default proxy available; its %(n)d proxy is passing",
-                                "Default proxy available; all %(n)d proxies passing", configured) % {"n": configured}
+            return OK, ngettext("Default proxy available; its %(n)d pool proxy is passing",
+                                "Default proxy available; all %(n)d pool proxies passing",
+                                configured) % {"n": configured}
         if passing == 0:
-            return DEGRADED, _("Default proxy answering, but no proxy passes its probe")
+            return DEGRADED, _("Default proxy answering, but no pool proxy passes its probe")
         if passing == 1:
-            return DEGRADED, _("Default proxy available on its last passing proxy, without a spare")
-        return DEGRADED, ngettext("Default proxy available; %(n)d proxy not passing, failover working",
-                                  "Default proxy available; %(n)d proxies not passing, failover working",
+            return DEGRADED, _("Default proxy available on its last passing pool proxy, without a spare")
+        return DEGRADED, ngettext("Default proxy available; %(n)d pool proxy not passing, failover working",
+                                  "Default proxy available; %(n)d pool proxies not passing, failover working",
                                   failing) % {"n": failing}
     if http == FAILING and socks == FAILING:
         if passing:
-            return DOWN, _("Default proxy failing while its proxies pass: the HA entry itself is down")
+            return DOWN, _("Default proxy failing while its pool proxies pass: the HA entry itself is down")
         if passing == 0:
-            return DOWN, _("Default proxy failing: no proxy passes its probe")
+            return DOWN, _("Default proxy failing: no pool proxy passes its probe")
         return DOWN, _("Default proxy failing")
     if http == FAILING and socks == PASSING:
         return DEGRADED, _("HTTP entry failing, SOCKS5 still available")
