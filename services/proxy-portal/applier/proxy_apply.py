@@ -450,6 +450,8 @@ class Applier:
                 batch = self.take(names, stuck)
                 if batch:
                     failures += self.apply_batch(batch)
+                if (self.base / BACKUP_DIR / MANIFEST).exists():  # files not restored: the next run retries first
+                    break
             self.write_portal_status()
         if stuck:
             log(f"{len(stuck)} request entries could not be removed")

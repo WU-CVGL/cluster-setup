@@ -624,6 +624,28 @@ class FailureTest(_Base):
         self.assertEqual(self.docker.restarts(), [["xray-ha"]])
         self.assert_no_leaks()
 
+    def test_unrestored_files_stop_the_run(self):
+        self.docker.fail_restart = 1
+        self.request("abcdefgh-1", "disable", "alice")
+        self.request("abcdefgh-2", "enable", "alice")  # same account: the next batch
+        os.utime(str(self.spool.requests / "abcdefgh-1.json"), (1, 1))
+        with mock.patch.object(ap.Applier, "restore_files", side_effect=OSError("read-only")):
+            self.assertEqual(self.run_applier(), 1)
+        record = self.status("abcdefgh-1")
+        self.assertEqual((record["status"], record["stage"], record["restored"]), ("failed", "restart", False))
+        self.assertTrue((self.base / ap.BACKUP_DIR / ap.MANIFEST).exists())
+        self.assertEqual(os.listdir(self.spool.requests), ["abcdefgh-2.json"])
+        self.assertFalse((self.spool.status / "abcdefgh-2.json").exists())
+        with mock.patch.object(ap.Applier, "restore_files", side_effect=OSError("read-only")):
+            with self.assertRaises(OSError):  # main() exits 2
+                self.run_applier()
+        self.assertEqual(os.listdir(self.spool.requests), ["abcdefgh-2.json"])
+        self.assertEqual(self.run_applier(), 0)  # the files can be restored again
+        self.assertEqual(self.status("abcdefgh-1")["status"], "failed")
+        self.assertEqual(self.status("abcdefgh-2")["status"], "applied")
+        self.assertTrue(pa.Accounts(self.base).enabled("alice"))
+        self.assertFalse((self.base / ap.BACKUP_DIR).exists())
+
     def test_applying_without_backup_is_failed(self):
         self.spool.write_status("abcdefgh-1", {"id": "abcdefgh-1", "status": "applying"})
         self.run_applier()
