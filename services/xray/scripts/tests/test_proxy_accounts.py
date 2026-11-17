@@ -25,9 +25,9 @@ import proxy_accounts as pa  # noqa: E402
 from XrayConfigHandler import XrayConfigHandler  # noqa: E402
 
 SERVICES = Path(__file__).resolve().parents[3]
-PUBLIC = "usca5-bwh-sla-1tb"     # listed in xray/public-lines.txt
+PUBLIC = "usca5-bwh-sla-1tb"     # listed in xray/public-proxies.txt
 PRIVATE = "jpty1-bwh-2tb"        # not listed: private
-HTTP_PROXY_TAGS = ("http_IN", "socks_IN", "ha-all_http_IN", "ha-all_socks_IN")
+HTTP_PROXY_TAGS = ("http_IN", "socks_IN", "ha-private_http_IN", "ha-private_socks_IN")
 
 
 def run(base, *argv):
@@ -64,14 +64,14 @@ class _Base(unittest.TestCase):
     def setUp(self):
         self.base = Path(tempfile.mkdtemp())
         self.addCleanup(shutil.rmtree, self.base)
-        for rel in (pa.HA_EXAMPLE, pa.BLACKBOX_EXAMPLE, pa.PUBLIC_LINES_FILE):
+        for rel in (pa.HA_EXAMPLE, pa.BLACKBOX_EXAMPLE, pa.PUBLIC_PROXIES_FILE):
             (self.base / rel).parent.mkdir(parents=True, exist_ok=True)
             shutil.copy(SERVICES / rel, self.base / rel)
 
-    def line(self, name, text=None):
+    def proxy(self, name, text=None):
         path = self.base / "xray" / name / "config" / "config.json"
         path.parent.mkdir(parents=True)
-        path.write_text(raw_line_config() if text is None else text)
+        path.write_text(proxy_config() if text is None else text)
         return path
 
     def accounts(self):
@@ -155,7 +155,7 @@ class FormatTest(_Base):
         self.assertEqual(run(self.base, "render")[0], 0)  # a version 2 file renders: no admins
         ha = json.loads((self.base / pa.HA_CONFIG).read_text())
         users = {i["tag"]: [u["user"] for u in i["settings"].get("users", [])] for i in ha["inbounds"]}
-        self.assertEqual(users["ha-all_http_IN"], ["svc-monitor"])
+        self.assertEqual(users["ha-private_http_IN"], ["svc-monitor"])
         self.assertEqual(run(self.base, "admin", "bob", "on")[0], 0)  # the first change writes version 3
         self.assertEqual(self.accounts(), {"version": 3, "raw_auth": False, "accounts": {
             "alice": {"password": "pw-a", "enabled": False, "admin": False},
@@ -206,7 +206,7 @@ class EnableTest(_Base):
         before = self.passwords()
         code, _, err = run(self.base, "disable", "alice")
         self.assertEqual(code, 0)
-        self.assertIn("the public lines' own entries still accept it", err)
+        self.assertIn("the public proxies' own entries still accept it", err)
         self.assertEqual(self.passwords(), before)  # the password is kept
         self.assertFalse(self.accounts()["accounts"]["alice"]["enabled"])
         self.assertEqual(run(self.base, "disable", "alice")[0], 0)  # idempotent
@@ -242,7 +242,7 @@ class EnableTest(_Base):
                 accounts.remove(name)
 
     def test_render_leaves_disabled_accounts_out(self):
-        raw = self.line(PUBLIC)
+        raw = self.proxy(PUBLIC)
         self.add("alice", "bob", "svc-monitor", "svc-ha")
         run(self.base, "disable", "alice")
         for raw_auth in ("off", "on"):
@@ -264,8 +264,8 @@ class EnableTest(_Base):
 class StatusTest(_Base):
     def test_status_json_has_no_passwords(self):
         self.add("alice", "bob", "svc-monitor", "svc-ha")
-        self.line(PUBLIC)
-        self.line(PRIVATE)
+        self.proxy(PUBLIC)
+        self.proxy(PRIVATE)
         run(self.base, "disable", "bob")
         run(self.base, "admin", "alice", "on")
         code, out, _ = run(self.base, "status", "--json")
@@ -275,13 +275,13 @@ class StatusTest(_Base):
         view = json.loads(out)
         text = (self.base / pa.ACCOUNTS_FILE).read_text()
         self.assertEqual(view, {
-            "raw_auth": False, "disabled_refused_at": ["ha-general", "ha-all", "private-lines"],
+            "raw_auth": False, "disabled_refused_at": ["ha-general", "ha-private", "private-proxies"],
             "accounts": [
                 {"name": "alice", "kind": "user", "enabled": True, "admin": True, "protected": False},
                 {"name": "bob", "kind": "user", "enabled": False, "admin": False, "protected": False},
                 {"name": "svc-ha", "kind": "service", "enabled": True, "admin": False, "protected": True},
                 {"name": "svc-monitor", "kind": "service", "enabled": True, "admin": False, "protected": True}],
-            "lines": [{"name": PRIVATE, "access": "admin"}, {"name": PUBLIC, "access": "public"}],
+            "proxies": [{"name": PRIVATE, "access": "private"}, {"name": PUBLIC, "access": "public"}],
             "accounts_sha256": pa.sha256_text(text), "applied": None, "unapplied_changes": None})
         (self.base / pa.APPLIED_FILE).write_text(json.dumps({"accounts_sha256": pa.sha256_text(text),
                                                              "applied_at": "2000-01-01T00:00:00Z"}))
@@ -290,10 +290,10 @@ class StatusTest(_Base):
         run(self.base, "raw-auth", "on")
         view = json.loads(run(self.base, "status", "--json")[1])
         self.assertEqual((view["unapplied_changes"], view["disabled_refused_at"]),
-                         (True, ["ha-general", "ha-all", "private-lines", "public-lines"]))
+                         (True, ["ha-general", "ha-private", "private-proxies", "public-proxies"]))
         code, out, _ = run(self.base, "status")
         self.assertIn("alice                            user     enabled  admin", out)
-        self.assertIn(f"line {PRIVATE:<40} admins only", out)
+        self.assertIn(f"proxy {PRIVATE:<40} private", out)
         self.assertIn("bob", out)
         self.assertNotIn(self.passwords()["bob"], out)
 
@@ -323,9 +323,9 @@ class LockTest(_Base):
 class RenderTest(_Base):
     def setUp(self):
         super().setUp()
-        self.raw_text = raw_line_config()
-        self.raw = self.line(PUBLIC)
-        self.private = self.line(PRIVATE)
+        self.raw_text = proxy_config()
+        self.raw = self.proxy(PUBLIC)
+        self.private = self.proxy(PRIVATE)
 
     def ha(self):
         return json.loads((self.base / pa.HA_CONFIG).read_text())
@@ -334,7 +334,7 @@ class RenderTest(_Base):
         users = {}
         for inbound in config["inbounds"]:
             if inbound["protocol"] in ("http", "socks"):
-                key = inbound["tag"] if inbound["tag"].startswith("ha-all") else inbound["protocol"]
+                key = inbound["tag"] if inbound["tag"].startswith("ha-private") else inbound["protocol"]
                 users[key] = {u["user"]: u["pass"] for u in inbound["settings"].get("users", [])}
         return users
 
@@ -349,13 +349,13 @@ class RenderTest(_Base):
         self.assertIn("svc-monitor", err)
         self.assertFalse((self.base / pa.HA_CONFIG).exists())
         self.add("svc-monitor")
-        code, _, err = run(self.base, "render")  # the private lines always need svc-ha
+        code, _, err = run(self.base, "render")  # the private proxies always need svc-ha
         self.assertEqual(code, 1)
         self.assertIn("svc-ha", err)
         self.assertFalse((self.base / pa.HA_CONFIG).exists())
 
     def test_render_without_raw_auth(self):
-        """The four entry types: ha-general, ha-all, a private line's own entry, a public line's own entry."""
+        """The four entry types: ha-general, ha-private, a private proxy's own entry, a public proxy's own entry."""
         self.add("alice", "bob", "carol", "svc-monitor", "svc-ha", "svc-docker-node01")
         run(self.base, "admin", "alice", "on")
         run(self.base, "admin", "carol", "on")
@@ -363,28 +363,28 @@ class RenderTest(_Base):
         code, out, _ = run(self.base, "render")
         self.assertEqual(code, 0)
         self.assertEqual(out.split(), [str(pa.HA_CONFIG), str(pa.BLACKBOX_CONFIG),
-                                       f"xray/{PRIVATE}/config/config.json"])  # the public line untouched
+                                       f"xray/{PRIVATE}/config/config.json"])  # the public proxy untouched
         self.assertEqual(self.raw.read_text(), self.raw_text)
         pw = self.passwords()
         ha = self.ha()
         general = {k: pw[k] for k in ("alice", "bob", "svc-docker-node01", "svc-monitor")}
         admins = {k: pw[k] for k in ("alice", "svc-monitor")}
         self.assertEqual(self.inbound_users(ha), {"http": general, "socks": general,
-                                                  "ha-all_http_IN": admins, "ha-all_socks_IN": admins})
+                                                  "ha-private_http_IN": admins, "ha-private_socks_IN": admins})
         for inbound in ha["inbounds"]:
             if inbound["protocol"] == "socks":
                 self.assertEqual((inbound["settings"]["auth"], inbound["settings"]["udp"]), ("password", True))
-        # The HA entry logs in as svc-ha to the private lines only
+        # The HA entry logs in as svc-ha to the private proxies only
         relay = self.outbound_users(ha)
         self.assertEqual(sorted(t for t, users in relay.items() if users == ["svc-ha"]),
                          sorted(t for t in relay if t.startswith("private-")))
         self.assertEqual(len(relay), 9)
         self.assertTrue(all(users in ([], ["svc-ha"]) for users in relay.values()))
         private = self.inbound_users(json.loads(self.private.read_text()))
-        line_users = {k: pw[k] for k in ("alice", "svc-ha", "svc-monitor")}
-        self.assertEqual(private, {"http": line_users, "socks": line_users})
+        proxy_users = {k: pw[k] for k in ("alice", "svc-ha", "svc-monitor")}
+        self.assertEqual(private, {"http": proxy_users, "socks": proxy_users})
         self.assertEqual(mode(self.private), 0o600)
-        # Apart from the users, the rendered configs are the example and the generated line
+        # Apart from the users, the rendered configs are the example and the generated proxy
         example = json.loads((self.base / pa.HA_EXAMPLE).read_text())
         for config in (ha, example):
             for inbound in config["inbounds"]:
@@ -392,14 +392,14 @@ class RenderTest(_Base):
             for outbound in config["outbounds"][1:]:
                 outbound["settings"]["servers"][0].pop("users", None)
         self.assertEqual(ha, example)
-        line = json.loads(self.private.read_text())
-        XrayConfigHandler.set_inbound_users(line, None)
-        self.assertEqual(json.dumps(line, indent=4, ensure_ascii=False), self.raw_text)
+        proxy = json.loads(self.private.read_text())
+        XrayConfigHandler.set_inbound_users(proxy, None)
+        self.assertEqual(json.dumps(proxy, indent=4, ensure_ascii=False), self.raw_text)
         for rel in (pa.HA_CONFIG, pa.BLACKBOX_CONFIG):
             self.assertEqual(mode(self.base / rel), 0o600)
         self.assertEqual(run(self.base, "render")[1], "")  # nothing changed
 
-    def test_admin_changes_reach_ha_all_and_the_private_lines(self):
+    def test_admin_changes_reach_ha_private_and_the_private_proxies(self):
         self.add("alice", "bob", "svc-monitor", "svc-ha")
         run(self.base, "render")
         public_before = self.raw.read_text()
@@ -413,13 +413,13 @@ class RenderTest(_Base):
             self.assertEqual(code, 0)
             self.assertIn(f"xray/{PRIVATE}/config/config.json", out.split(), command)
             users = self.inbound_users(self.ha())
-            self.assertEqual(set(users["ha-all_http_IN"]), expected, command)
-            self.assertEqual(set(users["ha-all_socks_IN"]), expected, command)
+            self.assertEqual(set(users["ha-private_http_IN"]), expected, command)
+            self.assertEqual(set(users["ha-private_socks_IN"]), expected, command)
             self.assertEqual(set(self.inbound_users(json.loads(self.private.read_text()))["http"]),
                              (expected - {"svc-monitor"}) | {"svc-ha", "svc-monitor"}, command)
             self.assertEqual(users["http"].get("bob"), self.passwords()["bob"] if command[0] != "disable" else None)
-        self.assertEqual(self.raw.read_text(), public_before)  # raw auth off: the public line never changes
-        # A non-admin change touches neither ha-all nor the private lines
+        self.assertEqual(self.raw.read_text(), public_before)  # raw auth off: the public proxy never changes
+        # A non-admin change touches neither ha-private nor the private proxies
         private_before = self.private.read_text()
         run(self.base, "rotate", "alice")
         out = run(self.base, "render")[1].split()
@@ -472,7 +472,7 @@ class RenderTest(_Base):
 
     def test_raw_auth_off_leaves_other_configs_alone(self):
         self.add("svc-monitor", "svc-ha")
-        odd = self.base / "xray/us-west-racknerd-12tb/config/config.json"  # a public line
+        odd = self.base / "xray/us-west-racknerd-12tb/config/config.json"  # a public proxy
         odd.parent.mkdir(parents=True)
         text = '{"inbounds": [{"protocol": "socks", "settings": {"udp": true}}, {"protocol": "vmess"}]}'
         odd.write_text(text)
@@ -499,14 +499,14 @@ class RenderTest(_Base):
         changed = [(a, b) for a, b in zip(example, rendered) if a != b]
         hosts = [("http", "xray-ha:8889"), ("socks5", "xray-ha:1089"), ("http", "xray-ha:8890"),
                  ("socks5", "xray-ha:1090")]
-        for line in ("jpty1-bwh-2tb", "miyaip-uk-01_relay_jpty1-bwh-2tb", "miyaip-uk-01_relay_usca5-bwh-sla-2tb",
-                     "miyaip-jp-01_relay_usca5-bwh-sla-2tb", "miyaip-jp-01_relay_jpty1-bwh-2tb"):
-            hosts += [("http", f"xray-{line}:8889"), ("socks5", f"xray-{line}:1089")]
+        for proxy in ("jpty1-bwh-2tb", "miyaip-uk-01_relay_jpty1-bwh-2tb", "miyaip-uk-01_relay_usca5-bwh-sla-2tb",
+                      "miyaip-jp-01_relay_usca5-bwh-sla-2tb", "miyaip-jp-01_relay_jpty1-bwh-2tb"):
+            hosts += [("http", f"xray-{proxy}:8889"), ("socks5", f"xray-{proxy}:1089")]
         self.assertEqual(changed, [(f"      proxy_url: {s}://svc-monitor:PASSWORD@{h}", f"      proxy_url: {s}://{auth}{h}")
                                    for s, h in hosts])
         self.assertEqual(sum("xray-ha:" in line for line in rendered), 4)
         self.assertFalse([line for line in rendered if "proxy_url:" in line and "PASSWORD" in line])
-        # the public lines: no account while raw auth is off
+        # the public proxies: no account while raw auth is off
         self.assertIn("      proxy_url: socks5://xray-usca5-bwh-sla-1tb:1089", rendered)
 
 
@@ -528,20 +528,20 @@ class ExampleTest(unittest.TestCase):
 
     def test_example_passes_the_isolation_check(self):
         config = json.loads((SERVICES / pa.HA_EXAMPLE).read_text())
-        lines = pa.check_ha(config, pa.public_lines(SERVICES))
-        self.assertEqual(sorted(lines.values()), sorted(
-            pa.public_lines(SERVICES) | {"jpty1-bwh-2tb", "miyaip-uk-01_relay_jpty1-bwh-2tb",
-                                         "miyaip-uk-01_relay_usca5-bwh-sla-2tb", "miyaip-jp-01_relay_usca5-bwh-sla-2tb",
-                                         "miyaip-jp-01_relay_jpty1-bwh-2tb"}))
-        self.assertEqual(len(lines), 9)
+        proxies = pa.check_ha(config, pa.public_proxies(SERVICES))
+        self.assertEqual(sorted(proxies.values()), sorted(
+            pa.public_proxies(SERVICES) | {"jpty1-bwh-2tb", "miyaip-uk-01_relay_jpty1-bwh-2tb",
+                                           "miyaip-uk-01_relay_usca5-bwh-sla-2tb",
+                                           "miyaip-jp-01_relay_usca5-bwh-sla-2tb", "miyaip-jp-01_relay_jpty1-bwh-2tb"}))
+        self.assertEqual(len(proxies), 9)
 
 
 class IsolationTest(unittest.TestCase):
-    """check_ha refuses every HA example in which ha-general could reach a private line."""
+    """check_ha refuses every HA example in which ha-general could reach a private proxy."""
 
     def setUp(self):
         self.example = json.loads((SERVICES / pa.HA_EXAMPLE).read_text())
-        self.public = pa.public_lines(SERVICES)
+        self.public = pa.public_proxies(SERVICES)
 
     def refused(self, change, message):
         config = json.loads(json.dumps(self.example))
@@ -565,15 +565,15 @@ class IsolationTest(unittest.TestCase):
     def test_mutations_refused(self):
         def private_as_pool(c):
             self.outbound(c, "private-jpty1-bwh-2tb")["tag"] = "pool-jpty1-bwh-2tb"
-        self.refused(private_as_pool, "not in xray/public-lines.txt")
+        self.refused(private_as_pool, "not in xray/public-proxies.txt")
 
         def private_under_pool_prefix(c):
             self.outbound(c, "private-jpty1-bwh-2tb")["tag"] = "pool-private-jpty1-bwh-2tb"
-        self.refused(private_under_pool_prefix, "not in xray/public-lines.txt")
+        self.refused(private_under_pool_prefix, "not in xray/public-proxies.txt")
 
-        def pool_to_private_line(c):
+        def pool_to_private_proxy(c):
             self.outbound(c, "pool-usca5-bwh-sla-1tb")["settings"]["servers"][0]["address"] = "xray-jpty1-bwh-2tb"
-        self.refused(pool_to_private_line, "not in xray/public-lines.txt")
+        self.refused(pool_to_private_proxy, "not in xray/public-proxies.txt")
 
         def general_selects_private(c):
             self.balancer(c, "ha-general")["selector"] = ["p"]
@@ -583,9 +583,9 @@ class IsolationTest(unittest.TestCase):
             self.balancer(c, "ha-general")["selector"].append("private-")
         self.refused(general_selects_too, "ha-general must select only pool-*")
 
-        def general_routed_to_all(c):
-            self.rule(c, "http_IN")["balancerTag"] = "ha-all"
-        self.refused(general_routed_to_all, "by inboundTag only")
+        def general_routed_to_ha_private(c):
+            self.rule(c, "http_IN")["balancerTag"] = "ha-private"
+        self.refused(general_routed_to_ha_private, "by inboundTag only")
 
         def general_routed_to_outbound(c):
             rule = self.rule(c, "socks_IN")
@@ -603,8 +603,8 @@ class IsolationTest(unittest.TestCase):
         self.refused(general_rule_with_condition, "by inboundTag only")
 
         def mixed_rule(c):
-            self.rule(c, "http_IN")["inboundTag"].append("ha-all_http_IN")
-            self.rule(c, "ha-all_socks_IN")["inboundTag"].remove("ha-all_http_IN")
+            self.rule(c, "http_IN")["inboundTag"].append("ha-private_http_IN")
+            self.rule(c, "ha-private_socks_IN")["inboundTag"].remove("ha-private_http_IN")
         self.refused(mixed_rule, "inbound")
 
         def default_not_blackhole(c):
@@ -620,40 +620,40 @@ class IsolationTest(unittest.TestCase):
         self.refused(extra_inbound, "exactly")
 
         def unrouted(c):
-            self.rule(c, "ha-all_http_IN")["inboundTag"] = ["ha-all_socks_IN"]
-        self.refused(unrouted, "no routing rule for ha-all_http_IN")
+            self.rule(c, "ha-private_http_IN")["inboundTag"] = ["ha-private_socks_IN"]
+        self.refused(unrouted, "no routing rule for ha-private_http_IN")
 
-        def all_misses_private(c):
-            self.balancer(c, "ha-all")["selector"] = ["pool-"]
-        self.refused(all_misses_private, "ha-all must select every line")
+        def ha_private_misses_private(c):
+            self.balancer(c, "ha-private")["selector"] = ["pool-"]
+        self.refused(ha_private_misses_private, "ha-private must select every proxy")
 
         def observatory_misses_private(c):
             c["observatory"]["subjectSelector"] = ["pool-"]
-        self.refused(observatory_misses_private, "observatory must cover every line")
+        self.refused(observatory_misses_private, "observatory must cover every proxy")
 
         def no_fallback(c):
-            self.balancer(c, "ha-all")["fallbackTag"] = "pool-usca5-bwh-sla-1tb"
+            self.balancer(c, "ha-private")["fallbackTag"] = "pool-usca5-bwh-sla-1tb"
         self.refused(no_fallback, "fall back to the blackhole")
 
-        def private_tag_to_public_line(c):
+        def private_tag_to_public_proxy(c):
             self.outbound(c, "private-jpty1-bwh-2tb")["settings"]["servers"][0]["address"] = "xray-usca6-bwh-1tb"
-        self.refused(private_tag_to_public_line, "public lines take pool-*")
+        self.refused(private_tag_to_public_proxy, "public proxies take pool-*")
 
         def relay_through_ha(c):
             self.outbound(c, "private-jpty1-bwh-2tb")["settings"]["servers"][0]["address"] = "xray-ha"
-        self.refused(relay_through_ha, "SOCKS to one xray-<line>")
+        self.refused(relay_through_ha, "SOCKS to one xray-<proxy>")
 
     def test_paths_besides_the_proxy_inbounds_refused(self):
-        def tunnel_to_all(c):
+        def tunnel_to_ha_private(c):
             c["inbounds"].append({"protocol": "dokodemo-door", "port": 2000, "tag": "fwd",
                                   "settings": {"address": "target", "port": 80}})
-            c["routing"]["rules"].append({"type": "field", "inboundTag": ["fwd"], "balancerTag": "ha-all"})
-        self.refused(tunnel_to_all, "the inbounds must be exactly")
+            c["routing"]["rules"].append({"type": "field", "inboundTag": ["fwd"], "balancerTag": "ha-private"})
+        self.refused(tunnel_to_ha_private, "the inbounds must be exactly")
 
-        def mixed_inbound_to_all(c):
+        def mixed_inbound_to_ha_private(c):
             c["inbounds"].append({"protocol": "mixed", "port": 1091, "tag": "mixed_IN", "settings": {}})
-            c["routing"]["rules"].append({"type": "field", "inboundTag": ["mixed_IN"], "balancerTag": "ha-all"})
-        self.refused(mixed_inbound_to_all, "the inbounds must be exactly")
+            c["routing"]["rules"].append({"type": "field", "inboundTag": ["mixed_IN"], "balancerTag": "ha-private"})
+        self.refused(mixed_inbound_to_ha_private, "the inbounds must be exactly")
 
         def duplicate_inbound(c):
             c["inbounds"].append(json.loads(json.dumps(c["inbounds"][2])))
@@ -668,11 +668,11 @@ class IsolationTest(unittest.TestCase):
             self.inbound(c, "api")["protocol"] = "http"
         self.refused(api_as_open_proxy, "must be dokodemo-door or tunnel")
 
-        def api_rule_to_all(c):
+        def api_rule_to_ha_private(c):
             rule = self.rule(c, "api")
             del rule["outboundTag"]
-            rule["balancerTag"] = "ha-all"
-        self.refused(api_rule_to_all, "the only rule for inbounds other than the proxy inbounds")
+            rule["balancerTag"] = "ha-private"
+        self.refused(api_rule_to_ha_private, "the only rule for inbounds other than the proxy inbounds")
 
         def api_rule_to_private(c):
             self.rule(c, "api")["outboundTag"] = "private-jpty1-bwh-2tb"
@@ -680,7 +680,7 @@ class IsolationTest(unittest.TestCase):
 
         def api_in_proxy_rule(c):
             c["routing"]["rules"].remove(self.rule(c, "api"))
-            self.rule(c, "ha-all_http_IN")["inboundTag"].append("api")
+            self.rule(c, "ha-private_http_IN")["inboundTag"].append("api")
         self.refused(api_in_proxy_rule, "by inboundTag only")
 
         def unknown_tag_rule(c):
@@ -713,42 +713,42 @@ class IsolationTest(unittest.TestCase):
             c["outbounds"][0]["proxySettings"] = {"tag": "private-jpty1-bwh-2tb"}
         self.refused(blackhole_chained, "the blackhole may set only")
 
-    def test_unlisted_line_is_private(self):
-        # Take a public line off the list: its pool-* outbound is refused, so it cannot stay in ha-general
+    def test_unlisted_proxy_is_private(self):
+        # Take a public proxy off the list: its pool-* outbound is refused, so it cannot stay in ha-general
         with self.assertRaises(pa.AccountsError):
             pa.check_ha(self.example, self.public - {"usca6-bwh-1tb"})
 
 
-class LinesTest(unittest.TestCase):
+class ProxiesTest(unittest.TestCase):
     def setUp(self):
         self.base = Path(tempfile.mkdtemp())
         self.addCleanup(shutil.rmtree, self.base)
         (self.base / "xray").mkdir()
 
     def write(self, text):
-        (self.base / pa.PUBLIC_LINES_FILE).write_text(text)
+        (self.base / pa.PUBLIC_PROXIES_FILE).write_text(text)
 
     def test_committed_list(self):
-        self.assertEqual(pa.public_lines(SERVICES), {"usca5-bwh-sla-1tb", "usca1-bwh-megaboxpro-2tb",
+        self.assertEqual(pa.public_proxies(SERVICES), {"usca5-bwh-sla-1tb", "usca1-bwh-megaboxpro-2tb",
                                                      "usca6-bwh-1tb", "us-west-racknerd-12tb"})
 
     def test_parse(self):
-        self.write("# comment\n\nline-a  # trailing\n  line_b\n")
-        self.assertEqual(pa.public_lines(self.base), {"line-a", "line_b"})
+        self.write("# comment\n\nproxy-a  # trailing\n  proxy_b\n")
+        self.assertEqual(pa.public_proxies(self.base), {"proxy-a", "proxy_b"})
         self.write("")
-        self.assertEqual(pa.public_lines(self.base), set())  # nothing public: every line private
+        self.assertEqual(pa.public_proxies(self.base), set())  # nothing public: every proxy private
 
     def test_refused(self):
-        for text, message in (("Line-A\n", "invalid"), ("a b\n", "invalid"), ("x\nx\n", "twice"),
+        for text, message in (("Proxy-A\n", "invalid"), ("a b\n", "invalid"), ("x\nx\n", "twice"),
                               ("-a\n", "invalid"), ("a.b\n", "invalid")):
             self.write(text)
             with self.assertRaises(pa.AccountsError, msg=text) as ctx:
-                pa.public_lines(self.base)
+                pa.public_proxies(self.base)
             self.assertIn(message, str(ctx.exception))
 
     def test_missing_file_is_an_error(self):
         with self.assertRaises(pa.AccountsError) as ctx:
-            pa.public_lines(self.base)
+            pa.public_proxies(self.base)
         self.assertIn("missing", str(ctx.exception))
 
 
@@ -786,9 +786,9 @@ class AdminTest(_Base):
         run(self.base, "disable", "alice")
         accounts = pa.Accounts(self.base)
         self.assertEqual((accounts.is_admin("alice"), accounts.admin_pairs()), (False, []))
-        self.assertEqual([n for n, _ in accounts.ha_all_users()], ["svc-monitor"])
-        self.assertEqual([n for n, _ in accounts.line_users(private=True)], ["svc-ha", "svc-monitor"])
-        self.assertIsNone(accounts.line_users(private=False))
+        self.assertEqual([n for n, _ in accounts.ha_private_users()], ["svc-monitor"])
+        self.assertEqual([n for n, _ in accounts.proxy_users(private=True)], ["svc-ha", "svc-monitor"])
+        self.assertIsNone(accounts.proxy_users(private=False))
         self.assertTrue(self.accounts()["accounts"]["alice"]["admin"])  # the flag is kept
 
 
@@ -815,7 +815,7 @@ class HandlerUsersTest(unittest.TestCase):
 class GitIgnoreTest(unittest.TestCase):
     SECRET_PATHS = ("services/proxy-accounts/accounts.json", "services/xray-ha/config/config.json",
                     "services/blackbox/config/blackbox.yml", "services/xray/usca5-bwh-sla-1tb/config/config.json",
-                    # the private lines' configs, which always hold accounts
+                    # the private proxies' configs, which always hold accounts
                     "services/xray/jpty1-bwh-2tb/config/config.json",
                     "services/xray/miyaip-uk-01_relay_jpty1-bwh-2tb/config/config.json",
                     # write_private's temp files, left behind if render is killed before the rename
@@ -836,7 +836,7 @@ class GitIgnoreTest(unittest.TestCase):
                                  capture_output=True, text=True, check=True).stdout
         self.assertEqual(tracked, "")
         for path in ("services/xray-ha/config.example.json", "services/blackbox/blackbox.example.yml",
-                     "services/xray/public-lines.txt"):
+                     "services/xray/public-proxies.txt"):
             ignored = subprocess.run(["git", "-C", str(repo), "check-ignore", "-q", "--no-index", path])
             self.assertEqual(ignored.returncode, 1, f"{path} should be in git")
 

@@ -59,7 +59,7 @@
         "type": "prometheus",
         "uid": "${prometheus_source}"
       },
-      "description": "All traffic of xray-ha's HTTP and SOCKS5 inbounds, by entry: ha-general and ha-all (admins only).",
+      "description": "All traffic of xray-ha's HTTP and SOCKS5 inbounds, by entry: ha-general and ha-private.",
       "gridPos": {
         "h": 8,
         "w": 24,
@@ -72,7 +72,7 @@
             "type": "prometheus",
             "uid": "${prometheus_source}"
           },
-          "expr": "sum by (entry) (label_replace(label_replace(rate(v2ray_traffic_downlink_bytes_total{job=\"v2ray\",proxy_role=\"entry\",dimension=\"inbound\",target!=\"api\"}[$__rate_interval]), \"entry\", \"ha-general\", \"target\", \"(http|socks)_IN\"), \"entry\", \"ha-all\", \"target\", \"ha-all_.*\")) * 8",
+          "expr": "sum by (entry) (label_replace(label_replace(rate(v2ray_traffic_downlink_bytes_total{job=\"v2ray\",proxy_role=\"entry\",dimension=\"inbound\",target!=\"api\"}[$__rate_interval]), \"entry\", \"ha-general\", \"target\", \"(http|socks)_IN\"), \"entry\", \"ha-private\", \"target\", \"ha-private_.*\")) * 8",
           "legendFormat": "{{entry}} download",
           "refId": "A"
         },
@@ -81,7 +81,7 @@
             "type": "prometheus",
             "uid": "${prometheus_source}"
           },
-          "expr": "sum by (entry) (label_replace(label_replace(rate(v2ray_traffic_uplink_bytes_total{job=\"v2ray\",proxy_role=\"entry\",dimension=\"inbound\",target!=\"api\"}[$__rate_interval]), \"entry\", \"ha-general\", \"target\", \"(http|socks)_IN\"), \"entry\", \"ha-all\", \"target\", \"ha-all_.*\")) * 8",
+          "expr": "sum by (entry) (label_replace(label_replace(rate(v2ray_traffic_uplink_bytes_total{job=\"v2ray\",proxy_role=\"entry\",dimension=\"inbound\",target!=\"api\"}[$__rate_interval]), \"entry\", \"ha-general\", \"target\", \"(http|socks)_IN\"), \"entry\", \"ha-private\", \"target\", \"ha-private_.*\")) * 8",
           "legendFormat": "{{entry}} upload",
           "refId": "B"
         }
@@ -133,7 +133,7 @@
         "type": "prometheus",
         "uid": "${prometheus_source}"
       },
-      "description": "Each user where the user enters the proxies: the HA entry (ha-general and ha-all together), and a line's own entry when it requires accounts (a private line always). Traffic the HA entry relays to a line is counted once, at the HA entry.",
+      "description": "Each user where the user enters the proxies: the HA entry (ha-general and ha-private together), and a proxy's own entry when it requires accounts (a private proxy always). Traffic the HA entry relays to a proxy is counted once, at the HA entry.",
       "gridPos": {
         "h": 10,
         "w": 24,

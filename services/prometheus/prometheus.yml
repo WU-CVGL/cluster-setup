@@ -149,9 +149,10 @@ scrape_configs:
   # End-to-end probes through each proxy entry (services/blackbox/blackbox.example.yml): a target is a
   # blackbox module, <entry>_<http|socks>; every probe fetches the same URL. 30 s apart, with a
   # 10 s scrape timeout over the module's 8 s, since a request abroad can take seconds.
-  # pool: the HA entries that use a line: ha-general (the public lines, in ha-all too), ha-all (the
-  # private lines, in ha-all only) or none. access: public, or admin-only (xray/public-lines.txt).
-  # A new xray line needs its two modules there and its two targets here, by hand.
+  # pool: the HA entries that use a proxy: ha-general (the public proxies, in ha-private too),
+  # ha-private (the private proxies, in ha-private only) or none. access: public, or private
+  # (xray/public-proxies.txt).
+  # A new xray proxy needs its two modules there and its two targets here, by hand.
   - job_name: "proxy-probe"
     metrics_path: /probe
     scrape_interval: 30s
@@ -165,12 +166,12 @@ scrape_configs:
           pool: ha-general
           access: public
       - targets:
-          - "ha-all_http"
-          - "ha-all_socks"
+          - "ha-private_http"
+          - "ha-private_socks"
         labels:
           kind: ha
-          pool: ha-all
-          access: admin-only
+          pool: ha-private
+          access: private
       - targets:
           - "usca5-bwh-sla-1tb_http"
           - "usca5-bwh-sla-1tb_socks"
@@ -197,8 +198,8 @@ scrape_configs:
           - "miyaip-jp-01_relay_jpty1-bwh-2tb_socks"
         labels:
           kind: raw
-          pool: ha-all
-          access: admin-only
+          pool: ha-private
+          access: private
     relabel_configs:
       - source_labels: [__address__]
         target_label: __param_module

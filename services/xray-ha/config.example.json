@@ -65,7 +65,7 @@
                     }
                 ]
             },
-            "tag": "ha-all_http_IN"
+            "tag": "ha-private_http_IN"
         },
         {
             "listen": "0.0.0.0",
@@ -76,7 +76,7 @@
                 "udp": true,
                 "users": []
             },
-            "tag": "ha-all_socks_IN"
+            "tag": "ha-private_socks_IN"
         },
         {
             "listen": "0.0.0.0",
@@ -225,7 +225,7 @@
                 "fallbackTag": "blackhole"
             },
             {
-                "tag": "ha-all",
+                "tag": "ha-private",
                 "selector": [
                     "pool-",
                     "private-"
@@ -255,10 +255,10 @@
             {
                 "type": "field",
                 "inboundTag": [
-                    "ha-all_http_IN",
-                    "ha-all_socks_IN"
+                    "ha-private_http_IN",
+                    "ha-private_socks_IN"
                 ],
-                "balancerTag": "ha-all"
+                "balancerTag": "ha-private"
             }
         ]
     }
