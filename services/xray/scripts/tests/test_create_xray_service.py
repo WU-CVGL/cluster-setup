@@ -142,7 +142,7 @@ class _TempServicesMixin:
         for job_name, job in jobs.items():
             targets = [t for sc in job.get('static_configs') or [] for t in sc.get('targets') or []]
             if job_name == 'v2ray':
-                # The xray lines are the first group; the HA entry, when present, is another.
+                # The xray proxies are the first group; the HA entry, when present, is another.
                 self.assertEqual(job['static_configs'][0]['targets'][-1], target)
                 job['static_configs'][0]['targets'].remove(target)
             else:
@@ -416,7 +416,7 @@ class RepoFilesYamlTest(_TempServicesMixin, unittest.TestCase):
         insert_at = next(i for i in range(last + 1, len(old_lines)) if re.match(r'^\s{2}[a-zA-Z0-9]', old_lines[i]))
         block = golden_block(name).replace('56089:', f'{socks_port}:').replace('56889:', f'{http_port}:')
         self.assertEqual(read(self.compose_file), ''.join(old_lines[:insert_at]) + block + ''.join(old_lines[insert_at:]))
-        # 新目标紧跟在 v2ray job 第一组 targets (proxy_role: raw 的 xray 线路) 的最后一个之后，
+        # 新目标紧跟在 v2ray job 第一组 targets (proxy_role: raw 的 xray 代理) 的最后一个之后，
         # 后面的 HA 入口组和其他 job 逐字不变
         old_prom_lines = old_prometheus.splitlines(True)
         last_target = next(i for i, line in enumerate(old_prom_lines) if V2RAY_TARGET_RE.match(line.rstrip('\n')))

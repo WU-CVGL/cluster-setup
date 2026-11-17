@@ -1,8 +1,8 @@
 # End-to-end checks through each proxy entry, scraped by the proxy-probe job of
 # services/prometheus/prometheus.yml (docs/00_Network_Proxy.md#proxy-availability).
 # One module per entry and protocol, named <entry>_<http|socks>; the job passes the probe URL.
-# A raw entry is the xray-<entry> service itself, never the HA entry, so a raw line that fails
-# shows as failed even while the HA entry carries on through another line.
+# A raw entry is the xray-<entry> service itself, never the HA entry, so a proxy that fails
+# shows as failed even while the HA entry carries on through another proxy.
 # blackbox_exporter takes proxy_url as written, with no file or environment reference for it, and
 # a SOCKS5 proxy's credentials can only be in that URL. Once the entries require accounts, this
 # file is generated from a committed example with the probe account's credentials from a

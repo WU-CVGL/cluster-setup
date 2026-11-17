@@ -100,7 +100,7 @@ ss -ltn | grep ":<port> "
 - 在 `docker-compose.yml` 中最后一个 xray exporter 服务之后添加 xray 服务和 exporter 服务
 - 在 `prometheus/prometheus.yml` 的 v2ray job 中添加 exporter 目标（第一组 targets，`proxy_role: raw`；`xray-ha-exporter` 在另一组）
 
-脚本不会把新线路加入 HA 入口的线路池，也不会为它添加端到端探测：探测需要手动在 `blackbox/blackbox.yml`
+脚本不会把新代理加入 HA 入口的代理池，也不会为它添加端到端探测：探测需要手动在 `blackbox/blackbox.yml`
 中添加 `<service_name>_http` 和 `<service_name>_socks` 两个 module，并在 `prometheus.yml` 的 `proxy-probe`
 job 中添加这两个目标（`pool: none`），见 [docs/00](../../../docs/00_Network_Proxy.md#proxy-availability)。
 

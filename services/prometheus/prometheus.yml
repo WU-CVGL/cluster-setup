@@ -139,7 +139,7 @@ scrape_configs:
           - "xray-miyaip-uk-01_relay_usca5-bwh-sla-2tb-exporter:9550"
           - "xray-miyaip-uk-01_relay_jpty1-bwh-2tb-exporter:9550"
         # proxy_role keeps the two layers apart: a request through the HA entry is counted
-        # once by xray-ha and again by the line it goes through.
+        # once by xray-ha and again by the proxy it goes through.
         labels:
           proxy_role: raw
       - targets:
@@ -149,7 +149,7 @@ scrape_configs:
   # End-to-end probes through each proxy entry (services/blackbox/blackbox.yml): a target is a
   # blackbox module, <entry>_<http|socks>; every probe fetches the same URL. 30 s apart, with a
   # 10 s scrape timeout over the module's 8 s, since a request abroad can take seconds.
-  # A new xray line needs its two modules there and its two targets here (pool: none).
+  # A new xray proxy needs its two modules there and its two targets here (pool: none).
   - job_name: "proxy-probe"
     metrics_path: /probe
     scrape_interval: 30s
