@@ -75,7 +75,7 @@ error at start: the Resources pages show no samples, or the Grafana link finds n
 | Docker container | `container_runtime_id` on cAdvisor series: the 64-character Docker ID from an `id` of `/docker/<id>` or `docker-<id>.scope`. Containers with other cgroup paths are not attributed | metric relabel of `cadvisor` |
 | GPU | `gpu_uuid` on DCGM series, copied from `UUID`. DCGM's own `gpu` (the host's GPU index), `pci_bus_id` and `modelName` stay; from fork 0.41.0 on, the WebUI shows them on hover over a GPU legend entry | metric relabel of `dcgm` |
 | cAdvisor metrics | `container_cpu_usage_seconds_total` (`cpu` is `total` or empty), `container_memory_working_set_bytes`, `container_memory_rss` | cAdvisor |
-| DCGM metrics | `DCGM_FI_DEV_GPU_UTIL`, `DCGM_FI_DEV_FB_USED`, `DCGM_FI_DEV_POWER_USAGE`, `DCGM_FI_DEV_GPU_TEMP`; for the agents' GPU memory, also `DCGM_FI_DEV_FB_TOTAL`, `DCGM_FI_DEV_FB_FREE` and `DCGM_FI_DEV_FB_RESERVED` | [`default-counters.csv`](../node-exporter/default-counters.csv) |
+| DCGM metrics | `DCGM_FI_DEV_GPU_UTIL`, `DCGM_FI_DEV_FB_USED`, `DCGM_FI_DEV_POWER_USAGE`, `DCGM_FI_DEV_GPU_TEMP`; for the agents' GPU memory, also `DCGM_FI_DEV_FB_TOTAL`, `DCGM_FI_DEV_FB_FREE` and `DCGM_FI_DEV_FB_RESERVED`; for their GPU power, also `DCGM_FI_DEV_POWER_MGMT_LIMIT`, `DCGM_FI_DEV_POWER_MGMT_LIMIT_DEF` and `DCGM_FI_DEV_ENFORCED_POWER_LIMIT` | [`default-counters.csv`](../node-exporter/default-counters.csv) |
 | Task mappings | `det:allocation_task:info`, `det:runtime_task:info` (with `container_runtime_id`), `det:gpu_task:info` (with `gpu_uuid`), each with `det_cluster`, `task_id` and `allocation_id` | recording rules |
 | Dashboard | UID `det-task-resources` (the master's optional Grafana link requires it) | dashboard JSON |
 
