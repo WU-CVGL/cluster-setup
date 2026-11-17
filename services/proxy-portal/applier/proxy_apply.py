@@ -641,7 +641,7 @@ class Applier:
                 self.delivered[record["username"]] = request_id
 
     def restart_set(self, accounts: pa.Accounts, outputs: List[Tuple[Path, str]]) -> List[str]:
-        """xray-ha; the lines, with raw auth or when their config changed; blackbox-exporter when its config did."""
+        """xray-ha; the proxies, with raw auth or when their config changed; blackbox-exporter when its config did."""
         running = self.compose.running()
         if HA_SERVICE not in running:
             raise ApplyError("precheck", f"{HA_SERVICE} is not running")
@@ -678,8 +678,8 @@ class Applier:
     def verify(self, accept, refuse) -> Tuple[str, str]:
         """
         ("ok"|"failed"|"unconfirmed", detail). A login that must be refused gets 407 from a running entry
-        whatever the lines do, and a wrong password always must (the canary): no 407 by the deadline is a
-        failure. A login that must pass needs a working line for its 204: no answer by then is unconfirmed.
+        whatever the proxies do, and a wrong password always must (the canary): no 407 by the deadline is a
+        failure. A login that must pass needs a working proxy for its 204: no answer by then is unconfirmed.
         """
         deadline = self.clock() + self.verify_timeout
         accept = list(accept)

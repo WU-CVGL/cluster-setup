@@ -207,9 +207,9 @@ class EnableTest(_Base):
                 accounts.remove(name)
 
     def test_render_leaves_disabled_accounts_out(self):
-        raw = self.base / "xray/line-a/config/config.json"
+        raw = self.base / "xray/proxy-a/config/config.json"
         raw.parent.mkdir(parents=True)
-        raw.write_text(raw_line_config())
+        raw.write_text(proxy_config())
         self.add("alice", "bob", "svc-monitor", "svc-ha")
         run(self.base, "disable", "alice")
         for raw_auth in ("off", "on"):
@@ -252,7 +252,7 @@ class StatusTest(_Base):
         self.assertIs(view["unapplied_changes"], False)
         run(self.base, "raw-auth", "on")
         view = json.loads(run(self.base, "status", "--json")[1])
-        self.assertEqual((view["unapplied_changes"], view["disabled_refused_at"]), (True, "ha-entry-and-lines"))
+        self.assertEqual((view["unapplied_changes"], view["disabled_refused_at"]), (True, "ha-entry-and-proxies"))
         code, out, _ = run(self.base, "status")
         self.assertIn("bob", out)
         self.assertNotIn(self.passwords()["bob"], out)
@@ -341,7 +341,7 @@ class RenderTest(_Base):
         run(self.base, "raw-auth", "on")
         code, out, _ = run(self.base, "render")
         self.assertEqual(code, 0)
-        self.assertIn("xray/line-a/config/config.json", out.split())
+        self.assertIn("xray/proxy-a/config/config.json", out.split())
         accounts = self.passwords()
         raw = json.loads(self.raw.read_text())
         self.assertEqual(self.inbound_users(raw), {"http": accounts, "socks": accounts})

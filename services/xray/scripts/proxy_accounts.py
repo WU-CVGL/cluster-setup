@@ -9,19 +9,19 @@ Proxy accounts: one protected accounts file, from which every authenticated prox
     proxy_accounts.py enable NAME
     proxy_accounts.py list                   account names, without passwords
     proxy_accounts.py status [--json]        names, kinds, enabled, raw auth and the last applied file hash
-    proxy_accounts.py raw-auth [on|off]      show or set authentication on the raw lines (off by default)
+    proxy_accounts.py raw-auth [on|off]      show or set authentication on the proxies (off by default)
     proxy_accounts.py render                 write the configs below from the accounts file
 
 render writes, relative to services/ (all gitignored, mode 0600, replaced atomically):
   xray-ha/config/config.json     xray-ha/config.example.json with every enabled account except svc-ha required
-                                 on both inbounds; with raw auth, the pool outbounds log in to the lines as svc-ha
+                                 on both inbounds; with raw auth, the pool outbounds log in to the proxies as svc-ha
   blackbox/config/blackbox.yml   blackbox/blackbox.example.yml with svc-monitor in the proxy URLs of the HA
-                                 entry, and of the raw lines with raw auth
-  xray/*/config/config.json      with raw auth, every enabled account required on the raw lines' inbounds; without
+                                 entry, and of the proxies with raw auth
+  xray/*/config/config.json      with raw auth, every enabled account required on the proxies' inbounds; without
                                  it, inbounds that carry accounts back to no authentication, other files untouched
 
 Account names are cluster usernames; names starting with svc- are service accounts:
-svc-ha (the HA entry's login to the lines), svc-monitor (the probes), svc-docker-<node> (a node's Docker daemon).
+svc-ha (the HA entry's login to the proxies), svc-monitor (the probes), svc-docker-<node> (a node's Docker daemon).
 svc-ha and svc-monitor cannot be disabled or removed. A disabled account is left out of every rendered config:
 with raw auth off, only the HA entry requires accounts, so only the HA entry refuses it.
 
@@ -244,8 +244,8 @@ def status(accounts: Accounts) -> dict:
     applied_sha = applied.get("accounts_sha256") if isinstance(applied, dict) else None
     return {
         "raw_auth": accounts.raw_auth,
-        # Where a disabled account is refused: only the HA entry while the lines require no accounts
-        "disabled_refused_at": "ha-entry-and-lines" if accounts.raw_auth else "ha-entry",
+        # Where a disabled account is refused: only the HA entry while the proxies require no accounts
+        "disabled_refused_at": "ha-entry-and-proxies" if accounts.raw_auth else "ha-entry",
         "accounts": [{"name": name, "kind": kind(name), "enabled": accounts.enabled(name),
                       "protected": name in PROTECTED} for name in sorted(accounts.accounts)],
         "accounts_sha256": current,
@@ -396,7 +396,7 @@ def read_command(accounts: Accounts, args: argparse.Namespace) -> int:
         print(json.dumps(status(accounts), indent=2))
     else:
         view = status(accounts)
-        scope = "the HA entry and the lines" if accounts.raw_auth else "the HA entry only (raw auth is off)"
+        scope = "the HA entry and the proxies" if accounts.raw_auth else "the HA entry only (raw auth is off)"
         print(f"raw auth: {'on' if accounts.raw_auth else 'off'}; disabled accounts are refused at {scope}")
         for entry in view["accounts"]:
             state = "enabled" if entry["enabled"] else "disabled"

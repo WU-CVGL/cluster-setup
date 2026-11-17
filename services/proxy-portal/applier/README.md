@@ -67,7 +67,7 @@ The portal's container mounts the spool and runs as the requester's uid (`id -u 
 | `applying` | taken, in the current batch |
 | `applied` | live and verified; `restarted` lists the services restarted, `changed: false` when nothing had to change |
 | `failed` | not applied; `stage` and `error` say why. `restored: true`: the previous files and running state are back (or nothing was touched). `restored: false`: the rollback did not finish. If the files could not be restored, `proxy-accounts/.apply-backup/` stays, and every run retries it first and applies nothing else until it succeeds (exit 2). Check `journalctl -u proxy-apply` and `docker compose ps xray-ha`, fix the cause, then `sudo systemctl start proxy-apply`. To restore by hand, `manifest.json` in that folder lists each file and its backup |
-| `unconfirmed` | live, and every login that must be refused is refused, but the logins that must pass got no 204 within the verify timeout (all lines or the probe URL may be down). The result file is written |
+| `unconfirmed` | live, and every login that must be refused is refused, but the logins that must pass got no 204 within the verify timeout (all proxies or the probe URL may be down). The result file is written |
 
 `stage` is one of `request` (invalid, or the account does not allow the operation; the other requests of the batch go on), `accounts`, `render`, `test`, `precheck`, `backup`, `swap`, `restart`, `verify`, `commit` or `interrupted`.
 
@@ -79,17 +79,17 @@ The applier holds the accounts lock (`proxy-accounts/.lock`, the one `proxy_acco
 2. Renders every config in memory. Disabled accounts are left out of every inbound.
 3. Runs `xray run -test` on each changed Xray config, with the image `xray-ha` is pinned to in the Compose file (digest required), the config on stdin and no network.
 4. Checks that `xray-ha` runs, keeps the files it is about to replace in `proxy-accounts/.apply-backup/`, and replaces them atomically: the configs, then the accounts file.
-5. Restarts a fixed set of Compose services: `xray-ha`; with raw auth on, every running line; a line whose config changed; `blackbox-exporter` only if its config changed, which a request cannot cause.
-6. Verifies through the HA entry's HTTP port, fetching the probe URL: `svc-monitor` and every newly added, enabled or rotated account must get 204, while every disabled or removed account, every replaced password and a wrong password must get 407. A running entry answers 407 whatever the lines do.
+5. Restarts a fixed set of Compose services: `xray-ha`; with raw auth on, every running proxy; a proxy whose config changed; `blackbox-exporter` only if its config changed, which a request cannot cause.
+6. Verifies through the HA entry's HTTP port, fetching the probe URL: `svc-monitor` and every newly added, enabled or rotated account must get 204, while every disabled or removed account, every replaced password and a wrong password must get 407. A running entry answers 407 whatever the proxies do.
 7. On a wrong answer, or no 407 within the timeout, it restores the files, restarts the same services and checks `svc-monitor` again (`failed`). When only the 204s are missing, the change stays (`unconfirmed`).
 
 Then it marks the backup committed, writes `proxy-accounts/applied.json`, the results and the statuses, drops the backup and writes `status.json`. `applied.json` holds the hash of the accounts file at the applier's last apply; `status` compares it with the current file (`unapplied_changes`), which differs after a change with `proxy_accounts.py` until the next apply. If the applier is killed after taking a batch and before the commit, the next run restores the files from the backup, if any were replaced, and marks the batch `failed` (`interrupted`). If it is killed after the commit, the next run finishes the batch instead: it writes the remaining statuses and `applied.json`, restarts nothing, and reports a result not yet written as `result: false`. Passwords are never logged or written to a status: errors are scrubbed of every known password.
 
 ## Restart impact
 
-Every change restarts the HA entry, and with raw auth on also every line. Established connections through them drop: downloads break and clients have to retry. Requests that start during the restart fail for a few seconds, as when `xray-ha` starts ([the HA entry](../../../docs/00_Network_Proxy.md#the-ha-entry)). A rollback restarts them once more, and a failed apply can keep the entry down for up to the verify timeout. Requests that arrive together are applied with one restart; each further request for the same account adds one. A request that changes nothing (enabling an enabled account) restarts nothing.
+Every change restarts the HA entry, and with raw auth on also every proxy. Established connections through them drop: downloads break and clients have to retry. Requests that start during the restart fail for a few seconds, as when `xray-ha` starts ([the HA entry](../../../docs/00_Network_Proxy.md#the-ha-entry)). A rollback restarts them once more, and a failed apply can keep the entry down for up to the verify timeout. Requests that arrive together are applied with one restart; each further request for the same account adds one. A request that changes nothing (enabling an enabled account) restarts nothing.
 
-While raw auth is off, disabling an account stops it only at the HA entry: the lines' own entries require no account, so it can still use them.
+While raw auth is off, disabling an account stops it only at the HA entry: the proxies' own entries require no account, so it can still use them.
 
 ## Tests
 

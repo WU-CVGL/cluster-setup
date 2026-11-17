@@ -30,7 +30,7 @@ from XrayConfigHandler import XrayConfigHandler  # noqa: E402
 
 SERVICES = Path(__file__).resolve().parents[3]
 IMAGE = "teddysun/xray:1@sha256:" + "0" * 64
-LINE = "line-a"
+PROXY = "proxy-a"
 
 
 class Crash(BaseException):
@@ -38,12 +38,12 @@ class Crash(BaseException):
 
 
 class FakeDocker:
-    """docker and docker compose, with the HA entry and the line as login tables loaded at each restart."""
+    """docker and docker compose, with the HA entry and the proxy as login tables loaded at each restart."""
 
     def __init__(self, base):
         self.base = base
         self.calls = []
-        self.running = {"xray-ha", "xray-" + LINE, "blackbox-exporter", "xray-ha-exporter"}
+        self.running = {"xray-ha", "xray-" + PROXY, "blackbox-exporter", "xray-ha-exporter"}
         self.fail_test = None        # substring of a config that makes xray -test fail
         self.fail_restart = 0        # restarts that fail before one succeeds
         self.crash_restart = False
@@ -71,7 +71,7 @@ class FakeDocker:
             return 0, "Configuration OK.\n", ""
         args = argv[argv.index("-f") + 2:]
         if args == ["config", "--services"]:
-            return 0, "\n".join(["xray-ha", "xray-" + LINE, "blackbox-exporter", "xray-ha-exporter"]) + "\n", ""
+            return 0, "\n".join(["xray-ha", "xray-" + PROXY, "blackbox-exporter", "xray-ha-exporter"]) + "\n", ""
         if args[:3] == ["ps", "--services", "--status"]:
             return 0, "\n".join(sorted(self.running)) + "\n", ""
         if args == ["config", "--format", "json"]:
@@ -95,11 +95,11 @@ class FakeDocker:
 
 
 class FakeProbe:
-    """The HA entry: 204 for a login it knows, 407 otherwise; or a down entry, or one without lines."""
+    """The HA entry: 204 for a login it knows, 407 otherwise; or a down entry, or one without proxies."""
 
     def __init__(self, docker):
         self.docker = docker
-        self.mode = "ok"      # ok | down | silent | nolines
+        self.mode = "ok"      # ok | down | silent | noproxies
         self.calls = []
 
     def __call__(self, user, password):
@@ -111,7 +111,7 @@ class FakeProbe:
         known = self.docker.ha_users.get(user) == password
         if not known:
             return "status", 407
-        return ("noresponse", None) if self.mode == "nolines" else ("status", 204)
+        return ("noresponse", None) if self.mode == "noproxies" else ("status", 204)
 
 
 class _Base(unittest.TestCase):
@@ -122,10 +122,10 @@ class _Base(unittest.TestCase):
         for rel in (pa.HA_EXAMPLE, pa.BLACKBOX_EXAMPLE):
             (self.base / rel).parent.mkdir(parents=True, exist_ok=True)
             shutil.copy(SERVICES / rel, self.base / rel)
-        self.line = self.base / "xray" / LINE / "config" / "config.json"
-        self.line.parent.mkdir(parents=True)
-        outbound = {"protocol": "freedom", "settings": {}, "tag": "line"}
-        self.line.write_text(json.dumps(XrayConfigHandler.build_xray_config(outbound, include_stats_api=True),
+        self.proxy = self.base / "xray" / PROXY / "config" / "config.json"
+        self.proxy.parent.mkdir(parents=True)
+        outbound = {"protocol": "freedom", "settings": {}, "tag": "proxy"}
+        self.proxy.write_text(json.dumps(XrayConfigHandler.build_xray_config(outbound, include_stats_api=True),
                                         indent=4))
         accounts = pa.Accounts(self.base)
         for name in ("svc-monitor", "svc-ha", "alice", "bob", "svc-docker-node01"):
@@ -166,7 +166,7 @@ class _Base(unittest.TestCase):
 
     def files(self):
         return {rel: (self.base / rel).read_text()
-                for rel in (pa.ACCOUNTS_FILE, pa.HA_CONFIG, pa.BLACKBOX_CONFIG, self.line.relative_to(self.base))}
+                for rel in (pa.ACCOUNTS_FILE, pa.HA_CONFIG, pa.BLACKBOX_CONFIG, self.proxy.relative_to(self.base))}
 
     def assert_no_leaks(self):
         texts = [self.out.getvalue()] + [p.read_text() for p in self.spool.status.iterdir()]
@@ -448,28 +448,28 @@ class ApplyTest(_Base):
         self.assertNotIn("svc-docker-node01", self.passwords())
         self.assertNotIn("svc-docker-node01", self.docker.ha_users)
 
-    def test_raw_auth_restarts_the_lines(self):
+    def test_raw_auth_restarts_the_proxies(self):
         accounts = pa.Accounts(self.base)
         accounts.raw_auth = True
         accounts.save()
         pa.render(accounts)
         self.request("abcdefgh-1", "disable", "alice")
         self.assertEqual(self.run_applier(), 0)
-        self.assertEqual(self.status("abcdefgh-1")["restarted"], ["xray-ha", "xray-" + LINE])
-        line = json.loads(self.line.read_text())
-        users = [u["user"] for u in line["inbounds"][0]["settings"]["users"]]
+        self.assertEqual(self.status("abcdefgh-1")["restarted"], ["xray-ha", "xray-" + PROXY])
+        proxy = json.loads(self.proxy.read_text())
+        users = [u["user"] for u in proxy["inbounds"][0]["settings"]["users"]]
         self.assertNotIn("alice", users)
         self.assertIn("bob", users)
-        self.assertEqual(self.docker.tests(), 2)  # the HA config and the line
+        self.assertEqual(self.docker.tests(), 2)  # the HA config and the proxy
         view = json.loads((self.spool.root / "status.json").read_text())
-        self.assertEqual(view["disabled_refused_at"], "ha-entry-and-lines")
+        self.assertEqual(view["disabled_refused_at"], "ha-entry-and-proxies")
 
-    def test_raw_auth_line_not_running_is_not_started(self):
+    def test_raw_auth_proxy_not_running_is_not_started(self):
         accounts = pa.Accounts(self.base)
         accounts.raw_auth = True
         accounts.save()
         pa.render(accounts)
-        self.docker.running.discard("xray-" + LINE)
+        self.docker.running.discard("xray-" + PROXY)
         self.request("abcdefgh-1", "disable", "alice")
         self.assertEqual(self.run_applier(), 0)
         self.assertEqual(self.status("abcdefgh-1")["restarted"], ["xray-ha"])
@@ -556,7 +556,7 @@ class FailureTest(_Base):
         self.run_failing("restart", restored=False)
 
     def test_unconfirmed_keeps_the_change_and_delivers(self):
-        self.probe.mode = "nolines"  # logins are taken, no line answers
+        self.probe.mode = "noproxies"  # logins are taken, no proxy answers
         self.request("abcdefgh-1", "disable", "alice")
         self.request("abcdefgh-2", "add", "carol")
         self.assertEqual(self.run_applier(), 0)

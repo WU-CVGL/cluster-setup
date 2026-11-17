@@ -12,7 +12,7 @@
     - [Client settings](#client-settings)
     - [Docker daemon with an account](#docker-daemon-with-an-account)
     - [Usage](#usage)
-    - [Accounts on the lines](#accounts-on-the-lines)
+    - [Accounts on the proxies](#accounts-on-the-proxies)
     - [Changes from the portal](#changes-from-the-portal)
   - [Proxy availability](#proxy-availability)
   - [Bootstrap: a temporary proxy on one machine](#bootstrap-a-temporary-proxy-on-one-machine)
@@ -137,7 +137,7 @@ docker compose restart xray-ha
 docker compose kill -s SIGHUP blackbox-exporter
 ```
 
-Passwords are random and are printed only by `add` and `rotate` with `--show`; give them to the user privately. A disabled account is left out of every rendered configuration, so every entry that requires accounts refuses it. While the [lines require no accounts](#accounts-on-the-lines) (the default), that is only the HA entry: a disabled user can still use a line's own entry. `svc-ha` and `svc-monitor` cannot be disabled or removed. The accounts file records for each account whether it is enabled; a file without that record (format version 1) is read with every account enabled and is rewritten with it at the next change. Xray reads accounts only when it starts, so each change takes effect with the restart of `xray-ha`, which breaks the connections open through it and resets its traffic counters. While the [lines require accounts](#accounts-on-the-lines), restart them as well.
+Passwords are random and are printed only by `add` and `rotate` with `--show`; give them to the user privately. A disabled account is left out of every rendered configuration, so every entry that requires accounts refuses it. While the [proxies require no accounts](#accounts-on-the-proxies) (the default), that is only the HA entry: a disabled user can still use a proxy's own entry. `svc-ha` and `svc-monitor` cannot be disabled or removed. The accounts file records for each account whether it is enabled; a file without that record (format version 1) is read with every account enabled and is rewritten with it at the next change. Xray reads accounts only when it starts, so each change takes effect with the restart of `xray-ha`, which breaks the connections open through it and resets its traffic counters. While the [proxies require accounts](#accounts-on-the-proxies), restart them as well.
 
 ### Client settings
 
@@ -222,11 +222,11 @@ The proxy portal does not change accounts itself. It writes a request per change
 - **Install:** the units `proxy-apply.service`, `.path` and `.timer` and the settings file `/etc/default/proxy-apply` are in [`services/system-configurations/etc`](../services/system-configurations/etc). Create the portal's user, install the files, set `PROXY_APPLY_SERVICES_DIR`, run `proxy_apply.py init` and enable the `.path` and `.timer` units; the [applier README](../services/proxy-portal/applier/README.md#install) has the commands.
 - **Spool and permissions:** `/var/lib/proxy-portal/spool`. The portal's user owns `requests/` and `results/` (`0700`); root owns `status/` and `status.json`. A request is accepted only as a regular file owned by the portal's user, at most 4096 bytes. Write each request under a name not ending in `.json`, then rename it to `<id>.json`; every `*.json` entry is read once and removed, valid or not.
 - **Requests:** `{"id": "<id>", "op": "add|rotate|enable|disable|remove", "username": "<account>"}` in `requests/<id>.json`, nothing else; `<id>` is 8 to 64 lowercase letters, digits and `-` (a UUID fits), new for every request. `svc-ha` and `svc-monitor` are refused; admins change them only with `proxy_accounts.py` ([Manage accounts](#manage-accounts)). For `add` and `rotate`, the applier generates the password and writes it once to `results/<id>.json` (mode `0400`, owned by the portal's user), which the portal deletes after showing it.
-- **Statuses** in `status/<id>.json`: `applying` while its batch runs, then `applied` (live and verified), `failed` (not applied; the previous files and services are restored, `restored: false` if the rollback did not finish: the [applier README](../services/proxy-portal/applier/README.md#statuses) has the recovery), or `unconfirmed` (live and every refused login gets 407, but the logins that must pass got no 204 in time, e.g. while the lines are down).
+- **Statuses** in `status/<id>.json`: `applying` while its batch runs, then `applied` (live and verified), `failed` (not applied; the previous files and services are restored, `restored: false` if the rollback did not finish: the [applier README](../services/proxy-portal/applier/README.md#statuses) has the recovery), or `unconfirmed` (live and every refused login gets 407, but the logins that must pass got no 204 in time, e.g. while the proxies are down).
 - **How:** the applier holds the accounts lock and applies the pending requests in batches, a second request for the same account going into the next batch: it renders in memory, tests every changed Xray config with `xray run -test`, replaces the files atomically, restarts the services and verifies through the HA entry that `svc-monitor` passes (204) and that every disabled or removed account, replaced password and a wrong password are refused (407). A wrong answer rolls everything back.
-- **Restart impact:** every change restarts `xray-ha`, and with raw auth on every line too. Established connections through them drop, and new ones fail for a few seconds. Requests that arrive together share one restart; each further request for the same account adds one.
+- **Restart impact:** every change restarts `xray-ha`, and with raw auth on every proxy too. Established connections through them drop, and new ones fail for a few seconds. Requests that arrive together share one restart; each further request for the same account adds one.
 
-While raw auth is off, turning a user's access off in the portal stops it only at the HA entry; the lines' own entries stay open to them.
+While raw auth is off, turning a user's access off in the portal stops it only at the HA entry; the proxies' own entries stay open to them.
 
 ## Proxy availability
 
