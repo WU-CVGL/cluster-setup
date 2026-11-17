@@ -391,7 +391,7 @@ services:
   # accounts, rendered by xray/scripts/proxy_accounts.py. Both ports require an account.
   # It forwards each new connection to one of the ha-general lines of that config, the
   # one with the lowest probe latency among those that pass Xray's own probe, and fails closed
-  # when none does. It has no route of its own to the internet or to China: each line's xray
+  # when none does. It has no route of its own to the internet or to China: each proxy's xray
   # service decides that. The ports are below the Linux ephemeral range (32768-60999).
   xray-ha:
     image: teddysun/xray:26.11.9@sha256:b3e117b834878d1e12f91e7b16270db104c2f0e5f0effbc0ece9088c473b5393
