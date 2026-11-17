@@ -1,0 +1,1 @@
+{% load i18n %}<span class="chip {% if level == 'ok' %}ok{% elif level == 'warn' %}warn{% elif level == 'bad' %}bad{% else %}info{% endif %}"><span class="dot {% if level == 'ok' %}ok{% elif level == 'bad' %}bad{% elif level == 'warn' %}degraded{% endif %}"></span>{{ row.get_state_display }}</span>

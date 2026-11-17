@@ -34,7 +34,7 @@ echo "me anonymous:  $(r -o /dev/null -w '%{http_code}' https://proxy.cvgl.lab/a
 r -D - -o /dev/null https://proxy.cvgl.lab/ | grep -iE '^(content-security-policy|x-frame-options|x-content-type-options|referrer-policy):' | cut -c1-90
 echo "headline:      $(r https://proxy.cvgl.lab/api/status | python3 -c 'import json,sys; print(json.load(sys.stdin)["headline"]["text"])')"
 
-# the README's incident commands: one resolved, one open
+# incidents in the database: one resolved, one open
 incident() { compose exec -T proxy-portal python manage.py shell -c "
 from django.utils import timezone; from portal.models import Incident
 i = Incident.objects.create(title='$1', body='$2', component='$3', state='investigating',

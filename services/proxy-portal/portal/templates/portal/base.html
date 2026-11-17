@@ -68,7 +68,7 @@ h3{font-size:15px;line-height:1.4;margin:0;font-weight:690}
 .day.unknown{background:repeating-linear-gradient(135deg,#dfe4e9 0 5px,#eef1f4 5px 10px)}
 .legend{display:flex;justify-content:space-between;align-items:center;color:var(--muted);font-size:11px;margin-top:10px;gap:10px;flex-wrap:wrap}.legend-set{display:flex;gap:12px;flex-wrap:wrap}.legend-set span{display:flex;gap:6px;align-items:center}
 .swatch{display:inline-block;width:12px;height:12px;border-radius:3px}.swatch.ok{background:#2da786}.swatch.degraded{background:#e2ac4f}.swatch.bad{background:#d0605e}.swatch.unknown{background:repeating-linear-gradient(135deg,#cfd6dc 0 3px,#eef1f4 3px 6px)}
-.table-scroll{overflow-x:auto}.table{border-collapse:collapse;width:100%;text-align:left;font-size:12px}
+.table-scroll{overflow-x:auto;position:relative}.table{border-collapse:collapse;width:100%;text-align:left;font-size:12px}
 .table th{color:var(--muted);font-weight:600;border-bottom:1px solid var(--border);padding:11px 10px;white-space:nowrap}
 .table td{padding:12px 10px;border-bottom:1px solid #edf0f3;white-space:nowrap}.table tr:last-child td{border-bottom:0}
 .table th.group{background:#fafbfc;color:#44566a;font-weight:700}
@@ -102,10 +102,20 @@ h3{font-size:15px;line-height:1.4;margin:0;font-weight:690}
 .form-actions{margin-top:18px;display:flex;gap:10px;align-items:center}
 .footer{padding:24px 0 30px;text-align:center;color:#6f7d89;border-top:1px solid var(--border);font-size:12px;line-height:1.7}
 .copied{color:#9fe3cf}
+.subnav{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:20px}.subnav a{padding:6px 12px;border-radius:8px;color:var(--muted);font-weight:650;font-size:13px;border:1px solid var(--border);background:#fff}.subnav a:hover{text-decoration:none;color:var(--ink)}.subnav a[aria-current=page]{background:var(--teal-pale);color:var(--teal);border-color:#cde9df}
+.btn.danger{background:var(--red);border-color:var(--red);color:#fff}.btn.danger:hover{background:#952f35}
+.actions{display:flex;gap:6px;flex-wrap:wrap}.table td.wrap{white-space:normal;min-width:220px}.table td.actions-cell{white-space:normal;min-width:300px}
+select.input{padding:9px 10px}textarea.input{min-height:96px;resize:vertical;line-height:1.5}
+.form-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:4px 14px}.form-grid .full{grid-column:1/-1}
+.filters{display:flex;gap:10px;flex-wrap:wrap;align-items:flex-end}.filters .field{margin-top:0;min-width:150px}
+.card-head+.notice{margin-top:12px}.kv{display:grid;grid-template-columns:max-content 1fr;gap:8px 18px;margin:16px 0 0;font-size:13px}.kv dt{color:var(--muted)}.kv dd{margin:0;overflow-wrap:anywhere}
+.secret-box{background:#142830;color:#e8fff8;border-radius:12px;padding:16px 18px;margin-top:14px;display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap}.secret-box code{font-size:17px;overflow-wrap:anywhere}
+.secret-box button{color:#d0e9e1;border:1px solid #3d575b;background:#223e44;border-radius:7px;padding:5px 11px;font-size:12px}
+.updates{list-style:none;margin:8px 0 0;padding:0 0 0 12px;border-left:2px solid var(--border)}.updates li{font-size:12px;color:var(--muted);margin-top:6px;white-space:pre-line}.updates b{color:var(--ink);font-weight:650}
 @media(max-width:1050px){.summary-grid{grid-template-columns:repeat(2,1fr)}.nav a{padding:0 11px}}
 @media(max-width:770px){.shell{padding:0 16px}.header-inner{flex-wrap:wrap;gap:8px;padding-top:10px}.brand{margin-right:auto}.nav{order:3;width:100%;height:44px}.nav a{flex:1;justify-content:center;padding:0 6px;font-size:13px}.header-right{margin-left:0}
 main.shell{padding-top:24px}.hero-head{display:block}h1{font-size:26px}.status-hero{grid-template-columns:1fr;padding:20px}.status-hero p{margin:10px 0 0}.status-right{border:0;border-top:1px solid #dceae6;padding:11px 0 0;text-align:left;display:flex;gap:10px;align-items:center}.status-number{font-size:22px}.status-number-label{margin:0}
-.grid-two,.access-list,.usage-grid{grid-template-columns:1fr}.table .wide{display:none}.phone-only{display:inline}.table td,.table th{padding:10px 6px}.service{padding:14px}.section-bar{align-items:flex-start;flex-direction:column}.history{gap:3px}.day{border-radius:3px;height:32px}.card-pad{padding:16px}}
+.grid-two,.access-list,.usage-grid,.form-grid{grid-template-columns:1fr}.table .wide{display:none}.phone-only{display:inline}.table td,.table th{padding:10px 6px}.service{padding:14px}.section-bar{align-items:flex-start;flex-direction:column}.history{gap:3px}.day{border-radius:3px;height:32px}.card-pad{padding:16px}}
 @media(max-width:440px){.summary-grid{gap:9px}.metric{padding:13px}.status-title{font-size:18px}.emblem{width:36px;height:36px}.service-icon{display:none}.brand-sub{display:none}}
 </style>
 </head>
@@ -119,6 +129,7 @@ main.shell{padding-top:24px}.hero-head{display:block}h1{font-size:26px}.status-h
       <a href="{% url 'status' %}"{% if nav == 'status' %} aria-current="page"{% endif %}>{% translate "Status" %}</a>
       <a href="{% url 'access' %}"{% if nav == 'access' %} aria-current="page"{% endif %}>{% translate "My access" %}</a>
       <a href="{% url 'usage' %}"{% if nav == 'usage' %} aria-current="page"{% endif %}>{% translate "My usage" %}</a>
+      {% if is_determined_admin %}<a href="{% url 'admin_accounts' %}"{% if nav == 'admin' %} aria-current="page"{% endif %}>{% translate "Admin" %}</a>{% endif %}
     </nav>
     <div class="header-right">
       <form class="lang" action="{% url 'set_language' %}" method="post" aria-label="{% translate 'Language' %}">{% csrf_token %}
@@ -161,5 +172,6 @@ document.querySelectorAll('[data-switch]').forEach(function(group){var name=grou
   group.hidden=false;show(group.getAttribute('data-default'));});
 })();
 </script>
+{% block scripts %}{% endblock %}
 </body>
 </html>

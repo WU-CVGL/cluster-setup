@@ -1,0 +1,9 @@
+{% extends "portal/base.html" %}{% load i18n %}
+{% block title %}{% translate "Admins only" %}{% endblock %}
+{% block content %}
+<div class="hero-head"><div>
+  <div class="eyebrow">{% translate "Admin" %}</div>
+  <h1>{% translate "Admins only" %}</h1>
+  <p class="sub">{% translate "This page is for Determined admins. The admin flag is read from Determined at sign-in: after a change on the master, sign out and sign in again." %}</p>
+</div></div>
+{% endblock %}

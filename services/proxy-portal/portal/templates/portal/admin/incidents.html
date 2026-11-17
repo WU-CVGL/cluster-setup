@@ -1,0 +1,36 @@
+{% extends "portal/base.html" %}{% load i18n portal %}
+{% block title %}{% translate "Incidents" %}{% endblock %}
+{% block content %}
+<div class="hero-head"><div>
+  <div class="eyebrow">{% translate "Admin" %}</div>
+  <h1>{% translate "Incidents" %}</h1>
+  <p class="sub">{% translate "Notices on the public status page. They never change a probe result: a maintenance notice does not turn a failing proxy green." %}</p>
+</div></div>
+{% include "portal/admin/_nav.html" %}
+<div class="card table-scroll">
+  <table class="table">
+    <caption class="sr-only">{% translate "Incidents" %}</caption>
+    <thead><tr><th scope="col">{% translate "Title" %}</th><th scope="col">{% translate "State" %}</th><th scope="col" class="wide">{% translate "Affected component" %}</th><th scope="col">{% translate "Started" %}</th><th scope="col" class="wide">{% translate "Updates" %}</th></tr></thead>
+    <tbody>
+    {% for incident in incidents %}
+    <tr>
+      <th scope="row" class="wrap"><a href="{% url 'admin_incident' incident.id %}">{{ incident.title }}</a></th>
+      <td><span class="chip {{ incident|incident_chip }}">{{ incident.get_state_display }}</span></td>
+      <td class="wide">{{ incident.get_component_display }}</td>
+      <td>{{ incident.started_at|date:"Y-m-d H:i" }}</td>
+      <td class="wide">{{ incident.updates.all|length }}</td>
+    </tr>
+    {% empty %}
+    <tr><td colspan="5"><div class="empty">{% translate "No incidents" %}</div></td></tr>
+    {% endfor %}
+    </tbody>
+  </table>
+</div>
+<section class="section" aria-labelledby="new-title">
+  <div class="section-bar"><div><h2 id="new-title">{% translate "New incident" %}</h2></div></div>
+  <form class="card card-pad" method="post" action="{% url 'admin_incidents' %}">{% csrf_token %}
+    {% include "portal/admin/_incident_fields.html" %}
+    <div class="form-actions"><button class="btn primary" type="submit">{% translate "Post" %}</button></div>
+  </form>
+</section>
+{% endblock %}

@@ -1,0 +1,31 @@
+{% extends "portal/base.html" %}{% load i18n portal %}
+{% block title %}{% translate "Incident" %}{% endblock %}
+{% block content %}
+<div class="hero-head"><div>
+  <div class="eyebrow">{% translate "Admin" %} · {% translate "Incident" %}</div>
+  <h1>{{ incident.title }}</h1>
+  <p class="sub"><span class="chip {{ incident|incident_chip }}">{{ incident.get_state_display }}</span> {{ incident.get_component_display }} · {{ incident.started_at|date:"Y-m-d H:i" }}{% if incident.resolved_at %} – {{ incident.resolved_at|date:"Y-m-d H:i" }}{% endif %}{% if incident.author %} · {{ incident.author }}{% endif %}</p>
+</div></div>
+{% include "portal/admin/_nav.html" %}
+<div class="grid-two">
+  <section aria-labelledby="update-title">
+    <div class="section-bar"><div><h2 id="update-title">{% translate "Post an update" %}</h2><p>{% translate "Sets the incident's state. Resolved sets the end time; any other state reopens it." %}</p></div></div>
+    <form class="card card-pad" method="post" action="{% url 'admin_incident_update' incident.id %}">{% csrf_token %}
+      <div class="field"><label for="{{ update.state.id_for_label }}">{% translate "State" %}</label>{{ update.state }}</div>
+      <div class="field"><label for="{{ update.body.id_for_label }}">{% translate "Text" %}</label>{{ update.body }}{% for e in update.body.errors %}<p class="tiny">{{ e }}</p>{% endfor %}</div>
+      <div class="form-actions"><button class="btn primary" type="submit">{% translate "Post the update" %}</button></div>
+    </form>
+    <div class="section card card-pad">
+      <h3>{% translate "Updates" %}</h3>
+      {% if incident.updates.all %}<ol class="updates">{% for u in incident.updates.all %}<li><b>{{ u.posted_at|date:"Y-m-d H:i" }} · {{ u.get_state_display }}</b>{% if u.author %} · {{ u.author }}{% endif %}<br>{{ u.body }}</li>{% endfor %}</ol>{% else %}<p class="small muted">{% translate "No updates yet." %}</p>{% endif %}
+    </div>
+  </section>
+  <section aria-labelledby="edit-title">
+    <div class="section-bar"><div><h2 id="edit-title">{% translate "Edit" %}</h2></div></div>
+    <form class="card card-pad" method="post" action="{% url 'admin_incident' incident.id %}">{% csrf_token %}
+      {% include "portal/admin/_incident_fields.html" %}
+      <div class="form-actions"><button class="btn primary" type="submit">{% translate "Save" %}</button><a class="btn" href="{% url 'admin_incidents' %}">{% translate "All incidents" %}</a></div>
+    </form>
+  </section>
+</div>
+{% endblock %}

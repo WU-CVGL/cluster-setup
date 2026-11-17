@@ -1,0 +1,392 @@
+"""
+The admin console: proxy accounts, account requests with their outcome, the change log and incidents. Admins are
+the users whose Determined admin flag was true at sign-in (the session's is_determined_admin); every view here checks
+it. Pages send anonymous users to sign-in, the APIs answer 401; a signed-in non-admin gets 403.
+
+Account changes are requests: the portal writes them into the applier's spool and shows the applier's outcome. It
+never changes the accounts file and never keeps a password.
+"""
+
+import functools
+import json
+import logging
+
+from django import forms
+from django.conf import settings
+from django.http import Http404, HttpResponseNotAllowed, JsonResponse
+from django.shortcuts import get_object_or_404, redirect, render
+from django.urls import reverse
+from django.utils import timezone
+from django.utils.translation import gettext as _
+from django.views.decorators.cache import never_cache
+from django.views.decorators.debug import sensitive_variables
+from django.views.decorators.http import require_GET, require_http_methods, require_POST
+
+from . import accounts, lifecycle, proxy_status, spool
+from .models import AccountRequest, Incident, IncidentUpdate
+from .views import SESSION_ADMIN, _signin_redirect, session_user
+
+log = logging.getLogger("portal.admin")
+
+LOG_LIMIT = 200
+
+
+def admin_only(kind):
+    """kind "page": anonymous users go to sign-in; "api": 401. Non-admins get 403 either way."""
+
+    def decorator(view):
+        @functools.wraps(view)
+        def wrapped(request, *args, **kwargs):
+            if session_user(request) is None:
+                if kind == "api":
+                    return JsonResponse({"error": "sign-in required"}, status=401)
+                return _signin_redirect(request)
+            if request.session.get(SESSION_ADMIN) is not True:
+                if kind == "api":
+                    return JsonResponse({"error": "Determined admins only"}, status=403)
+                return render(request, "portal/admin/forbidden.html", {"nav": "admin"}, status=403)
+            return view(request, *args, **kwargs)
+
+        wrapped.admin_only = kind
+        return never_cache(wrapped)
+
+    return decorator
+
+
+# ------------------------------------------------------------------ accounts
+
+
+def _restart_text(op, row, status):
+    if status.raw_auth:
+        services = _("the HA entries (xray-ha) and every proxy")
+    elif op in ("admin-on", "admin-off") or (row is not None and row.admin):
+        services = _("the HA entries (xray-ha) and the private proxies")
+    else:
+        services = _("the HA entries (xray-ha)")
+    return _("Applying restarts %(services)s. Established connections through them drop, and new ones fail for a "
+             "few seconds.") % {"services": services}
+
+
+def _effect_text(op, name):
+    return {
+        "add": _("Creates the proxy account %(name)s with a new random password, which you see once when the "
+                 "change is live. It may use ha-general and the public proxies."),
+        "rotate": _("Gives %(name)s a new random password, which you see once when it is live. The old password "
+                    "stops working."),
+        "enable": _("Turns proxy access on for %(name)s, with its current password."),
+        "disable": _("Turns proxy access off for %(name)s. The account and its password are kept: turning it on "
+                     "again restores it."),
+        "remove": _("Removes the account %(name)s and its password. Adding it again gives it a new password."),
+        "admin-on": _("Makes %(name)s an admin account: it may also use ha-private and the private proxies. This "
+                      "is the proxy account's flag, not the Determined admin role."),
+        "admin-off": _("%(name)s stops being an admin account: ha-private and the private proxies refuse it."),
+    }[op] % {"name": name}
+
+
+def raw_auth_text(status):
+    if status.raw_auth:
+        return _("Raw auth is on: every entry, the public proxies' own entries included, refuses an account whose "
+                 "proxy access is off.")
+    return _("Raw auth is off: proxy access off stops only ha-general, ha-private and the private proxies. A "
+             "public proxy's own entry needs no account, so it still works for that user.")
+
+
+def _pending_by_account():
+    rows = lifecycle.refresh_all(AccountRequest.objects.exclude(state__in=AccountRequest.FINAL)[:200])
+    pending = {}
+    for row in rows:
+        if not row.final and row.username not in pending:
+            pending[row.username] = row
+    return pending
+
+
+def _account_rows(status, query):
+    pending = _pending_by_account()
+    rows = []
+    for row in status.all_accounts:
+        if query and query not in row.name:
+            continue
+        rows.append({"name": row.name, "kind": row.kind, "enabled": row.enabled, "admin": row.admin,
+                     "protected": row.protected, "actions": accounts.actions(row), "pending": pending.get(row.name)})
+    return rows
+
+
+@admin_only("page")
+@require_GET
+def accounts_page(request):
+    status = proxy_status.load()
+    query = (request.GET.get("q") or "").strip().lower()[:64]
+    return render(request, "portal/admin/accounts.html", {
+        "nav": "admin", "subnav": "accounts", "status": status, "query": query,
+        "rows": _account_rows(status, query) if status.available else [],
+        "raw_auth_text": raw_auth_text(status), "suggestions": accounts.suggestions(status, settings.NODES),
+        "recent": lifecycle.refresh_all(AccountRequest.objects.all()[:8]),
+    })
+
+
+def _create(request, op, username):
+    """Check, record and write one request. Raises accounts.Refused before anything is written."""
+    status = proxy_status.load()
+    accounts.check(op, username, status)
+    row = AccountRequest.objects.create(id=spool.new_id(), op=op, username=username,
+                                        requested_by=session_user(request))
+    try:
+        spool.write_request(row.id, op, username)
+    except OSError as e:
+        request_id = row.id
+        row.delete()
+        log.error("request %s %s %s by %s: not written: %s", request_id, op, username, row.requested_by,
+                  type(e).__name__)
+        raise accounts.Refused(_("The request could not be written to the applier's spool. Nothing changed."), 503)
+    log.info("request %s: %s %s by %s", row.id, op, username, row.requested_by)
+    return row
+
+
+@admin_only("page")
+@require_http_methods(["GET", "POST"])
+def confirm_page(request, op):
+    if op not in accounts.OPS:
+        raise Http404()
+    source = request.POST if request.method == "POST" else request.GET
+    username = (source.get("username") or "").strip()[:128]
+    status = proxy_status.load()
+    row = next((r for r in status.all_accounts if r.name == username), None)
+    context = {"nav": "admin", "subnav": "accounts", "op": op, "username": username, "row": row, "status": status,
+               "destructive": op in accounts.DESTRUCTIVE, "error": None}
+    try:
+        accounts.check(op, username, status)
+    except accounts.Refused as e:
+        context["error"] = str(e)
+        return render(request, "portal/admin/confirm.html", context, status=e.status)
+    context.update(effect=_effect_text(op, username), restart=_restart_text(op, row, status),
+                   raw_auth=raw_auth_text(status) if op in ("disable", "enable", "remove") else None)
+    if request.method == "POST":
+        if op in accounts.DESTRUCTIVE and request.POST.get("confirm", "").strip() != username:
+            context["error"] = _("Type the account name to confirm.")
+            return render(request, "portal/admin/confirm.html", context, status=400)
+        try:
+            created = _create(request, op, username)
+        except accounts.Refused as e:
+            context["error"] = str(e)
+            return render(request, "portal/admin/confirm.html", context, status=e.status)
+        return redirect("admin_request", request_id=created.id)
+    return render(request, "portal/admin/confirm.html", context)
+
+
+@admin_only("page")
+@require_GET
+def request_page(request, request_id):
+    row = lifecycle.refresh(get_object_or_404(AccountRequest, id=request_id))
+    pw = lifecycle.password_state(row, session_user(request))
+    status = proxy_status.load()
+    return render(request, "portal/admin/request.html", {
+        "nav": "admin", "subnav": "log", "row": row, "level": lifecycle.level(row), "text": lifecycle.describe(row),
+        "password": pw, "password_text": lifecycle.password_text(pw, row) if pw else None,
+        "raw_auth": raw_auth_text(status) if row.op in ("disable", "enable", "remove") and status.available
+        else None,
+    })
+
+
+@admin_only("page")
+@require_POST
+@sensitive_variables("password")
+def password_page(request, request_id):
+    """Show the one-time password to the admin who made the request: claim, read, delete, render. Never kept."""
+    username = session_user(request)
+    row = lifecycle.refresh(get_object_or_404(AccountRequest, id=request_id))
+    state = lifecycle.password_state(row, username)
+    if state == "other":
+        return render(request, "portal/admin/forbidden.html", {"nav": "admin"}, status=403)
+    password = None
+    if state == "ready":
+        # one claim only: a second response, or a reload of this one, finds it claimed
+        claimed = AccountRequest.objects.filter(id=row.id, requested_by=username, result_state="") \
+            .update(result_state="claimed", result_at=timezone.now())
+        if claimed:
+            try:
+                password = spool.take_result(row.id, row.username)
+                outcome = "shown"
+            except spool.ResultError as e:
+                outcome = "expired" if e.reason == "missing" else "unreadable"
+            AccountRequest.objects.filter(id=row.id).update(result_state=outcome)
+            log.info("request %s: one-time result %s to %s", row.id, outcome, username)
+            row.refresh_from_db()
+            state = outcome
+        else:
+            row.refresh_from_db()
+            state = lifecycle.password_state(row, username)
+    response = render(request, "portal/admin/password.html", {
+        "nav": "admin", "subnav": "log", "row": row, "password_value": password,
+        "password_text": lifecycle.password_text(state, row) if password is None else None})
+    password = None
+    return response
+
+
+# ------------------------------------------------------------------ change log
+
+
+FILTERS = ("username", "requested_by", "op", "state")
+
+
+def _filtered(params):
+    rows = AccountRequest.objects.all()
+    applied = {}
+    for key in FILTERS:
+        value = (params.get(key) or "").strip()[:128]
+        if value:
+            applied[key] = value
+            rows = rows.filter(**({f"{key}__icontains": value} if key in ("username", "requested_by")
+                                  else {key: value}))
+    return lifecycle.refresh_all(rows[:LOG_LIMIT]), applied
+
+
+@admin_only("page")
+@require_GET
+def log_page(request):
+    # outcomes are copied from the status files first, so a state filter sees them
+    lifecycle.refresh_all(AccountRequest.objects.exclude(state__in=AccountRequest.FINAL)[:LOG_LIMIT])
+    rows, applied = _filtered(request.GET)
+    return render(request, "portal/admin/log.html", {
+        "nav": "admin", "subnav": "log", "rows": [(row, lifecycle.level(row), lifecycle.describe(row))
+                                                  for row in rows],
+        "filters": applied, "ops": AccountRequest.OPS, "states": AccountRequest.STATES, "limit": LOG_LIMIT})
+
+
+# ------------------------------------------------------------------ APIs
+
+
+@admin_only("api")
+def api_accounts(request):
+    if request.method != "GET":
+        return HttpResponseNotAllowed(["GET"])
+    status = proxy_status.load()
+    query = (request.GET.get("q") or "").strip().lower()[:64]
+    rows = _account_rows(status, query) if status.available else []
+    for row in rows:
+        pending = row.pop("pending")
+        row["pending"] = {"id": pending.id, "op": pending.op, "state": pending.state} if pending else None
+    return JsonResponse({
+        "status_available": status.available,
+        "status_stale": status.stale if status.available else None,
+        "status_generated_at": status.generated_at.isoformat() if status.generated_at else None,
+        "raw_auth": status.raw_auth if status.available else None,
+        "raw_auth_text": raw_auth_text(status) if status.available else None,
+        "status_unapplied_changes": status.unapplied_changes if status.available else None,
+        "accounts": rows,
+    })
+
+
+@admin_only("api")
+def api_requests(request):
+    """GET: the change log, filtered. POST {"op", "username", "confirm"}: a new request (202)."""
+    if request.method == "GET":
+        rows, _applied = _filtered(request.GET)
+        user = session_user(request)
+        return JsonResponse({"requests": [lifecycle.as_json(row, user) for row in rows]})
+    if request.method != "POST":
+        return HttpResponseNotAllowed(["GET", "POST"])
+    try:
+        body = json.loads(request.body.decode("utf-8")) if request.content_type == "application/json" \
+            else {k: v for k, v in request.POST.items() if k != "csrfmiddlewaretoken"}
+    except (UnicodeDecodeError, ValueError):
+        return JsonResponse({"error": "not UTF-8 JSON"}, status=400)
+    if not isinstance(body, dict) or not set(body) <= {"op", "username", "confirm"} \
+            or not all(isinstance(v, str) for v in body.values()):
+        return JsonResponse({"error": "expected an object with op, username and, for rotate, disable, remove and "
+                                      "admin-off, confirm (the account name)"}, status=400)
+    op, username = body.get("op", ""), body.get("username", "")
+    if op in accounts.DESTRUCTIVE and body.get("confirm") != username:
+        return JsonResponse({"error": "confirm must equal the account name for this operation"}, status=400)
+    try:
+        row = _create(request, op, username)
+    except accounts.Refused as e:
+        return JsonResponse({"error": str(e)}, status=e.status)
+    return JsonResponse(lifecycle.as_json(row, session_user(request)), status=202)
+
+
+@admin_only("api")
+def api_request(request, request_id):
+    if request.method != "GET":
+        return HttpResponseNotAllowed(["GET"])
+    row = AccountRequest.objects.filter(id=request_id).first()
+    if row is None:
+        return JsonResponse({"error": "no such request"}, status=404)
+    return JsonResponse(lifecycle.as_json(lifecycle.refresh(row), session_user(request)))
+
+
+# ------------------------------------------------------------------ incidents
+
+
+class IncidentForm(forms.ModelForm):
+    started_at = forms.DateTimeField(required=False, widget=forms.DateTimeInput(
+        attrs={"class": "input", "type": "datetime-local"}, format="%Y-%m-%dT%H:%M"))
+
+    class Meta:
+        model = Incident
+        fields = ["title", "component", "state", "body", "started_at"]
+        widgets = {"title": forms.TextInput(attrs={"class": "input", "maxlength": 200}),
+                   "component": forms.Select(attrs={"class": "input"}),
+                   "state": forms.Select(attrs={"class": "input"}),
+                   "body": forms.Textarea(attrs={"class": "input", "rows": 4})}
+
+
+class UpdateForm(forms.ModelForm):
+    class Meta:
+        model = IncidentUpdate
+        fields = ["state", "body"]
+        widgets = {"state": forms.Select(attrs={"class": "input"}),
+                   "body": forms.Textarea(attrs={"class": "input", "rows": 4, "maxlength": 5000})}
+
+
+@admin_only("page")
+@require_http_methods(["GET", "POST"])
+def incidents_page(request):
+    form = IncidentForm(request.POST or None, initial={"state": "investigating"})
+    if request.method == "POST" and form.is_valid():
+        incident = form.save(commit=False)
+        incident.started_at = form.cleaned_data["started_at"] or timezone.now()
+        incident.author = session_user(request)
+        incident.set_state(incident.state)
+        incident.save()
+        log.info("incident %s created by %s", incident.id, incident.author)
+        return redirect("admin_incident", pk=incident.id)
+    return render(request, "portal/admin/incidents.html", {
+        "nav": "admin", "subnav": "incidents", "form": form,
+        "incidents": Incident.objects.prefetch_related("updates").all()[:100]},
+        status=400 if request.method == "POST" else 200)
+
+
+@admin_only("page")
+@require_http_methods(["GET", "POST"])
+def incident_page(request, pk):
+    incident = get_object_or_404(Incident, pk=pk)
+    form = IncidentForm(request.POST or None, instance=incident)
+    update = UpdateForm(initial={"state": incident.state})
+    if request.method == "POST" and form.is_valid():
+        edited = form.save(commit=False)
+        edited.started_at = form.cleaned_data["started_at"] or incident.started_at
+        edited.set_state(edited.state)
+        edited.save()
+        log.info("incident %s edited by %s", incident.id, session_user(request))
+        return redirect("admin_incident", pk=incident.id)
+    return render(request, "portal/admin/incident.html", {
+        "nav": "admin", "subnav": "incidents", "incident": incident, "form": form, "update": update},
+        status=400 if request.method == "POST" else 200)
+
+
+@admin_only("page")
+@require_POST
+def incident_update(request, pk):
+    incident = get_object_or_404(Incident, pk=pk)
+    update = UpdateForm(request.POST)
+    if not update.is_valid():
+        return render(request, "portal/admin/incident.html", {
+            "nav": "admin", "subnav": "incidents", "incident": incident, "form": IncidentForm(instance=incident),
+            "update": update}, status=400)
+    item = update.save(commit=False)
+    item.incident, item.author = incident, session_user(request)
+    item.save()
+    incident.set_state(item.state, at=item.posted_at)
+    incident.save()
+    log.info("incident %s updated by %s", incident.id, item.author)
+    return redirect(reverse("admin_incident", kwargs={"pk": incident.id}))

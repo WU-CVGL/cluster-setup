@@ -39,8 +39,9 @@ def portal_context(request):
 
 def incidents():
     since = timezone.now() - datetime.timedelta(days=30)
-    open_ = list(Incident.objects.exclude(state="resolved")[:20])
-    closed = list(Incident.objects.filter(state="resolved", resolved_at__gte=since)[:20])
+    shown = Incident.objects.prefetch_related("updates")
+    open_ = list(shown.exclude(state="resolved")[:20])
+    closed = list(shown.filter(state="resolved", resolved_at__gte=since)[:20])
     return open_ + closed
 
 

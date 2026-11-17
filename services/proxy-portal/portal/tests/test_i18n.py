@@ -51,3 +51,16 @@ class LanguageTest(PortalTestCase):
         self.assertContains(page, "公共代理自己的入口仍可使用")
         page = self.client.get("/usage", HTTP_ACCEPT_LANGUAGE="zh-CN")
         self.assertContains(page, "观测总量")
+
+    def test_admin_pages_in_chinese(self):
+        self.sign_in("carol")
+        page = self.client.get("/admin/accounts", HTTP_ACCEPT_LANGUAGE="zh-CN")
+        self.assertContains(page, "代理账号")
+        self.assertContains(page, ">管理</a>")
+        self.assertContains(page, "公共代理自己的入口不需要账号")
+        self.assertContains(page, "svc-docker-&lt;node&gt;")
+        page = self.client.get("/admin/accounts/disable?username=alice", HTTP_ACCEPT_LANGUAGE="zh-CN")
+        self.assertContains(page, "关闭 alice 的代理访问")
+        self.assertContains(page, "经过它们的已建立连接会断开")
+        self.assertContains(self.client.get("/admin/log", HTTP_ACCEPT_LANGUAGE="zh-CN"), "变更记录")
+        self.assertContains(self.client.get("/admin/incidents", HTTP_ACCEPT_LANGUAGE="zh-CN"), "维护通知不会让失败的代理显示为正常")

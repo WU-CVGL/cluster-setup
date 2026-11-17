@@ -146,10 +146,17 @@ UPSTREAM_TIMEOUT = float(env("UPSTREAM_TIMEOUT", "10"))
 # In tests, every upstream must be a local stub: a request elsewhere raises.
 UPSTREAM_LOOPBACK_ONLY = TESTING
 
-# The applier's sanitized accounts status (proxy_accounts.py status --json), in its spool folder.
-STATUS_FILE = Path(env("STATUS_FILE", "/srv/spool/status.json"))
+# The applier's spool (applier/README.md): the portal writes requests/, reads and deletes results/, and reads
+# status/ and the sanitized accounts status status.json (proxy_accounts.py status --json).
+SPOOL_DIR = Path(env("SPOOL_DIR", "/srv/spool"))
+STATUS_FILE = Path(env("STATUS_FILE", str(SPOOL_DIR / "status.json")))
 # The applier rewrites it on every run, at least every 5 minutes; older than this, it is shown as out of date.
 STATUS_FILE_MAX_AGE = int(env("STATUS_FILE_MAX_AGE", "900"))
+
+# The nodes whose Docker daemons get an account svc-docker-<node>, offered in the admins' add form.
+NODES = [n for n in env("NODES", ",".join(f"cvgl-node{i:02d}" for i in range(1, 9))).split(",") if n]
+# A request still pending after this many seconds is shown as not taken by the applier (its timer runs every 5 min).
+REQUEST_PENDING_WARN = int(env("REQUEST_PENDING_WARN", "360"))
 
 # The addresses of the supplementary services VM, where the proxy entries listen.
 PROXY_ADDRESSES = [
