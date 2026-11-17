@@ -1,0 +1,10 @@
+# Starts proxy-apply.service while a request is waiting in the spool.
+[Unit]
+Description=Watch the proxy account request spool
+
+[Path]
+PathExistsGlob=/var/lib/proxy-portal/spool/requests/*.json
+Unit=proxy-apply.service
+
+[Install]
+WantedBy=paths.target

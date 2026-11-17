@@ -1,0 +1,610 @@
+# -*- coding: utf-8 -*-
+"""
+proxy_apply.py: request validation, the spool, and the apply state machine with injected failures.
+
+    cd services/proxy-portal/applier && python3 -B -m unittest discover -s tests -v
+"""
+
+import contextlib
+import io
+import json
+import os
+import shutil
+import socket
+import ssl
+import stat
+import subprocess
+import sys
+import tempfile
+import threading
+import unittest
+from pathlib import Path
+
+sys.dont_write_bytecode = True
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
+
+import proxy_apply as ap  # noqa: E402
+import proxy_accounts as pa  # noqa: E402
+from XrayConfigHandler import XrayConfigHandler  # noqa: E402
+
+SERVICES = Path(__file__).resolve().parents[3]
+IMAGE = "teddysun/xray:1@sha256:" + "0" * 64
+LINE = "line-a"
+
+
+class Crash(BaseException):
+    """Stands for the applier being killed mid-apply."""
+
+
+class FakeDocker:
+    """docker and docker compose, with the HA entry and the line as login tables loaded at each restart."""
+
+    def __init__(self, base):
+        self.base = base
+        self.calls = []
+        self.running = {"xray-ha", "xray-" + LINE, "blackbox-exporter", "xray-ha-exporter"}
+        self.fail_test = None        # substring of a config that makes xray -test fail
+        self.fail_restart = 0        # restarts that fail before one succeeds
+        self.crash_restart = False
+        self.stale = False
+        self.image = IMAGE
+        self.ha_users = {}
+        self.load()
+
+    def load(self):
+        path = self.base / pa.HA_CONFIG
+        self.ha_users = {}
+        if path.exists():
+            config = json.loads(path.read_text())
+            http = next(i for i in config["inbounds"] if i["protocol"] == "http")
+            self.ha_users = {u["user"]: u["pass"] for u in http["settings"].get("users", [])}
+
+    def __call__(self, argv, input_text, timeout):
+        argv = list(argv)
+        self.calls.append(argv)
+        if argv[:2] == ["docker", "run"]:
+            json.loads(input_text)
+            if self.fail_test and self.fail_test in input_text:
+                return 23, "", "Failed to start: main: failed to load config files: bad (password " + \
+                    input_text.split('"pass": "')[1].split('"')[0] + ")"
+            return 0, "Configuration OK.\n", ""
+        args = argv[argv.index("-f") + 2:]
+        if args == ["config", "--services"]:
+            return 0, "\n".join(["xray-ha", "xray-" + LINE, "blackbox-exporter", "xray-ha-exporter"]) + "\n", ""
+        if args[:3] == ["ps", "--services", "--status"]:
+            return 0, "\n".join(sorted(self.running)) + "\n", ""
+        if args == ["config", "--format", "json"]:
+            return 0, json.dumps({"services": {"xray-ha": {"image": self.image}}}), ""
+        if args[0] == "restart":
+            if self.crash_restart:
+                raise Crash()
+            if self.fail_restart:
+                self.fail_restart -= 1
+                return 1, "", "Error response from daemon: cannot restart"
+            if not self.stale:
+                self.load()
+            return 0, "", ""
+        raise AssertionError(argv)
+
+    def restarts(self):
+        return [c[c.index("-f") + 3:] for c in self.calls if "restart" in c]
+
+    def tests(self):
+        return sum(c[:2] == ["docker", "run"] for c in self.calls)
+
+
+class FakeProbe:
+    """The HA entry: 204 for a login it knows, 407 otherwise; or a down entry, or one without lines."""
+
+    def __init__(self, docker):
+        self.docker = docker
+        self.mode = "ok"      # ok | down | silent | nolines
+        self.calls = []
+
+    def __call__(self, user, password):
+        self.calls.append(user)
+        if self.mode == "down":
+            return "unreachable", None
+        if self.mode == "silent":
+            return "noresponse", None
+        known = self.docker.ha_users.get(user) == password
+        if not known:
+            return "status", 407
+        return ("noresponse", None) if self.mode == "nolines" else ("status", 204)
+
+
+class _Base(unittest.TestCase):
+    def setUp(self):
+        self.tmp = Path(tempfile.mkdtemp())
+        self.addCleanup(shutil.rmtree, self.tmp)
+        self.base = self.tmp / "services"
+        for rel in (pa.HA_EXAMPLE, pa.BLACKBOX_EXAMPLE):
+            (self.base / rel).parent.mkdir(parents=True, exist_ok=True)
+            shutil.copy(SERVICES / rel, self.base / rel)
+        self.line = self.base / "xray" / LINE / "config" / "config.json"
+        self.line.parent.mkdir(parents=True)
+        outbound = {"protocol": "freedom", "settings": {}, "tag": "line"}
+        self.line.write_text(json.dumps(XrayConfigHandler.build_xray_config(outbound, include_stats_api=True),
+                                        indent=4))
+        accounts = pa.Accounts(self.base)
+        for name in ("svc-monitor", "svc-ha", "alice", "bob", "svc-docker-node01"):
+            accounts.accounts[name] = pa.new_password()
+        accounts.save()
+        pa.render(accounts)
+        self.spool = ap.Spool(self.tmp / "spool", os.getuid())
+        self.spool.init(os.getgid())
+        self.docker = FakeDocker(self.base)
+        self.probe = FakeProbe(self.docker)
+        self.time = [0.0]
+        self.out = io.StringIO()
+        self.seen_passwords = set(self.passwords().values())
+
+    def passwords(self):
+        return dict(pa.Accounts(self.base).accounts)
+
+    def applier(self):
+        def sleep(seconds):
+            self.time[0] += seconds
+        return ap.Applier(self.base, self.spool, ap.Compose(self.base / "compose.yml", None, self.docker), self.probe,
+                          verify_timeout=10, verify_interval=2, sleep=sleep, clock=lambda: self.time[0])
+
+    def request(self, request_id, op, username, raw=None):
+        path = self.spool.requests / f"{request_id}.json"
+        path.write_bytes(raw if raw is not None else json.dumps({"id": request_id, "op": op,
+                                                                  "username": username}).encode())
+        return path
+
+    def run_applier(self):
+        with contextlib.redirect_stdout(self.out):
+            code = self.applier().run()
+        self.seen_passwords |= set(self.passwords().values())
+        return code
+
+    def status(self, request_id):
+        return json.loads((self.spool.status / f"{request_id}.json").read_text())
+
+    def files(self):
+        return {rel: (self.base / rel).read_text()
+                for rel in (pa.ACCOUNTS_FILE, pa.HA_CONFIG, pa.BLACKBOX_CONFIG, self.line.relative_to(self.base))}
+
+    def assert_no_leaks(self):
+        texts = [self.out.getvalue()] + [p.read_text() for p in self.spool.status.iterdir()]
+        texts.append((self.spool.root / "status.json").read_text() if (self.spool.root / "status.json").exists()
+                     else "")
+        for text in texts:
+            for password in self.seen_passwords:
+                self.assertNotIn(password, text)
+
+
+class ParseRequestTest(unittest.TestCase):
+    def ok(self, **kw):
+        data = {"id": "0f8e1c2a-1111-4222-8333-944455556666", "op": "disable", "username": "alice"}
+        data.update(kw)
+        return json.dumps(data).encode()
+
+    def test_valid(self):
+        for op in ap.OPS:
+            self.assertEqual(ap.parse_request(self.ok(op=op))["op"], op)
+        self.assertEqual(ap.parse_request(self.ok(username="svc-docker-node01"))["username"], "svc-docker-node01")
+
+    def test_invalid(self):
+        bad = [
+            self.ok(op="render"), self.ok(op="raw-auth"), self.ok(op="ADD"), self.ok(op=""),
+            self.ok(username="Alice"), self.ok(username="../etc/passwd"), self.ok(username="a/b"),
+            self.ok(username="alice\n"), self.ok(username="svc-foo"), self.ok(username="x" * 65),
+            self.ok(username="svc-monitor"), self.ok(username="svc-ha"), self.ok(username="a:b"),
+            self.ok(id="../../etc/x"), self.ok(id="a/b-cdefgh"), self.ok(id="short"), self.ok(id="ABCDEFGH-1"),
+            self.ok(id="x" * 65), self.ok(id=".hidden-id"),
+            self.ok(password="chosen"), self.ok(path="/etc/shadow"), self.ok(command="id"),
+            json.dumps({"id": "abcdefgh-1", "op": "add"}).encode(),
+            json.dumps({"id": "abcdefgh-1", "op": "add", "username": ["alice"]}).encode(),
+            json.dumps({"id": "abcdefgh-1", "op": "add", "username": None}).encode(),
+            b'{"id": "abcdefgh-1", "op": "add", "username": "alice", "username": "bob"}',
+            b'["abcdefgh-1", "add", "alice"]', b"not json", b"\xff\xfe", b"",
+            self.ok(username="a" * 5000),
+            b" " * (ap.MAX_REQUEST_BYTES + 1),
+        ]
+        for raw in bad:
+            with self.assertRaises(ap.RequestError, msg=raw[:80]):
+                ap.parse_request(raw)
+
+
+class SpoolTest(_Base):
+    def test_init_modes(self):
+        for path, mode in ((self.spool.root, 0o755), (self.spool.status, 0o755), (self.spool.requests, 0o700),
+                           (self.spool.results, 0o700)):
+            self.assertEqual(stat.S_IMODE(os.stat(path).st_mode), mode)
+        self.spool.init(os.getgid())  # idempotent
+
+    def test_every_json_entry_is_consumed(self):
+        target = self.tmp / "target.json"
+        target.write_text(json.dumps({"id": "abcdefgh-2", "op": "disable", "username": "alice"}))
+        os.symlink(str(target), str(self.spool.requests / "abcdefgh-1.json"))       # symlink
+        (self.spool.requests / "abcdefgh-3.json").mkdir()                            # folder
+        (self.spool.requests / "abcdefgh-3.json" / "x").write_text("x")
+        hard = self.request("abcdefgh-4", "disable", "alice")                         # hard link
+        os.link(str(hard), str(self.tmp / "other-link"))
+        os.mkfifo(str(self.spool.requests / "abcdefgh-5.json"))                       # fifo
+        self.request("abcdefgh-6", "", "", raw=b"x" * (ap.MAX_REQUEST_BYTES + 100))  # oversized
+        self.request("abcdefgh-7", "disable", "alice", raw=json.dumps(
+            {"id": "abcdefgh-8", "op": "disable", "username": "alice"}).encode())     # id is not the file name
+        self.request("Bad_Name", "disable", "alice")                                  # file name
+        self.request("abcdefgh-9", "remove", "svc-monitor")                           # protected
+        (self.spool.requests / "abcdefgh-10.json.tmp").write_text("{}")               # a temp file: left alone
+        files = self.files()
+        self.assertEqual(self.run_applier(), 1)
+        self.assertEqual(sorted(os.listdir(self.spool.requests)), ["abcdefgh-10.json.tmp"])
+        self.assertTrue(target.exists())
+        self.assertEqual(self.files(), files)
+        self.assertEqual(self.docker.restarts(), [])
+        for request_id in ("abcdefgh-1", "abcdefgh-3", "abcdefgh-4", "abcdefgh-5", "abcdefgh-6", "abcdefgh-7",
+                           "abcdefgh-9"):
+            self.assertEqual(self.status(request_id)["status"], "failed", request_id)
+            self.assertEqual(self.status(request_id)["stage"], "request")
+        self.assertIn("managed with proxy_accounts.py only", self.status("abcdefgh-9")["error"])
+        self.assertFalse((self.spool.status / "abcdefgh-8.json").exists())
+        self.assertEqual(sorted(os.listdir(self.spool.status)),
+                         sorted(f"abcdefgh-{i}.json" for i in (1, 3, 4, 5, 6, 7, 9)))
+
+    def test_other_owner_refused(self):
+        self.spool.requester_uid = os.getuid() + 1
+        self.request("abcdefgh-1", "disable", "alice")
+        self.assertEqual(self.run_applier(), 1)
+        self.assertEqual(os.listdir(self.spool.requests), [])
+        self.assertIn("not the requester", self.status("abcdefgh-1")["error"])
+        self.assertTrue(pa.Accounts(self.base).enabled("alice"))
+
+    def test_stale_temp_files_removed(self):
+        tmp = self.spool.requests / "abcdefgh-1.json.tmp"
+        tmp.write_text("{")
+        os.utime(str(tmp), (1, 1))
+        self.run_applier()
+        self.assertEqual(os.listdir(self.spool.requests), [])
+
+    def test_result_does_not_follow_planted_links(self):
+        victim = self.tmp / "victim"
+        victim.write_text("keep")
+        os.symlink(str(victim), str(self.spool.results / "abcdefgh-1.json"))
+        os.symlink(str(victim), str(self.spool.results / ".abcdefgh-2.tmp"))
+        self.request("abcdefgh-1", "rotate", "alice")
+        self.request("abcdefgh-2", "rotate", "bob")
+        self.run_applier()
+        self.assertEqual(victim.read_text(), "keep")
+        result = self.spool.results / "abcdefgh-1.json"
+        self.assertFalse(result.is_symlink())  # the link itself was replaced
+        self.assertEqual(stat.S_IMODE(os.lstat(result).st_mode), 0o400)
+        self.assertEqual(json.loads(result.read_text())["password"], self.passwords()["alice"])
+        self.assertEqual(self.status("abcdefgh-2")["status"], "applied")
+        self.assertIs(self.status("abcdefgh-2")["result"], False)  # not delivered through the planted link
+
+    def test_results_expire(self):
+        self.request("abcdefgh-1", "add", "carol")
+        self.run_applier()
+        result = self.spool.results / "abcdefgh-1.json"
+        self.assertTrue(result.exists())
+        self.spool.expire_results(ttl=3600)
+        self.assertTrue(result.exists())
+        os.utime(str(result), (1, 1))
+        self.run_applier()
+        self.assertFalse(result.exists())
+
+    def test_reused_id_dropped(self):
+        self.request("abcdefgh-1", "disable", "alice")
+        self.run_applier()
+        first = self.status("abcdefgh-1")
+        self.request("abcdefgh-1", "enable", "alice")
+        self.run_applier()
+        self.assertEqual(os.listdir(self.spool.requests), [])
+        self.assertEqual(self.status("abcdefgh-1"), first)
+        self.assertFalse(pa.Accounts(self.base).enabled("alice"))
+
+
+class ApplyTest(_Base):
+    def test_disable_and_enable(self):
+        alice = self.passwords()["alice"]
+        self.request("abcdefgh-1", "disable", "alice")
+        self.assertEqual(self.run_applier(), 0)
+        record = self.status("abcdefgh-1")
+        self.assertEqual((record["status"], record["changed"], record["restarted"]), ("applied", True, ["xray-ha"]))
+        self.assertNotIn("alice", self.docker.ha_users)
+        self.assertIn("bob", self.docker.ha_users)
+        self.assertNotIn(alice, (self.base / pa.HA_CONFIG).read_text())
+        self.assertEqual(self.passwords()["alice"], alice)
+        self.assertIn("alice", self.probe.calls)  # the refused login was checked
+        self.assertEqual(self.docker.tests(), 1)  # only the HA config changed
+        view = json.loads((self.spool.root / "status.json").read_text())
+        self.assertEqual(next(a for a in view["accounts"] if a["name"] == "alice")["enabled"], False)
+        self.assertEqual(view["disabled_refused_at"], "ha-entry")
+        self.assertIs(view["unapplied_changes"], False)
+        self.assertFalse((self.base / ap.BACKUP_DIR).exists())
+        self.assertEqual(os.listdir(self.spool.results), [])
+
+        self.request("abcdefgh-2", "enable", "alice")
+        self.assertEqual(self.run_applier(), 0)
+        self.assertEqual(self.docker.ha_users["alice"], alice)
+        self.assert_no_leaks()
+
+    def test_noop_does_not_restart(self):
+        self.request("abcdefgh-1", "enable", "alice")
+        self.assertEqual(self.run_applier(), 0)
+        self.assertEqual((self.status("abcdefgh-1")["status"], self.status("abcdefgh-1")["changed"]),
+                         ("applied", False))
+        self.assertEqual(self.docker.restarts(), [])
+
+    def test_add_and_rotate_deliver_a_result(self):
+        old_bob = self.passwords()["bob"]
+        self.request("abcdefgh-1", "add", "carol")
+        self.request("abcdefgh-2", "rotate", "bob")
+        self.request("abcdefgh-3", "add", "alice")  # exists: fails alone
+        self.assertEqual(self.run_applier(), 1)
+        passwords = self.passwords()
+        for request_id, name in (("abcdefgh-1", "carol"), ("abcdefgh-2", "bob")):
+            record = self.status(request_id)
+            self.assertEqual((record["status"], record["result"]), ("applied", True))
+            result = json.loads((self.spool.results / f"{request_id}.json").read_text())
+            self.assertEqual(result, {"id": request_id, "username": name, "password": passwords[name]})
+            self.assertGreaterEqual(len(result["password"]), 32)
+        self.assertNotEqual(passwords["bob"], old_bob)
+        self.assertEqual((self.status("abcdefgh-3")["status"], self.status("abcdefgh-3")["stage"]),
+                         ("failed", "request"))
+        self.assertFalse((self.spool.results / "abcdefgh-3.json").exists())
+        self.assertEqual(self.docker.ha_users["carol"], passwords["carol"])
+        self.assertEqual(self.docker.restarts(), [["xray-ha"]])  # one batch, one restart
+        self.assert_no_leaks()
+
+    def test_remove(self):
+        self.request("abcdefgh-1", "remove", "svc-docker-node01")
+        self.assertEqual(self.run_applier(), 0)
+        self.assertNotIn("svc-docker-node01", self.passwords())
+        self.assertNotIn("svc-docker-node01", self.docker.ha_users)
+
+    def test_raw_auth_restarts_the_lines(self):
+        accounts = pa.Accounts(self.base)
+        accounts.raw_auth = True
+        accounts.save()
+        pa.render(accounts)
+        self.request("abcdefgh-1", "disable", "alice")
+        self.assertEqual(self.run_applier(), 0)
+        self.assertEqual(self.status("abcdefgh-1")["restarted"], ["xray-ha", "xray-" + LINE])
+        line = json.loads(self.line.read_text())
+        users = [u["user"] for u in line["inbounds"][0]["settings"]["users"]]
+        self.assertNotIn("alice", users)
+        self.assertIn("bob", users)
+        self.assertEqual(self.docker.tests(), 2)  # the HA config and the line
+        view = json.loads((self.spool.root / "status.json").read_text())
+        self.assertEqual(view["disabled_refused_at"], "ha-entry-and-lines")
+
+    def test_raw_auth_line_not_running_is_not_started(self):
+        accounts = pa.Accounts(self.base)
+        accounts.raw_auth = True
+        accounts.save()
+        pa.render(accounts)
+        self.docker.running.discard("xray-" + LINE)
+        self.request("abcdefgh-1", "disable", "alice")
+        self.assertEqual(self.run_applier(), 0)
+        self.assertEqual(self.status("abcdefgh-1")["restarted"], ["xray-ha"])
+
+    def test_migrates_a_version_1_file(self):
+        accounts = pa.Accounts(self.base)
+        (self.base / pa.ACCOUNTS_FILE).write_text(json.dumps({"raw_auth": False, "accounts": accounts.accounts}))
+        self.request("abcdefgh-1", "disable", "bob")
+        self.assertEqual(self.run_applier(), 0)
+        data = json.loads((self.base / pa.ACCOUNTS_FILE).read_text())
+        self.assertEqual(data["version"], 2)
+        self.assertEqual({n: e["password"] for n, e in data["accounts"].items()}, accounts.accounts)
+        self.assertEqual([n for n, e in data["accounts"].items() if not e["enabled"]], ["bob"])
+
+
+class FailureTest(_Base):
+    def run_failing(self, stage, restored=True):
+        before = self.files()
+        alice = self.passwords()["alice"]
+        self.request("abcdefgh-1", "disable", "alice")
+        self.request("abcdefgh-2", "add", "carol")
+        self.assertEqual(self.run_applier(), 1)
+        for request_id in ("abcdefgh-1", "abcdefgh-2"):
+            record = self.status(request_id)
+            self.assertEqual((record["status"], record["stage"], record["restored"]), ("failed", stage, restored))
+        self.assertEqual(self.files(), before)
+        self.assertEqual(self.docker.ha_users["alice"], alice)
+        self.assertEqual(os.listdir(self.spool.results), [])
+        self.assertFalse((self.base / ap.BACKUP_DIR).exists())
+        self.assertFalse((self.base / pa.APPLIED_FILE).exists())
+        self.assert_no_leaks()
+        return before
+
+    def test_render_error(self):
+        example = json.loads((self.base / pa.HA_EXAMPLE).read_text())
+        example["outbounds"] = [o for o in example["outbounds"] if not o["tag"].startswith("pool-")]
+        (self.base / pa.HA_EXAMPLE).write_text(json.dumps(example))
+        self.run_failing("render")
+        self.assertIn("pool-", self.status("abcdefgh-1")["error"])
+        self.assertEqual(self.docker.restarts(), [])
+        self.assertEqual(self.docker.tests(), 0)
+
+    def test_xray_test_failure(self):
+        self.docker.fail_test = '"carol"'
+        self.run_failing("test")
+        self.assertIn("***", self.status("abcdefgh-1")["error"])  # the password in xray's output is scrubbed
+        self.assertEqual(self.docker.restarts(), [])
+
+    def test_unpinned_image(self):
+        self.docker.image = "teddysun/xray:latest"
+        self.run_failing("test")
+        self.assertEqual(self.docker.restarts(), [])
+
+    def test_ha_entry_not_running(self):
+        self.docker.running.discard("xray-ha")
+        self.run_failing("precheck")
+        self.assertEqual(self.docker.restarts(), [])
+
+    def test_restart_failure_rolls_back(self):
+        self.docker.fail_restart = 1
+        self.run_failing("restart")
+        self.assertEqual(self.docker.restarts(), [["xray-ha"], ["xray-ha"]])  # the rollback restarts it again
+
+    def test_verify_failure_rolls_back(self):
+        self.docker.stale = True  # restarts do not take the new config: the disabled login still gets through
+        before = self.run_failing("verify", restored=True)
+        self.assertIn("alice: expected 407, got 204", self.status("abcdefgh-1")["error"])
+        self.assertEqual(self.docker.restarts(), [["xray-ha"], ["xray-ha"]])
+        self.assertEqual(self.files(), before)
+
+    def test_unreachable_entry_rolls_back(self):
+        self.probe.mode = "down"
+        self.run_failing("verify", restored=False)  # the entry stays down after the rollback too
+        self.assertIn("no 407 from xray-ha in 10 s for alice (unreachable), a wrong password (unreachable)",
+                      self.status("abcdefgh-1")["error"])
+
+    def test_entry_that_takes_connections_but_never_answers_rolls_back(self):
+        self.probe.mode = "silent"  # what docker-proxy looks like in front of a port nothing listens on
+        self.run_failing("verify", restored=False)
+        self.assertIn("a wrong password (noresponse)", self.status("abcdefgh-1")["error"])
+
+    def test_rollback_restart_failure_reported(self):
+        self.docker.fail_restart = 2
+        self.run_failing("restart", restored=False)
+
+    def test_unconfirmed_keeps_the_change_and_delivers(self):
+        self.probe.mode = "nolines"  # logins are taken, no line answers
+        self.request("abcdefgh-1", "disable", "alice")
+        self.request("abcdefgh-2", "add", "carol")
+        self.assertEqual(self.run_applier(), 1)
+        for request_id in ("abcdefgh-1", "abcdefgh-2"):
+            self.assertEqual(self.status(request_id)["status"], "unconfirmed")
+        self.assertEqual(self.status("abcdefgh-1")["error"], "no 204 for svc-monitor (noresponse), carol (noresponse)")
+        self.assertNotIn("alice", self.docker.ha_users)
+        self.assertTrue(self.status("abcdefgh-2")["result"])
+        self.assertTrue((self.spool.results / "abcdefgh-2.json").exists())
+        self.assertTrue((self.base / pa.APPLIED_FILE).exists())
+        self.assert_no_leaks()
+
+    def test_interrupted_apply_is_recovered(self):
+        before = self.files()
+        self.docker.crash_restart = True
+        self.request("abcdefgh-1", "disable", "alice")
+        with self.assertRaises(Crash):
+            self.run_applier()
+        self.assertEqual(self.status("abcdefgh-1")["status"], "applying")
+        self.assertNotEqual(self.files(), before)
+        self.assertTrue((self.base / ap.BACKUP_DIR / ap.MANIFEST).exists())
+        self.docker.crash_restart = False
+        self.assertEqual(self.run_applier(), 0)
+        self.assertEqual(self.files(), before)
+        record = self.status("abcdefgh-1")
+        self.assertEqual((record["status"], record["stage"], record["restored"]), ("failed", "interrupted", True))
+        self.assertFalse((self.base / ap.BACKUP_DIR).exists())
+        self.assertEqual(self.docker.restarts(), [["xray-ha"], ["xray-ha"]])  # the interrupted one, the recovery
+
+    def test_applying_without_backup_is_failed(self):
+        self.spool.write_status("abcdefgh-1", {"id": "abcdefgh-1", "status": "applying"})
+        self.run_applier()
+        record = self.status("abcdefgh-1")
+        self.assertEqual((record["status"], record["stage"], record["restored"]), ("failed", "interrupted", True))
+
+
+class ProxyProbeTest(unittest.TestCase):
+    """proxy_probe against a stub proxy: plain GET, CONNECT with 407, CONNECT then TLS."""
+
+    def serve(self, handler):
+        server = socket.socket()
+        server.bind(("127.0.0.1", 0))
+        server.listen(4)
+        self.addCleanup(server.close)
+
+        def loop():
+            while True:
+                try:
+                    conn, _ = server.accept()
+                except OSError:
+                    return
+                with conn:
+                    try:
+                        handler(conn)
+                    except OSError:
+                        pass
+        threading.Thread(target=loop, daemon=True).start()
+        return server.getsockname()
+
+    @staticmethod
+    def head(conn):
+        data = b""
+        while b"\r\n\r\n" not in data:
+            chunk = conn.recv(4096)
+            if not chunk:
+                break
+            data += chunk
+        return data.decode()
+
+    def test_http(self):
+        seen = []
+
+        def handler(conn):
+            request = self.head(conn)
+            seen.append(request)
+            ok = "Proxy-Authorization: Basic YWxpY2U6cHc=" in request  # alice:pw
+            conn.sendall(b"HTTP/1.1 204 No Content\r\n\r\n" if ok else
+                         b"HTTP/1.1 407 Proxy Authentication Required\r\n\r\n")
+        proxy = self.serve(handler)
+        self.assertEqual(ap.proxy_probe(proxy, "http://target/generate_204", "alice", "pw"), ("status", 204))
+        self.assertEqual(ap.proxy_probe(proxy, "http://target/generate_204", "alice", "x"), ("status", 407))
+        self.assertTrue(seen[0].startswith("GET http://target/generate_204 HTTP/1.1\r\n"))
+
+    def test_noresponse_and_unreachable(self):
+        proxy = self.serve(lambda conn: self.head(conn))
+        self.assertEqual(ap.proxy_probe(proxy, "http://target/", "a", "b"), ("noresponse", None))
+        free = socket.socket()
+        free.bind(("127.0.0.1", 0))
+        port = free.getsockname()[1]
+        free.close()
+        self.assertEqual(ap.proxy_probe(("127.0.0.1", port), "http://target/", "a", "b"), ("unreachable", None))
+
+    @unittest.skipUnless(shutil.which("openssl"), "needs openssl")
+    def test_https_through_connect(self):
+        tmp = Path(tempfile.mkdtemp())
+        self.addCleanup(shutil.rmtree, tmp)
+        subprocess.run(["openssl", "req", "-x509", "-newkey", "rsa:2048", "-nodes", "-days", "1", "-subj",
+                        "/CN=probe.test", "-addext", "subjectAltName=DNS:probe.test",
+                        "-keyout", str(tmp / "key.pem"), "-out", str(tmp / "cert.pem")],
+                       check=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        server_ctx = ssl.SSLContext(ssl.PROTOCOL_TLS_SERVER)
+        server_ctx.load_cert_chain(str(tmp / "cert.pem"), str(tmp / "key.pem"))
+        seen = []
+
+        def handler(conn):
+            request = self.head(conn)
+            seen.append(request.split("\r\n")[0])
+            if "Basic YWxpY2U6cHc=" not in request:
+                conn.sendall(b"HTTP/1.1 407 Proxy Authentication Required\r\n\r\n")
+                return
+            conn.sendall(b"HTTP/1.1 200 Connection established\r\n\r\n")
+            with server_ctx.wrap_socket(conn, server_side=True) as tls:
+                seen.append(self.head(tls).split("\r\n")[0])
+                tls.sendall(b"HTTP/1.1 204 No Content\r\n\r\n")
+        proxy = self.serve(handler)
+        client_ctx = ssl.create_default_context(cafile=str(tmp / "cert.pem"))
+        url = "https://probe.test/generate_204"
+        self.assertEqual(ap.proxy_probe(proxy, url, "alice", "x", context=client_ctx), ("status", 407))
+        self.assertEqual(ap.proxy_probe(proxy, url, "alice", "pw", context=client_ctx), ("status", 204))
+        self.assertEqual(seen, ["CONNECT probe.test:443 HTTP/1.1", "CONNECT probe.test:443 HTTP/1.1",
+                                "GET /generate_204 HTTP/1.1"])
+        # an untrusted certificate is no answer, not a pass
+        self.assertEqual(ap.proxy_probe(proxy, url, "alice", "pw"), ("noresponse", None))
+
+
+class CommandLineTest(unittest.TestCase):
+    def test_settings_come_from_the_environment(self):
+        tmp = Path(tempfile.mkdtemp())
+        self.addCleanup(shutil.rmtree, tmp)
+        env = dict(os.environ, PROXY_APPLY_SPOOL=str(tmp / "spool"), PROXY_APPLY_REQUESTER=str(os.getuid()),
+                   PROXY_APPLY_SERVICES_DIR=str(tmp / "services"))
+        script = Path(ap.__file__)
+        subprocess.run([sys.executable, "-I", "-B", str(script), "init"], env=env, check=True)
+        self.assertTrue((tmp / "spool" / "requests").is_dir())
+        p = subprocess.run([sys.executable, "-I", "-B", str(script), "status"], env=env, check=True,
+                           stdout=subprocess.PIPE, universal_newlines=True)
+        self.assertEqual(json.loads(p.stdout)["accounts"], [])
+
+
+if __name__ == "__main__":
+    unittest.main()

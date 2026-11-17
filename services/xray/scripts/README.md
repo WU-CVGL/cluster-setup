@@ -164,13 +164,23 @@ cd services
 python3 xray/scripts/proxy_accounts.py add <name> [--show]      # 新账号，随机密码（secrets）；--show 时输出密码
 python3 xray/scripts/proxy_accounts.py rotate <name> [--show]   # 换密码
 python3 xray/scripts/proxy_accounts.py remove <name>
+python3 xray/scripts/proxy_accounts.py disable <name>           # 保留账号和密码，所有要求账号的入口拒绝它
+python3 xray/scripts/proxy_accounts.py enable <name>
 python3 xray/scripts/proxy_accounts.py list                     # 只输出账号名
+python3 xray/scripts/proxy_accounts.py status [--json]          # 账号、类型、是否启用、raw auth、上次应用的文件哈希；不含密码
 python3 xray/scripts/proxy_accounts.py raw-auth [on|off]        # 线路自身入口是否要求账号，默认 off
 python3 xray/scripts/proxy_accounts.py render
 ```
 
 - 账号名：集群用户名，小写字母、数字、`.`、`_`、`-`，以字母或数字开头，最长 64 个字符。`svc-` 开头的是服务账号，
-  只能是 `svc-ha`（HA 入口登录线路）、`svc-monitor`（探测）和 `svc-docker-<node>`（节点的 Docker daemon）
+  只能是 `svc-ha`（HA 入口登录线路）、`svc-monitor`（探测）和 `svc-docker-<node>`（节点的 Docker daemon）。
+  `svc-ha` 和 `svc-monitor` 不能禁用或删除
+- 文件格式（version 2）：`{"version": 2, "raw_auth": bool, "accounts": {name: {"password": str, "enabled": bool}}}`。
+  没有 `version` 的旧文件（`{name: password}`）照常读取，所有账号视为启用，下次修改时写成 version 2
+- 禁用的账号不出现在任何生成的配置中。`raw-auth off` 时只有 HA 入口要求账号，所以禁用的账号只在 HA 入口被拒绝，
+  仍可直接使用线路自身入口
+- 修改账号文件和 `render` 的命令持有排他锁 `proxy-accounts/.lock`；门户的 applier
+  （[proxy-portal/applier](../../proxy-portal/applier/README.md)）在一次应用的全过程持有同一把锁
 - `render` 先在内存中生成全部文件并检查，再逐个原子替换（同目录临时文件 + rename，权限 `0600`），内容未变的文件不写：
   - `xray-ha/config/config.json`：`xray-ha/config.example.json` 的 HTTP 和 SOCKS5 入站换成除 `svc-ha` 外的所有账号
     （SOCKS5 `auth: password`）；`raw-auth on` 时 `pool-*` 出站以 `svc-ha` 登录线路

@@ -13,6 +13,7 @@
     - [Docker daemon with an account](#docker-daemon-with-an-account)
     - [Usage](#usage)
     - [Accounts on the lines](#accounts-on-the-lines)
+    - [Changes from the portal](#changes-from-the-portal)
   - [Proxy availability](#proxy-availability)
   - [Bootstrap: a temporary proxy on one machine](#bootstrap-a-temporary-proxy-on-one-machine)
   - [Verify a proxy](#verify-a-proxy)
@@ -127,13 +128,16 @@ cd ~/ws/cluster-setup/services
 python3 xray/scripts/proxy_accounts.py add <user> --show      # prints the new password
 python3 xray/scripts/proxy_accounts.py rotate <user> --show   # new password; the old one stops working
 python3 xray/scripts/proxy_accounts.py remove <user>
+python3 xray/scripts/proxy_accounts.py disable <user>         # keeps the account and its password
+python3 xray/scripts/proxy_accounts.py enable <user>
 python3 xray/scripts/proxy_accounts.py list                   # names only
+python3 xray/scripts/proxy_accounts.py status                 # names, kinds, enabled; --json for the portal
 python3 xray/scripts/proxy_accounts.py render
 docker compose restart xray-ha
 docker compose kill -s SIGHUP blackbox-exporter
 ```
 
-Passwords are random and are printed only by `add` and `rotate` with `--show`; give them to the user privately. Xray reads accounts only when it starts, so each change takes effect with the restart of `xray-ha`, which breaks the connections open through it and resets its traffic counters. While the [lines require accounts](#accounts-on-the-lines), restart them as well.
+Passwords are random and are printed only by `add` and `rotate` with `--show`; give them to the user privately. A disabled account is left out of every rendered configuration, so every entry that requires accounts refuses it. While the [lines require no accounts](#accounts-on-the-lines) (the default), that is only the HA entry: a disabled user can still use a line's own entry. `svc-ha` and `svc-monitor` cannot be disabled or removed. The file format changed with `enable` and `disable`; an older file is read as it is, with every account enabled, and is rewritten in the new format at the next change. Xray reads accounts only when it starts, so each change takes effect with the restart of `xray-ha`, which breaks the connections open through it and resets its traffic counters. While the [lines require accounts](#accounts-on-the-lines), restart them as well.
 
 ### Client settings
 
@@ -210,6 +214,19 @@ By default the lines' own entries (the *raw* entries, hence `raw-auth`) require 
     The HA entry and the lines must agree: the HA entry logging in to a line without accounts, or not logging in to a line with them, fails, and the HA entry fails closed until both sides have restarted.
 
 While accounts are on, restart the lines together with `xray-ha` after every account change. A line made with `create_xray_service.py` requires the accounts from its creation. `raw-auth off` followed by the same steps turns them off.
+
+### Changes from the portal
+
+The proxy portal does not change accounts itself. It writes a request per change into a spool folder, and the applier, a root systemd service on the VM ([`services/proxy-portal/applier`](../services/proxy-portal/applier/README.md)), applies them. The portal never gets the Docker socket or the accounts file. The accounts file stays the only record of the accounts and whether they are enabled.
+
+- **Install:** the units `proxy-apply.service`, `.path` and `.timer` and the settings file `/etc/default/proxy-apply` are in [`services/system-configurations/etc`](../services/system-configurations/etc). Create the portal's user, install the files, set `PROXY_APPLY_SERVICES_DIR`, run `proxy_apply.py init` and enable the `.path` and `.timer` units; the [applier README](../services/proxy-portal/applier/README.md#install) has the commands.
+- **Spool and permissions:** `/var/lib/proxy-portal/spool`. The portal's user owns `requests/` and `results/` (`0700`); root owns `status/` and `status.json`. A request is accepted only as a regular file owned by the portal's user, at most 4096 bytes.
+- **Requests:** `{"id": "<uuid>", "op": "add|rotate|enable|disable|remove", "username": "<account>"}` in `requests/<id>.json`, nothing else. `svc-ha` and `svc-monitor` are refused; they are changed here with `proxy_accounts.py`. For `add` and `rotate`, the applier generates the password and writes it once to `results/<id>.json` (mode `0400`, owned by the portal's user), which the portal deletes after showing it.
+- **Statuses** in `status/<id>.json`: `applied` (live and verified), `failed` (not applied; the previous files and services are restored, `restored: false` if the rollback did not finish), or `unconfirmed` (live and every refused login gets 407, but the logins that must pass got no 204 in time, e.g. while the lines are down).
+- **How:** the applier holds the accounts lock and applies the pending requests as one batch: it renders in memory, tests every changed Xray config with `xray run -test`, replaces the files atomically, restarts the services and verifies through the HA entry that `svc-monitor` passes (204) and that every disabled or removed account, replaced password and a wrong password are refused (407). A wrong answer rolls everything back.
+- **Restart impact:** every change restarts `xray-ha`, and with raw auth on every line too. Established connections through them drop, and new ones fail for a few seconds. Requests that arrive together share one restart.
+
+While raw auth is off, turning a user's access off in the portal stops it only at the HA entry; the lines' own entries stay open to them.
 
 ## Proxy availability
 
