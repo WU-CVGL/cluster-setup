@@ -19,16 +19,17 @@ class HeadlineTest(SimpleTestCase):
     def test_table(self):
         cases = [
             # http, socks, passing, configured -> level, text
-            (PASSING, PASSING, 4, 4, "ok", "Default proxy available; all 4 lines passing"),
-            (PASSING, PASSING, 3, 4, "degraded", "Default proxy available; 1 line not passing, failover working"),
-            (PASSING, PASSING, 2, 4, "degraded", "Default proxy available; 2 lines not passing, failover working"),
-            (PASSING, PASSING, 1, 4, "degraded", "Default proxy available on its last passing line, without a spare"),
-            (PASSING, PASSING, 0, 4, "degraded", "Default proxy answering, but no line passes its probe"),
+            (PASSING, PASSING, 4, 4, "ok", "Default proxy available; all 4 proxies passing"),
+            (PASSING, PASSING, 3, 4, "degraded", "Default proxy available; 1 proxy not passing, failover working"),
+            (PASSING, PASSING, 2, 4, "degraded", "Default proxy available; 2 proxies not passing, failover working"),
+            (PASSING, PASSING, 1, 4, "degraded", "Default proxy available on its last passing proxy, without a spare"),
+            (PASSING, PASSING, 0, 4, "degraded", "Default proxy answering, but no proxy passes its probe"),
             (PASSING, PASSING, None, None, "ok", "Default proxy available"),
             (FAILING, PASSING, 4, 4, "degraded", "HTTP entry failing, SOCKS5 still available"),
             (PASSING, FAILING, 4, 4, "degraded", "SOCKS5 entry failing, HTTP still available"),
-            (FAILING, FAILING, 3, 4, "down", "Default proxy failing while its lines pass: the HA entry itself is down"),
-            (FAILING, FAILING, 0, 4, "down", "Default proxy failing: no line passes its probe"),
+            (FAILING, FAILING, 3, 4, "down",
+             "Default proxy failing while its proxies pass: the HA entry itself is down"),
+            (FAILING, FAILING, 0, 4, "down", "Default proxy failing: no proxy passes its probe"),
             (FAILING, FAILING, None, None, "down", "Default proxy failing"),
             (UNKNOWN, UNKNOWN, 4, 4, "unknown", "Status unknown: no recent probe results for the default proxy"),
             (PASSING, UNKNOWN, 4, 4, "degraded", "HTTP entry available; SOCKS5 status unknown"),
@@ -76,8 +77,8 @@ class StatusTest(PortalTestCase):
     def test_page_is_public(self):
         response = self.client.get("/")
         self.assertEqual(response.status_code, 200)
-        self.assertContains(response, "Default proxy available; 1 line not passing, failover working")
-        self.assertContains(response, "Admins only")
+        self.assertContains(response, "Default proxy available; 1 proxy not passing, failover working")
+        self.assertContains(response, "Private proxies")
         self.assertContains(response, "us-west-racknerd-12tb")
         self.assert_only_fixed_queries()
 
@@ -85,16 +86,16 @@ class StatusTest(PortalTestCase):
         data = self.client.get("/api/status").json()
         self.assertEqual(data["headline"]["level"], "degraded")
         general = data["entries"]["ha-general"]
-        self.assertEqual(general["lines"], {"passing": 3, "configured": 4})
+        self.assertEqual(general["proxies"], {"passing": 3, "configured": 4})
         self.assertEqual(general["protocols"]["http"]["state"], "passing")
-        self.assertEqual(data["entries"]["ha-all"]["access"], "admin-only")
-        self.assertEqual(data["entries"]["ha-all"]["lines"], {"passing": 7, "configured": 9})
-        lines = {line["name"]: line for line in data["lines"]}
-        self.assertEqual(len(lines), 9)
-        self.assertEqual(lines["us-west-racknerd-12tb"]["protocols"]["http"]["state"], "failing")
-        self.assertEqual(lines["miyaip-jp-01_relay_jpty1-bwh-2tb"]["protocols"]["socks"]["state"], "unknown")
-        self.assertEqual(lines["jpty1-bwh-2tb"]["access"], "admin-only")
-        self.assertEqual([line["access"] for line in data["lines"]][:4], ["public"] * 4)
+        self.assertEqual(data["entries"]["ha-private"]["access"], "private")
+        self.assertEqual(data["entries"]["ha-private"]["proxies"], {"passing": 7, "configured": 9})
+        proxies = {proxy["name"]: proxy for proxy in data["proxies"]}
+        self.assertEqual(len(proxies), 9)
+        self.assertEqual(proxies["us-west-racknerd-12tb"]["protocols"]["http"]["state"], "failing")
+        self.assertEqual(proxies["miyaip-jp-01_relay_jpty1-bwh-2tb"]["protocols"]["socks"]["state"], "unknown")
+        self.assertEqual(proxies["jpty1-bwh-2tb"]["access"], "private")
+        self.assertEqual([proxy["access"] for proxy in data["proxies"]][:4], ["public"] * 4)
         self.assertNotIn("accounts", str(data.keys()))
         self.assert_only_fixed_queries()
 
@@ -145,11 +146,11 @@ class StatusTest(PortalTestCase):
         self.assertFalse(data["monitoring_available"])
         self.assertEqual(data["headline"]["level"], "unknown")
         states = [p["state"] for e in data["entries"].values() for p in e["protocols"].values()]
-        states += [p["state"] for line in data["lines"] for p in line["protocols"].values()]
+        states += [p["state"] for proxy in data["proxies"] for p in proxy["protocols"].values()]
         self.assertEqual(set(states), {"unknown"})
         self.assertEqual({day["state"] for day in data["history"]["days"]}, {"unknown"})
-        # the lines still come from the applier's status, as unknown
-        self.assertEqual(len(data["lines"]), 9)
+        # the proxies still come from the applier's status, as unknown
+        self.assertEqual(len(data["proxies"]), 9)
         page = self.client.get("/")
         self.assertContains(page, "Monitoring data is unavailable")
         self.assertNotContains(page, 'class="chip passing"')
@@ -160,12 +161,12 @@ class StatusTest(PortalTestCase):
         self.assertIsNone(data["last_check_age_seconds"])
         self.assertNotContains(self.client.get("/", HTTP_ACCEPT_LANGUAGE="zh-CN"), "从未")
 
-    def test_unknown_line_shows_no_duration(self):
-        lines = {line["name"]: line for line in self.client.get("/api/status").json()["lines"]}
-        stale = lines["miyaip-jp-01_relay_jpty1-bwh-2tb"]["protocols"]
+    def test_unknown_proxy_shows_no_duration(self):
+        proxies = {proxy["name"]: proxy for proxy in self.client.get("/api/status").json()["proxies"]}
+        stale = proxies["miyaip-jp-01_relay_jpty1-bwh-2tb"]["protocols"]
         self.assertEqual({p["state"] for p in stale.values()}, {"unknown"})
         self.assertEqual({p["duration_seconds"] for p in stale.values()}, {None})
-        self.assertIsNotNone(lines["us-west-racknerd-12tb"]["protocols"]["http"]["duration_seconds"])
+        self.assertIsNotNone(proxies["us-west-racknerd-12tb"]["protocols"]["http"]["duration_seconds"])
 
     def test_parameters_never_reach_prometheus(self):
         self.client.get("/api/status?query=up&target=evil&entry=x")
@@ -182,7 +183,7 @@ class StatusTest(PortalTestCase):
 
     def test_incidents(self):
         now = timezone.now()
-        Incident.objects.create(title="Line us-west down", body="Use the default proxy.", component="lines",
+        Incident.objects.create(title="Proxy us-west down", body="Use the default proxy.", component="proxies",
                                 state="investigating", started_at=now - datetime.timedelta(hours=1))
         Incident.objects.create(title="Old outage", component="ha-general", state="resolved",
                                 started_at=now - datetime.timedelta(days=40),
@@ -190,10 +191,10 @@ class StatusTest(PortalTestCase):
         Incident.objects.create(title="Recent maintenance", component="ha-general", state="resolved",
                                 started_at=now - datetime.timedelta(days=2), resolved_at=now - datetime.timedelta(days=2))
         data = self.client.get("/api/status").json()
-        self.assertEqual([i["title"] for i in data["incidents"]], ["Line us-west down", "Recent maintenance"])
+        self.assertEqual([i["title"] for i in data["incidents"]], ["Proxy us-west down", "Recent maintenance"])
         self.assertTrue(data["incidents"][0]["open"])
         page = self.client.get("/")
-        self.assertContains(page, "Line us-west down")
+        self.assertContains(page, "Proxy us-west down")
         self.assertContains(page, "Investigating")
         self.assertNotContains(page, "Old outage")
 

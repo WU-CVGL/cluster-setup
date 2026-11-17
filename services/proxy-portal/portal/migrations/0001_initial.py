@@ -17,7 +17,7 @@ class Migration(migrations.Migration):
                 ('id', models.BigAutoField(auto_created=True, primary_key=True, serialize=False, verbose_name='ID')),
                 ('title', models.CharField(max_length=200)),
                 ('body', models.TextField(blank=True)),
-                ('component', models.CharField(choices=[('ha-general', 'Default proxy (ha-general)'), ('ha-all', 'Admin entry (ha-all)'), ('lines', 'Lines'), ('monitoring', 'Monitoring'), ('portal', 'Portal')], max_length=32)),
+                ('component', models.CharField(choices=[('ha-general', 'Default proxy (ha-general)'), ('ha-private', 'Private entry (ha-private)'), ('proxies', 'Proxies'), ('monitoring', 'Monitoring'), ('portal', 'Portal')], max_length=32)),
                 ('state', models.CharField(choices=[('investigating', 'Investigating'), ('identified', 'Identified'), ('monitoring', 'Monitoring'), ('resolved', 'Resolved'), ('maintenance', 'Maintenance')], max_length=32)),
                 ('started_at', models.DateTimeField()),
                 ('resolved_at', models.DateTimeField(blank=True, null=True)),

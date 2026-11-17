@@ -9,8 +9,8 @@ Proxy accounts: one protected accounts file, from which every authenticated prox
     proxy_accounts.py enable NAME
     proxy_accounts.py admin NAME on|off      admin accounts may use ha-private and the private proxies
     proxy_accounts.py list                   account names, admins marked, without passwords
-    proxy_accounts.py status [--json]        accounts, lines and their ports, raw auth and the last applied file hash
-    proxy_accounts.py raw-auth [on|off]      show or set authentication on the public lines (off by default)
+    proxy_accounts.py status [--json]        accounts, proxies and their ports, raw auth and the last applied file hash
+    proxy_accounts.py raw-auth [on|off]      show or set authentication on the public proxies (off by default)
     proxy_accounts.py render                 write the configs below from the accounts file
 
 Proxies: xray/public-proxies.txt lists the public proxies. Every other proxy (xray/<name>/) is private: for admin
@@ -67,7 +67,7 @@ HA_CONFIG = Path("xray-ha/config/config.json")
 BLACKBOX_EXAMPLE = Path("blackbox/blackbox.example.yml")
 BLACKBOX_CONFIG = Path("blackbox/config/blackbox.yml")
 RAW_CONFIG_GLOB = "xray/*/config/config.json"
-PUBLIC_LINES_FILE = Path("xray/public-lines.txt")
+PUBLIC_PROXIES_FILE = Path("xray/public-proxies.txt")
 COMPOSE_FILE = Path("docker-compose.yml")
 
 RELAY = "svc-ha"
@@ -83,11 +83,11 @@ API_TAG = "api"  # the stats API's inbound, routed to Xray's API handler
 API_PROTOCOLS = ("dokodemo-door", "tunnel")
 HA_TOP_LEVEL = {"log", "stats", "api", "policy", "inbounds", "outbounds", "observatory", "routing"}
 HA_HOST = "xray-ha"
-# Container ports of the proxy entries, as in docker-compose.yml: a line's HTTP and SOCKS5 inbounds, and the HA
-# entries' (ha-general on a line's ports, ha-all on its own)
-LINE_CONTAINER_PORTS = {"http": 8889, "socks": 1089}
-HA_CONTAINER_PORTS = {GENERAL: {"http": 8889, "socks": 1089}, ALL: {"http": 8890, "socks": 1090}}
-LINE_HOST_PREFIX = "xray-"
+# Container ports of the proxy entries, as in docker-compose.yml: a proxy's HTTP and SOCKS5 inbounds, and the HA
+# entries' (ha-general on a proxy's ports, ha-private on its own)
+PROXY_CONTAINER_PORTS = {"http": 8889, "socks": 1089}
+HA_CONTAINER_PORTS = {GENERAL: {"http": 8889, "socks": 1089}, HA_PRIVATE: {"http": 8890, "socks": 1090}}
+PROXY_HOST_PREFIX = "xray-"
 
 NAME_RE = re.compile(r"[a-z0-9][a-z0-9._-]{0,63}")
 PROXY_NAME_RE = re.compile(r"[a-z0-9][a-z0-9_-]*")  # create_xray_service.py's service names
@@ -385,8 +385,8 @@ def status(accounts: Accounts) -> dict:
         applied = {"error": f"{APPLIED_FILE} is not valid JSON"}
     current = sha256_text(accounts.loaded_text) if accounts.loaded_text is not None else None
     applied_sha = applied.get("accounts_sha256") if isinstance(applied, dict) else None
-    lines = line_names(accounts.base_dir)
-    public = public_lines(accounts.base_dir) if lines else set()
+    proxies = proxy_names(accounts.base_dir)
+    public = public_proxies(accounts.base_dir) if proxies else set()
     ports = compose_ports(accounts.base_dir)
     return {
         "raw_auth": accounts.raw_auth,
@@ -397,10 +397,10 @@ def status(accounts: Accounts) -> dict:
         "accounts": [{"name": name, "kind": kind(name), "enabled": accounts.enabled(name),
                       "admin": name in accounts.admins, "protected": name in PROTECTED}
                      for name in sorted(accounts.accounts)],
-        "lines": [{"name": name, "access": "public" if name in public else "admin",
-                   # host ports from docker-compose.yml, null when not published
-                   "ports": _ports(ports.get(LINE_HOST_PREFIX + name, {}), LINE_CONTAINER_PORTS)}
-                  for name in lines],
+        "proxies": [{"name": name, "access": "public" if name in public else "private",
+                     # host ports from docker-compose.yml, null when not published
+                     "ports": _ports(ports.get(PROXY_HOST_PREFIX + name, {}), PROXY_CONTAINER_PORTS)}
+                    for name in proxies],
         "entries": {entry: {"ports": _ports(ports.get(HA_HOST, {}), container)}
                     for entry, container in HA_CONTAINER_PORTS.items()},
         "accounts_sha256": current,
@@ -676,10 +676,10 @@ def read_command(accounts: Accounts, args: argparse.Namespace) -> int:
             state = "enabled" if entry["enabled"] else "disabled"
             flags = ("  admin" if entry["admin"] else "") + ("  protected" if entry["protected"] else "")
             print(f"{entry['name']:<32} {entry['kind']:<8} {state}{flags}")
-        for line in view["lines"]:
-            access = "public" if line["access"] == "public" else "admins only"
-            ports = "  ".join(f"{protocol} {port}" for protocol, port in line["ports"].items() if port)
-            print(f"line {line['name']:<40} {access:<12} {ports}".rstrip())
+        for proxy in view["proxies"]:
+            access = "public" if proxy["access"] == "public" else "private"
+            ports = "  ".join(f"{protocol} {port}" for protocol, port in proxy["ports"].items() if port)
+            print(f"proxy {proxy['name']:<40} {access:<12} {ports}".rstrip())
         applied = view["applied"] or {}
         print(f"accounts file sha256: {view['accounts_sha256']}")
         print(f"last applied sha256:  {applied.get('accounts_sha256')} {applied.get('applied_at') or ''}".rstrip())

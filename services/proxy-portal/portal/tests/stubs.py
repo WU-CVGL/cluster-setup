@@ -150,11 +150,11 @@ def serve(stub, port=0, host="127.0.0.1"):
 
 # ------------------------------------------------------------------ the demo scenario
 
-PUBLIC_LINES = ["usca5-bwh-sla-1tb", "usca1-bwh-megaboxpro-2tb", "usca6-bwh-1tb", "us-west-racknerd-12tb"]
-PRIVATE_LINES = ["jpty1-bwh-2tb", "miyaip-uk-01_relay_jpty1-bwh-2tb", "miyaip-uk-01_relay_usca5-bwh-sla-2tb",
+PUBLIC_PROXIES = ["usca5-bwh-sla-1tb", "usca1-bwh-megaboxpro-2tb", "usca6-bwh-1tb", "us-west-racknerd-12tb"]
+PRIVATE_PROXIES = ["jpty1-bwh-2tb", "miyaip-uk-01_relay_jpty1-bwh-2tb", "miyaip-uk-01_relay_usca5-bwh-sla-2tb",
                  "miyaip-jp-01_relay_usca5-bwh-sla-2tb", "miyaip-jp-01_relay_jpty1-bwh-2tb"]
-FAILING_LINE = "us-west-racknerd-12tb"
-STALE_LINE = "miyaip-jp-01_relay_jpty1-bwh-2tb"
+FAILING_PROXY = "us-west-racknerd-12tb"
+STALE_PROXY = "miyaip-jp-01_relay_jpty1-bwh-2tb"
 
 
 def _range(params, fn, labels_list):
@@ -174,34 +174,34 @@ def _range(params, fn, labels_list):
 
 
 def demo_answers():
-    """One public line failing (failover working), one private line without recent results, a 30-day history with
+    """One public proxy failing (failover working), one private proxy without recent results, a 30-day history with
     a day without data, a day with too little data and two bad days, and usage for alice and carol."""
     s = queries.STATUS
     a = {}
-    for pool, configured, passing in (("ha-general", 4, 3), ("ha-all", 9, 7)):
+    for pool, configured, passing in (("ha-general", 4, 3), ("ha-private", 9, 7)):
         q = s[pool]
         a[q["http"]] = vector(({"protocol": "http"}, 1))
         a[q["socks"]] = vector(({"protocol": "socks"}, 1))
-        a[q["lines_passing"]] = vector(({}, passing))
-        a[q["lines_configured"]] = vector(({}, configured))
+        a[q["proxies_passing"]] = vector(({}, passing))
+        a[q["proxies_configured"]] = vector(({}, configured))
         a[q["duration"]] = vector(({"protocol": "http"}, 0.412), ({"protocol": "socks"}, 0.388))
         a[q["last_check"]] = vector(({"protocol": "http"}, 11.2), ({"protocol": "socks"}, 12.9))
         a[q["rate_24h"]] = vector(({"protocol": "http"}, 0.9993), ({"protocol": "socks"}, 0.9986))
         a[q["coverage_24h"]] = vector(({"protocol": "http"}, 1), ({"protocol": "socks"}, 0.998))
-    lines = s["lines"]
-    rows = [(name, "ha-general", "public") for name in PUBLIC_LINES] + \
-           [(name, "ha-all", "admin-only") for name in PRIVATE_LINES]
-    a[lines["http"]] = vector(*[({"entry": n, "pool": p, "access": acc},
-                                 0 if n == FAILING_LINE else -1 if n == STALE_LINE else 1) for n, p, acc in rows])
-    a[lines["socks"]] = vector(*[({"entry": n}, 0 if n == FAILING_LINE else -1 if n == STALE_LINE else 1)
-                                 for n, _, _ in rows])
-    a[lines["duration_http"]] = vector(*[({"entry": n}, 0.3 + i * 0.07) for i, (n, _, _) in enumerate(rows)])
-    a[lines["duration_socks"]] = vector(*[({"entry": n}, 0.28 + i * 0.06) for i, (n, _, _) in enumerate(rows)])
-    a[lines["last_check"]] = vector(*[({"entry": n}, 600 if n == STALE_LINE else 9 + i) for i, (n, _, _)
-                                      in enumerate(rows)])
-    a[lines["rate_24h_http"]] = vector(*[({"entry": n}, 0.41 if n == FAILING_LINE else 0.997) for n, _, _ in rows])
-    a[lines["rate_24h_socks"]] = vector(*[({"entry": n}, 0.39 if n == FAILING_LINE else 0.995) for n, _, _ in rows])
-    a[lines["coverage_24h"]] = vector(*[({"entry": n}, 0.2 if n == STALE_LINE else 1) for n, _, _ in rows])
+    proxies = s["proxies"]
+    rows = [(name, "ha-general", "public") for name in PUBLIC_PROXIES] + \
+           [(name, "ha-private", "private") for name in PRIVATE_PROXIES]
+    a[proxies["http"]] = vector(*[({"entry": n, "pool": p, "access": acc},
+                                   0 if n == FAILING_PROXY else -1 if n == STALE_PROXY else 1) for n, p, acc in rows])
+    a[proxies["socks"]] = vector(*[({"entry": n}, 0 if n == FAILING_PROXY else -1 if n == STALE_PROXY else 1)
+                                   for n, _, _ in rows])
+    a[proxies["duration_http"]] = vector(*[({"entry": n}, 0.3 + i * 0.07) for i, (n, _, _) in enumerate(rows)])
+    a[proxies["duration_socks"]] = vector(*[({"entry": n}, 0.28 + i * 0.06) for i, (n, _, _) in enumerate(rows)])
+    a[proxies["last_check"]] = vector(*[({"entry": n}, 600 if n == STALE_PROXY else 9 + i) for i, (n, _, _)
+                                        in enumerate(rows)])
+    a[proxies["rate_24h_http"]] = vector(*[({"entry": n}, 0.41 if n == FAILING_PROXY else 0.997) for n, _, _ in rows])
+    a[proxies["rate_24h_socks"]] = vector(*[({"entry": n}, 0.39 if n == FAILING_PROXY else 0.995) for n, _, _ in rows])
+    a[proxies["coverage_24h"]] = vector(*[({"entry": n}, 0.2 if n == STALE_PROXY else 1) for n, _, _ in rows])
 
     def day_index(params, t):
         return round((t - float(params["start"])) / queries.DAY)

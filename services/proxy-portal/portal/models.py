@@ -7,8 +7,8 @@ class Incident(models.Model):
 
     COMPONENTS = [
         ("ha-general", pgettext_lazy("incident component", "Default proxy (ha-general)")),
-        ("ha-all", pgettext_lazy("incident component", "Admin entry (ha-all)")),
-        ("lines", pgettext_lazy("incident component", "Lines")),
+        ("ha-private", pgettext_lazy("incident component", "Private entry (ha-private)")),
+        ("proxies", pgettext_lazy("incident component", "Proxies")),
         ("monitoring", pgettext_lazy("incident component", "Monitoring")),
         ("portal", pgettext_lazy("incident component", "Portal")),
     ]

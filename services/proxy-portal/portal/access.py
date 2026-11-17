@@ -1,14 +1,15 @@
 """
 My access: the signed-in user's proxy account and the entries it may use, from the applier's status (the accounts
-file at the applier's last run, never a pending portal request). Every account may use ha-general and the public lines; admin accounts also ha-all and
-the private lines. The proxy admin flag is the account's own, not the Determined admin role.
+file at the applier's last run, never a pending portal request). Every account may use ha-general and the public
+proxies; admin accounts also ha-private and the private proxies. The proxy admin flag is the account's own, not the
+Determined admin role.
 """
 
 from django.conf import settings
 
 from . import proxy_status
 
-DEFAULT_PORTS = {"ha-general": {"http": 30889, "socks": 30089}, "ha-all": {"http": 31889, "socks": 31089}}
+DEFAULT_PORTS = {"ha-general": {"http": 30889, "socks": 30089}, "ha-private": {"http": 31889, "socks": 31089}}
 NO_PROXY = "localhost,127.0.0.1,cvgl.lab,harbor.cvgl.lab,192.168.233.0/24,10.0.1.64/27"
 TEST_URL = "https://www.google.com/generate_204"
 
@@ -26,7 +27,7 @@ def _addresses(ports):
 
 
 def _entry(entry_id, kind, public, ports, usable, requires_account):
-    return {"id": entry_id, "kind": kind, "access": "public" if public else "admin-only", "ports": ports,
+    return {"id": entry_id, "kind": kind, "access": "public" if public else "private", "ports": ports,
             "addresses": _addresses(ports), "usable": usable, "requires_account": requires_account}
 
 
@@ -73,20 +74,20 @@ def build(username):
     enabled = account is not None and account.enabled
     admin = enabled and account.admin
     general_ports = {k: v or DEFAULT_PORTS["ha-general"][k] for k, v in status.entry_ports["ha-general"].items()}
-    all_ports = {k: v or DEFAULT_PORTS["ha-all"][k] for k, v in status.entry_ports["ha-all"].items()}
+    all_ports = {k: v or DEFAULT_PORTS["ha-private"][k] for k, v in status.entry_ports["ha-private"].items()}
     show_admin = account is not None and account.admin
     entries = [_entry("ha-general", "ha", True, general_ports, enabled, True)]
     if show_admin:
-        entries.append(_entry("ha-all", "ha", False, all_ports, admin, True))
-    for line in status.lines:
-        if line.public:
-            # without raw auth, a public line's own entry takes no account: anyone may use it
+        entries.append(_entry("ha-private", "ha", False, all_ports, admin, True))
+    for proxy in status.proxies:
+        if proxy.public:
+            # without raw auth, a public proxy's own entry takes no account: anyone may use it
             usable = enabled if status.raw_auth else True
-            entries.append(_entry(line.name, "line", True, line.ports, usable, status.raw_auth))
+            entries.append(_entry(proxy.name, "proxy", True, proxy.ports, usable, status.raw_auth))
     if show_admin:
-        for line in status.lines:
-            if not line.public:
-                entries.append(_entry(line.name, "line", False, line.ports, admin, True))
+        for proxy in status.proxies:
+            if not proxy.public:
+                entries.append(_entry(proxy.name, "proxy", False, proxy.ports, admin, True))
     view["entries"] = entries
     if enabled:
         view["templates"] = {"entry": "ha-general", "networks": templates(username, general_ports)}

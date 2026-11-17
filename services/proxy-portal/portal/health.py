@@ -1,5 +1,5 @@
 """
-The public status: the HA entries, the lines and the 30-day history, from the fixed queries of queries.py.
+The public status: the HA entries, the proxies and the 30-day history, from the fixed queries of queries.py.
 
 Results are cached for a few seconds and aged on every view: a probe result older than 90 s, counting the time it
 spent in the cache, is unknown, as is everything Prometheus does not answer. Unknown is never shown as passing.
@@ -17,7 +17,7 @@ from .headline import FAILING, PASSING, UNKNOWN, headline
 
 log = logging.getLogger("portal.status")
 PROTOCOLS = ("http", "socks")
-HA_ENTRIES = ("ha-general", "ha-all")
+HA_ENTRIES = ("ha-general", "ha-private")
 
 # History thresholds: a day needs probe results for at least half of it, or it is grey; then it is green from
 # 99 % probe success, amber from 90 %, red below.
@@ -47,13 +47,13 @@ def _scalar(rows):
 
 
 def collect(at):
-    """Every status query at time at: {"time", "ok", "ha": {...}, "lines": {...}}, None where Prometheus failed."""
+    """Every status query at time at: {"time", "ok", "ha": {...}, "proxies": {...}}, None where Prometheus failed."""
     jobs = {}
     for entry in HA_ENTRIES:
         for key, expr in queries.STATUS[entry].items():
             jobs[(entry, key)] = expr
-    for key, expr in queries.STATUS["lines"].items():
-        jobs[("lines", key)] = expr
+    for key, expr in queries.STATUS["proxies"].items():
+        jobs[("proxies", key)] = expr
     with concurrent.futures.ThreadPoolExecutor(max_workers=8) as pool:
         futures = {name: pool.submit(_run_instant, expr, at) for name, expr in jobs.items()}
         results = {name: future.result() for name, future in futures.items()}
@@ -62,33 +62,33 @@ def collect(at):
         r = {key: results[(entry, key)] for key in queries.STATUS[entry]}
         ha[entry] = {
             "http": _scalar(r["http"]), "socks": _scalar(r["socks"]),
-            "lines_passing": _scalar(r["lines_passing"]), "lines_configured": _scalar(r["lines_configured"]),
+            "proxies_passing": _scalar(r["proxies_passing"]), "proxies_configured": _scalar(r["proxies_configured"]),
             "duration": _by(r["duration"], "protocol"), "last_check": _by(r["last_check"], "protocol"),
             "rate_24h": _by(r["rate_24h"], "protocol"), "coverage_24h": _by(r["coverage_24h"], "protocol"),
         }
-    r = {key: results[("lines", key)] for key in queries.STATUS["lines"]}
-    lines = {}
+    r = {key: results[("proxies", key)] for key in queries.STATUS["proxies"]}
+    proxies = {}
     for labels, value in r["http"] or []:
-        lines.setdefault(labels.get("entry", ""), {})["labels"] = {"pool": labels.get("pool"),
-                                                                    "access": labels.get("access")}
-    lines_data = {"http": _by(r["http"], "entry"), "socks": _by(r["socks"], "entry"),
-                  "duration_http": _by(r["duration_http"], "entry"),
-                  "duration_socks": _by(r["duration_socks"], "entry"),
-                  "last_check": _by(r["last_check"], "entry"),
-                  "rate_24h_http": _by(r["rate_24h_http"], "entry"),
-                  "rate_24h_socks": _by(r["rate_24h_socks"], "entry"),
-                  "coverage_24h": _by(r["coverage_24h"], "entry")}
-    names = set(lines)
-    for values in lines_data.values():
+        proxies.setdefault(labels.get("entry", ""), {})["labels"] = {"pool": labels.get("pool"),
+                                                                      "access": labels.get("access")}
+    proxies_data = {"http": _by(r["http"], "entry"), "socks": _by(r["socks"], "entry"),
+                    "duration_http": _by(r["duration_http"], "entry"),
+                    "duration_socks": _by(r["duration_socks"], "entry"),
+                    "last_check": _by(r["last_check"], "entry"),
+                    "rate_24h_http": _by(r["rate_24h_http"], "entry"),
+                    "rate_24h_socks": _by(r["rate_24h_socks"], "entry"),
+                    "coverage_24h": _by(r["coverage_24h"], "entry")}
+    names = set(proxies)
+    for values in proxies_data.values():
         names.update(values or {})
     names.discard("")
     for name in names:
-        line = lines.setdefault(name, {})
-        line.setdefault("labels", {"pool": None, "access": None})
-        for key, values in lines_data.items():
-            line[key] = (values or {}).get(name)
+        proxy = proxies.setdefault(name, {})
+        proxy.setdefault("labels", {"pool": None, "access": None})
+        for key, values in proxies_data.items():
+            proxy[key] = (values or {}).get(name)
     ok = any(value is not None for value in results.values())
-    return {"time": at, "ok": ok, "ha": ha, "lines": lines}
+    return {"time": at, "ok": ok, "ha": ha, "proxies": proxies}
 
 
 def cached_collect(now):
@@ -119,7 +119,7 @@ def _seconds(value):
 def entry_view(data, entry, now):
     ha = data["ha"][entry]
     last = ha["last_check"] or {}
-    view = {"name": entry, "access": "public" if entry == "ha-general" else "admin-only", "protocols": {}}
+    view = {"name": entry, "access": "public" if entry == "ha-general" else "private", "protocols": {}}
     for protocol in PROTOCOLS:
         age = last.get(protocol)
         current = state(ha[protocol], age, data["time"], now)
@@ -131,31 +131,31 @@ def entry_view(data, entry, now):
             "success_rate_24h": _ratio((ha["rate_24h"] or {}).get(protocol)),
             "coverage_24h": _ratio((ha["coverage_24h"] or {}).get(protocol)),
         }
-    passing, configured = ha["lines_passing"], ha["lines_configured"]
-    view["lines"] = {"passing": None if passing is None or configured is None else int(passing),
-                     "configured": None if configured is None else int(configured)}
+    passing, configured = ha["proxies_passing"], ha["proxies_configured"]
+    view["proxies"] = {"passing": None if passing is None or configured is None else int(passing),
+                       "configured": None if configured is None else int(configured)}
     return view
 
 
-def lines_view(data, status, now):
-    """The lines, public ones first: from the probes, and from the applier's status for lines without results."""
-    access = {line.name: line.public for line in status.lines} if status.available else {}
-    names = set(data["lines"]) | set(access)
+def proxies_view(data, status, now):
+    """The proxies, public ones first: from the probes, and from the applier's status for proxies without results."""
+    access = {proxy.name: proxy.public for proxy in status.proxies} if status.available else {}
+    names = set(data["proxies"]) | set(access)
     rows = []
     for name in names:
-        line = data["lines"].get(name) or {"labels": {}}
-        labels = line.get("labels") or {}
+        proxy = data["proxies"].get(name) or {"labels": {}}
+        labels = proxy.get("labels") or {}
         public = access.get(name, labels.get("access") == "public")
-        age = line.get("last_check")
-        row = {"name": name, "access": "public" if public else "admin-only", "pool": labels.get("pool"),
+        age = proxy.get("last_check")
+        row = {"name": name, "access": "public" if public else "private", "pool": labels.get("pool"),
                "last_check_age_seconds": None if age is None else round(age + now - data["time"]),
-               "coverage_24h": _ratio(line.get("coverage_24h")), "protocols": {}}
+               "coverage_24h": _ratio(proxy.get("coverage_24h")), "protocols": {}}
         for protocol in PROTOCOLS:
-            current = state(line.get(protocol), age, data["time"], now)
+            current = state(proxy.get(protocol), age, data["time"], now)
             row["protocols"][protocol] = {
                 "state": current,
-                "duration_seconds": None if current == UNKNOWN else _seconds(line.get("duration_" + protocol)),
-                "success_rate_24h": _ratio(line.get("rate_24h_" + protocol)),
+                "duration_seconds": None if current == UNKNOWN else _seconds(proxy.get("duration_" + protocol)),
+                "success_rate_24h": _ratio(proxy.get("rate_24h_" + protocol)),
             }
         rows.append(row)
     rows.sort(key=lambda row: (row["access"] != "public", row["name"]))
@@ -223,7 +223,7 @@ def build(now=None):
     entries = {entry: entry_view(data, entry, now) for entry in HA_ENTRIES}
     general = entries["ha-general"]
     level, text = headline(general["protocols"]["http"]["state"], general["protocols"]["socks"]["state"],
-                           general["lines"]["passing"], general["lines"]["configured"])
+                           general["proxies"]["passing"], general["proxies"]["configured"])
     ages = [p["last_check_age_seconds"] for p in general["protocols"].values()
             if p["last_check_age_seconds"] is not None]
     return {
@@ -233,6 +233,6 @@ def build(now=None):
         "last_check_age_seconds": max(ages) if ages else None,
         "stale_after_seconds": settings.STALE_SECONDS,
         "entries": entries,
-        "lines": lines_view(data, status, now),
+        "proxies": proxies_view(data, status, now),
         "history": {"entry": "ha-general", "days": cached_history(now)},
     }

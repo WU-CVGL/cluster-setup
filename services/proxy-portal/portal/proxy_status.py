@@ -1,6 +1,6 @@
 """
 The applier's sanitized accounts status, status.json in its spool (proxy_accounts.py status --json): the accounts
-without passwords, raw auth, the lines with their access and ports, and the HA entries' ports. The applier writes
+without passwords, raw auth, the proxies with their access and ports, and the HA entries' ports. The applier writes
 it after each of its runs from the accounts file; the portal only reads it.
 """
 
@@ -15,7 +15,7 @@ from django.conf import settings
 
 # proxy_accounts.py's account names; svc-* are service accounts, never a person's
 NAME_RE = re.compile(r"[a-z0-9][a-z0-9._-]{0,63}")
-LINE_RE = re.compile(r"[a-z0-9][a-z0-9_-]*")
+PROXY_NAME_RE = re.compile(r"[a-z0-9][a-z0-9_-]*")
 PROTOCOLS = ("http", "socks")
 
 
@@ -27,7 +27,7 @@ class Account:
 
 
 @dataclass
-class Line:
+class Proxy:
     name: str
     public: bool
     ports: Dict[str, Optional[int]]
@@ -40,7 +40,7 @@ class ProxyStatus:
     generated_at: Optional[datetime.datetime] = None
     raw_auth: bool = False
     accounts: Dict[str, Account] = field(default_factory=dict)
-    lines: List[Line] = field(default_factory=list)
+    proxies: List[Proxy] = field(default_factory=list)
     entry_ports: Dict[str, Dict[str, Optional[int]]] = field(default_factory=dict)
     # the accounts file differs from the applier's last apply (a change made with proxy_accounts.py): what it
     # holds may not be running yet
@@ -76,17 +76,17 @@ def parse(data, now=None):
         if not NAME_RE.fullmatch(name) or entry.get("kind") != "user" or name.startswith("svc-"):
             continue  # service accounts are nobody's own account
         accounts[name] = Account(name=name, enabled=entry.get("enabled") is True, admin=entry.get("admin") is True)
-    lines = []
-    for entry in data.get("lines") or []:
-        if isinstance(entry, dict) and isinstance(entry.get("name"), str) and LINE_RE.fullmatch(entry["name"]):
-            lines.append(Line(name=entry["name"], public=entry.get("access") == "public",
-                              ports=_ports(entry.get("ports"))))
+    proxies = []
+    for entry in data.get("proxies") or []:
+        if isinstance(entry, dict) and isinstance(entry.get("name"), str) and PROXY_NAME_RE.fullmatch(entry["name"]):
+            proxies.append(Proxy(name=entry["name"], public=entry.get("access") == "public",
+                                 ports=_ports(entry.get("ports"))))
     entries = data.get("entries") if isinstance(data.get("entries"), dict) else {}
     entry_ports = {name: _ports((entries.get(name) or {}).get("ports") if isinstance(entries.get(name), dict)
                                 else None)
-                   for name in ("ha-general", "ha-all")}
+                   for name in ("ha-general", "ha-private")}
     return ProxyStatus(available=True, stale=stale, generated_at=generated, raw_auth=data.get("raw_auth") is True,
-                       accounts=accounts, lines=lines, entry_ports=entry_ports,
+                       accounts=accounts, proxies=proxies, entry_ports=entry_ports,
                        unapplied_changes=data.get("unapplied_changes") if isinstance(data.get("unapplied_changes"),
                                                                                    bool) else None)
 

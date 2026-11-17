@@ -2,8 +2,8 @@
   "raw_auth": false,
   "disabled_refused_at": [
     "ha-general",
-    "ha-all",
-    "private-lines"
+    "ha-private",
+    "private-proxies"
   ],
   "accounts": [
     {
@@ -56,10 +56,10 @@
       "protected": true
     }
   ],
-  "lines": [
+  "proxies": [
     {
       "name": "jpty1-bwh-2tb",
-      "access": "admin",
+      "access": "private",
       "ports": {
         "http": 55889,
         "socks": 55089
@@ -67,7 +67,7 @@
     },
     {
       "name": "miyaip-jp-01_relay_jpty1-bwh-2tb",
-      "access": "admin",
+      "access": "private",
       "ports": {
         "http": 52889,
         "socks": 52089
@@ -75,7 +75,7 @@
     },
     {
       "name": "miyaip-jp-01_relay_usca5-bwh-sla-2tb",
-      "access": "admin",
+      "access": "private",
       "ports": {
         "http": 51889,
         "socks": 51089
@@ -83,7 +83,7 @@
     },
     {
       "name": "miyaip-uk-01_relay_jpty1-bwh-2tb",
-      "access": "admin",
+      "access": "private",
       "ports": {
         "http": 54889,
         "socks": 54089
@@ -91,7 +91,7 @@
     },
     {
       "name": "miyaip-uk-01_relay_usca5-bwh-sla-2tb",
-      "access": "admin",
+      "access": "private",
       "ports": {
         "http": 53889,
         "socks": 53089
@@ -137,7 +137,7 @@
         "socks": 30089
       }
     },
-    "ha-all": {
+    "ha-private": {
       "ports": {
         "http": 31889,
         "socks": 31089

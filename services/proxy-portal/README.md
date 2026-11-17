@@ -6,12 +6,12 @@
 
 | Page | JSON | Who | Content |
 | :--- | :--- | :--- | :--- |
-| Status `/` | `/api/status` | everyone | a headline of what the probes mean for users; `ha-general` HTTP and SOCKS5 with its lines passing out of configured; `ha-all` and the private lines, marked admins only; the public lines; the last check; a 30-day history of `ha-general`'s probe success rate; incidents |
+| Status `/` | `/api/status` | everyone | a headline of what the probes mean for users; `ha-general` HTTP and SOCKS5 with its proxies passing out of configured; `ha-private` and the private proxies; the public proxies; the last check; a 30-day history of `ha-general`'s probe success rate; incidents |
 | My access `/access` | `/api/me/access` | signed in | the user's proxy account, the one named as their Determined username (none, on or off, admin or not), the entries it may use with their addresses on the private (`192.168.233.8`) and campus (`10.0.1.68`) networks, and client settings with `<password>` in place of the password |
 | My usage `/usage` | `/api/me/usage` | signed in | the user's observed download, upload and total over 24 hours, 7 days and 30 days, and a trend chart |
 
-- **Status** values older than 90 seconds, counting the portal's few seconds of caching, are Unknown, as is everything Prometheus does not answer; Unknown is never shown as passing, and a line or entry shown as Unknown shows no duration. The queries are those of the Proxy Availability dashboard, so the portal and Grafana agree. The lines passing are counted on their SOCKS5 probe, the port the HA entry uses; a line not passing is failing or Unknown. Each history bar covers 24 hours; the last ends now and each earlier one a day before. A bar with probe results for less than half of its 24 hours is grey; otherwise it is green from 99 % probe success, amber from 90 %, red below.
-- **My access** shows the accounts file as the applier last read it (`status.json`, rewritten after every applier run, at least every 5 minutes), never a request still waiting. `/api/me/access` also returns `status_unapplied_changes`: true when the file holds a change made with `proxy_accounts.py` since the applier's last apply. Every account may use `ha-general` and the public lines; admin accounts also `ha-all` and the private lines. The proxy admin flag belongs to the proxy account, not to the Determined admin role. While raw auth is off, a public line's own entry accepts anyone, so turning an account off stops it only at the HA entries and the private lines; the page says so.
+- **Status** values older than 90 seconds, counting the portal's few seconds of caching, are Unknown, as is everything Prometheus does not answer; Unknown is never shown as passing, and a proxy or entry shown as Unknown shows no duration. The queries are those of the Proxy Availability dashboard, so the portal and Grafana agree. The proxies passing are counted on their SOCKS5 probe, the port the HA entry uses; a proxy not passing is failing or Unknown. Each history bar covers 24 hours; the last ends now and each earlier one a day before. A bar with probe results for less than half of its 24 hours is grey; otherwise it is green from 99 % probe success, amber from 90 %, red below.
+- **My access** shows the accounts file as the applier last read it (`status.json`, rewritten after every applier run, at least every 5 minutes), never a request still waiting. `/api/me/access` also returns `status_unapplied_changes`: true when the file holds a change made with `proxy_accounts.py` since the applier's last apply. Every account may use `ha-general` and the public proxies; admin accounts also `ha-private` and the private proxies. The proxy admin flag belongs to the proxy account, not to the Determined admin role. While raw auth is off, a public proxy's own entry accepts anyone, so turning an account off stops it only at the HA entries and the private proxies; the page says so.
 - **My usage** uses the Proxy Usage dashboard's per-user totals: a user is counted where they enter the proxies, summed over every entry, service accounts excluded. The totals are Prometheus `increase()` over the window ([Usage](../../docs/00_Network_Proxy.md#usage) says when they read high or low).
 - **Incidents** are notices kept in the portal's database (title, text, component, state, start and end). The status page lists the open ones and those resolved in the last 30 days. See [Incidents](#incidents) to post one.
 
@@ -59,12 +59,12 @@ To upgrade, pull the repository and repeat step 2. To roll back, check out the p
 
 ## Incidents
 
-Admins post and resolve incidents in the container. `component` is one of `ha-general`, `ha-all`, `lines`, `monitoring`, `portal`; `state` one of `investigating`, `identified`, `monitoring`, `resolved`, `maintenance`. Post one:
+Admins post and resolve incidents in the container. `component` is one of `ha-general`, `ha-private`, `proxies`, `monitoring`, `portal`; `state` one of `investigating`, `identified`, `monitoring`, `resolved`, `maintenance`. Post one:
 
 ```sh
 docker compose exec proxy-portal python manage.py shell -c "
 from django.utils import timezone; from portal.models import Incident
-i = Incident.objects.create(title='<title>', body='<text>', component='lines', state='investigating',
+i = Incident.objects.create(title='<title>', body='<text>', component='proxies', state='investigating',
                             started_at=timezone.now(), author='<admin>'); print(i.id)"
 ```
 

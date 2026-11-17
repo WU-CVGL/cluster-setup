@@ -1,12 +1,12 @@
 {% extends "portal/base.html" %}{% load i18n portal %}
 {% block title %}{% translate "Status" %}{% endblock %}
 {% block content %}
-{% with general=data.entries|get:"ha-general" admin_entry=data.entries|get:"ha-all" %}
+{% with general=data.entries|get:"ha-general" admin_entry=data.entries|get:"ha-private" %}
 <div class="hero-head">
   <div>
     <div class="eyebrow">{% translate "Service health" %}</div>
     <h1>{% translate "Proxy status" %}</h1>
-    <p class="sub">{% translate "Whether requests get through the HA entries and each line, from probes every 30 seconds. The status of an entry is not whether your account may use it: see My access." %}</p>
+    <p class="sub">{% translate "Whether requests get through the HA entries and each proxy, from probes every 30 seconds. The status of an entry is not whether your account may use it: see My access." %}</p>
   </div>
   <div class="small muted">{% translate "Last check" %}: {{ data.last_check_age_seconds|age }}</div>
 </div>
@@ -14,30 +14,30 @@
 <section class="status-hero {{ data.headline.level }}" aria-labelledby="headline">
   <div>
     <div class="status-title"><span class="emblem" aria-hidden="true">{% if data.headline.level == 'ok' %}✓{% elif data.headline.level == 'unknown' %}?{% else %}!{% endif %}</span><h2 id="headline">{{ data.headline.text }}</h2></div>
-    <p>{% if not data.monitoring_available %}{% translate "Monitoring data is unavailable, so every status is unknown." %}{% else %}{% translate "The default proxy ha-general sends each new connection to a passing public line; open connections stay on their line." %}{% endif %}</p>
+    <p>{% if not data.monitoring_available %}{% translate "Monitoring data is unavailable, so every status is unknown." %}{% else %}{% translate "The default proxy ha-general sends each new connection to a passing public proxy; open connections stay on their proxy." %}{% endif %}</p>
   </div>
   <div class="status-right">
-    <div class="status-number">{% if general.lines.configured is None %}—{% else %}{{ general.lines.passing }} / {{ general.lines.configured }}{% endif %}</div>
-    <div class="status-number-label">{% translate "public lines passing" %}</div>
+    <div class="status-number">{% if general.proxies.configured is None %}—{% else %}{{ general.proxies.passing }} / {{ general.proxies.configured }}{% endif %}</div>
+    <div class="status-number-label">{% translate "public proxies passing" %}</div>
   </div>
 </section>
 
 <div class="summary-grid">
   {% with p=general.protocols.http %}<div class="card metric"><div class="m-label">{% translate "Default proxy · HTTP" %}</div><div class="m-value">{% include "portal/state.html" with state=p.state %}</div><div class="m-foot">{% translate "24 h success" %} {{ p.success_rate_24h|percent }} · {% translate "coverage" %} {{ p.coverage_24h|percent:0 }}</div></div>{% endwith %}
   {% with p=general.protocols.socks %}<div class="card metric"><div class="m-label">{% translate "Default proxy · SOCKS5" %}</div><div class="m-value">{% include "portal/state.html" with state=p.state %}</div><div class="m-foot">{% translate "24 h success" %} {{ p.success_rate_24h|percent }} · {% translate "coverage" %} {{ p.coverage_24h|percent:0 }}</div></div>{% endwith %}
-  <div class="card metric"><div class="m-label">{% translate "Lines of the default proxy" %}</div><div class="m-value">{% if general.lines.configured is None %}—{% else %}{{ general.lines.passing }} <span class="muted small">/ {{ general.lines.configured }}</span>{% endif %}</div><div class="m-foot">{% translate "passing / configured" %}</div></div>
+  <div class="card metric"><div class="m-label">{% translate "Pool of the default proxy" %}</div><div class="m-value">{% if general.proxies.configured is None %}—{% else %}{{ general.proxies.passing }} <span class="muted small">/ {{ general.proxies.configured }}</span>{% endif %}</div><div class="m-foot">{% translate "passing / configured" %}</div></div>
   <div class="card metric"><div class="m-label">{% translate "Last check" %}</div><div class="m-value">{{ data.last_check_age_seconds|age }}</div><div class="m-foot">{% blocktranslate with s=data.stale_after_seconds %}Unknown when older than {{ s }} s{% endblocktranslate %}</div></div>
 </div>
 
 <section class="section" aria-labelledby="entries-title">
-  <div class="section-bar"><div><h2 id="entries-title">{% translate "Entries" %}</h2><p>{% translate "The HA entries keep one address and choose a passing line for each new connection." %}</p></div></div>
+  <div class="section-bar"><div><h2 id="entries-title">{% translate "Entries" %}</h2><p>{% translate "The HA entries keep one address and choose a passing proxy for each new connection." %}</p></div></div>
   <div class="card">
     {% for entry in data.entries.values %}
     <div class="service">
       <div class="service-icon" aria-hidden="true">⇄</div>
       <div class="service-main">
-        <h3>{% if entry.name == 'ha-general' %}{% translate "Default proxy" %} <code>ha-general</code>{% else %}{% translate "Admin entry" %} <code>ha-all</code> <span class="tag admin">{% translate "Admins only" %}</span>{% endif %}</h3>
-        <div class="desc">{% if entry.name == 'ha-general' %}{% translate "Over the public lines, for every proxy account" %}{% else %}{% translate "Over every line, public and private, for admin accounts" %}{% endif %} · {% blocktranslate with passing=entry.lines.passing|default_if_none:"—" configured=entry.lines.configured|default_if_none:"—" %}{{ passing }} of {{ configured }} lines passing{% endblocktranslate %}</div>
+        <h3>{% if entry.name == 'ha-general' %}{% translate "Default proxy" %} <code>ha-general</code>{% else %}{% translate "Private entry" %} <code>ha-private</code>{% endif %}</h3>
+        <div class="desc">{% if entry.name == 'ha-general' %}{% translate "Over the public proxies, for every proxy account" %}{% else %}{% translate "Over every proxy, public and private, for admin accounts" %}{% endif %} · {% blocktranslate with passing=entry.proxies.passing|default_if_none:"—" configured=entry.proxies.configured|default_if_none:"—" %}{{ passing }} of {{ configured }} proxies passing{% endblocktranslate %}</div>
       </div>
       <div class="service-side">
         <span class="small muted">HTTP</span>{% include "portal/state.html" with state=entry.protocols.http.state %}
@@ -62,29 +62,29 @@
   </div>
 </section>
 
-<section class="section" aria-labelledby="lines-title">
-  <div class="section-bar"><div><h2 id="lines-title">{% translate "Lines" %}</h2><p>{% translate "Each line probed through its own entry. A line's own entry has no failover: when it fails, use the default proxy." %}</p></div></div>
+<section class="section" aria-labelledby="proxies-title">
+  <div class="section-bar"><div><h2 id="proxies-title">{% translate "Proxies" %}</h2><p>{% translate "Each proxy probed through its own entry. A proxy's own entry has no failover: when it fails, use the default proxy." %}</p></div></div>
   <div class="card table-scroll">
     <table class="table">
-      <caption class="sr-only">{% translate "Lines" %}</caption>
-      <thead><tr><th scope="col">{% translate "Line" %}</th><th scope="col">HTTP</th><th scope="col">SOCKS5</th><th scope="col" class="wide">{% translate "Duration" %}</th><th scope="col">{% translate "24 h success" %}</th><th scope="col" class="wide">{% translate "Coverage" %}</th><th scope="col" class="wide">{% translate "Last check" %}</th></tr></thead>
+      <caption class="sr-only">{% translate "Proxies" %}</caption>
+      <thead><tr><th scope="col">{% translate "Proxy" %}</th><th scope="col">HTTP</th><th scope="col">SOCKS5</th><th scope="col" class="wide">{% translate "Duration" %}</th><th scope="col">{% translate "24 h success" %}</th><th scope="col" class="wide">{% translate "Coverage" %}</th><th scope="col" class="wide">{% translate "Last check" %}</th></tr></thead>
       <tbody>
-      {% regroup data.lines by access as groups %}
+      {% regroup data.proxies by access as groups %}
       {% for group in groups %}
-        <tr><th class="group" colspan="7" scope="colgroup">{% if group.grouper == 'public' %}{% translate "Public lines" %}{% else %}{% translate "Private lines" %} <span class="tag admin">{% translate "Admins only" %}</span>{% endif %}</th></tr>
-        {% for line in group.list %}
+        <tr><th class="group" colspan="7" scope="colgroup">{% if group.grouper == 'public' %}{% translate "Public proxies" %}{% else %}{% translate "Private proxies" %}{% endif %}</th></tr>
+        {% for proxy in group.list %}
         <tr>
-          <th scope="row"><span class="line-name">{{ line.name }}</span></th>
-          <td>{% include "portal/state.html" with state=line.protocols.http.state %}</td>
-          <td>{% include "portal/state.html" with state=line.protocols.socks.state %}</td>
-          <td class="mono wide">{{ line.protocols.http.duration_seconds|milliseconds }} / {{ line.protocols.socks.duration_seconds|milliseconds }}</td>
-          <td class="mono">{{ line.protocols.http.success_rate_24h|percent }} / {{ line.protocols.socks.success_rate_24h|percent }}</td>
-          <td class="mono wide">{{ line.coverage_24h|percent:0 }}</td>
-          <td class="wide">{{ line.last_check_age_seconds|age }}</td>
+          <th scope="row"><span class="proxy-name">{{ proxy.name }}</span></th>
+          <td>{% include "portal/state.html" with state=proxy.protocols.http.state %}</td>
+          <td>{% include "portal/state.html" with state=proxy.protocols.socks.state %}</td>
+          <td class="mono wide">{{ proxy.protocols.http.duration_seconds|milliseconds }} / {{ proxy.protocols.socks.duration_seconds|milliseconds }}</td>
+          <td class="mono">{{ proxy.protocols.http.success_rate_24h|percent }} / {{ proxy.protocols.socks.success_rate_24h|percent }}</td>
+          <td class="mono wide">{{ proxy.coverage_24h|percent:0 }}</td>
+          <td class="wide">{{ proxy.last_check_age_seconds|age }}</td>
         </tr>
         {% endfor %}
       {% empty %}
-        <tr><td colspan="7"><div class="empty">{% translate "No line results" %}</div></td></tr>
+        <tr><td colspan="7"><div class="empty">{% translate "No proxy results" %}</div></td></tr>
       {% endfor %}
       </tbody>
     </table>
@@ -118,7 +118,7 @@
       <h3>{% translate "The service works but you cannot connect" %}</h3>
       <p class="small muted">{% translate "Check My access: whether you have an account, whether its proxy access is on, and the address for your network. The probes run on the supplementary services VM and do not cover the way from your machine to it." %}</p>
       <h3>{% translate "Failover" %}</h3>
-      <p class="small muted">{% translate "An HA entry chooses a passing line for each new connection, within about 15 seconds of a line failing. Open downloads, SSH sessions and WebSockets stay on their line and break with it; the client has to retry." %}</p>
+      <p class="small muted">{% translate "An HA entry chooses a passing proxy for each new connection, within about 15 seconds of a proxy failing. Open downloads, SSH sessions and WebSockets stay on their proxy and break with it; the client has to retry." %}</p>
       <h3>{% translate "Unknown" %}</h3>
       <p class="small muted">{% translate "No probe result in the last 90 seconds. An older result is never shown in its place." %}</p>
     </div>

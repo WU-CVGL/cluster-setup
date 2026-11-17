@@ -1,7 +1,7 @@
 """
 My usage: the signed-in user's observed proxy traffic, from the Proxy Usage dashboard's per-user totals.
 
-Users are counted where they enter the proxies (the HA entries, and a line's own entry when it requires accounts),
+Users are counted where they enter the proxies (the HA entries, and a proxy's own entry when it requires accounts),
 summed over every entry, and service accounts are left out, as in Grafana. The queries return every user; the
 portal keeps only the row of the session's username. The totals are Prometheus increase() over the window.
 """

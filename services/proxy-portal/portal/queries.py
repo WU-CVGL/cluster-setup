@@ -17,13 +17,13 @@ def _status(selector, by):
 
 def _ha(pool):
     sel = f'job="proxy-probe",kind="ha",pool="{pool}"'
-    lines = 'pool="ha-general"' if pool == "ha-general" else 'pool=~"ha-general|ha-all"'
-    raw = f'job="proxy-probe",kind="raw",{lines},protocol="socks"'
+    proxies = 'pool="ha-general"' if pool == "ha-general" else 'pool=~"ha-general|ha-private"'
+    raw = f'job="proxy-probe",kind="raw",{proxies},protocol="socks"'
     return {
         "http": _status(sel + ',protocol="http"', "protocol"),
         "socks": _status(sel + ',protocol="socks"', "protocol"),
-        "lines_passing": f"count(({_status(raw, 'entry')}) == 1) or vector(0)",
-        "lines_configured": f"count(max by (entry) (max_over_time(up{{{raw}}}[1d])))",
+        "proxies_passing": f"count(({_status(raw, 'entry')}) == 1) or vector(0)",
+        "proxies_configured": f"count(max by (entry) (max_over_time(up{{{raw}}}[1d])))",
         "duration": (f"max by (protocol) (probe_duration_seconds{{{sel}}} unless on (instance) "
                      f"(time() - timestamp(probe_duration_seconds{{{sel}}}) > {PROBE_STALE}))"),
         "last_check": f"max by (protocol) (time() - timestamp(probe_success{{{sel}}}))",
@@ -36,8 +36,8 @@ _RAW = 'job="proxy-probe",kind="raw"'
 
 STATUS = {
     "ha-general": _ha("ha-general"),
-    "ha-all": _ha("ha-all"),
-    "lines": {
+    "ha-private": _ha("ha-private"),
+    "proxies": {
         "http": _status(_RAW + ',protocol="http"', "entry, pool, access"),
         "socks": _status(_RAW + ',protocol="socks"', "entry"),
         "duration_http": f'max by (entry) (probe_duration_seconds{{{_RAW},protocol="http"}})',

@@ -24,7 +24,7 @@ def dashboard_exprs(name):
 class QueriesTest(SimpleTestCase):
     def test_status_queries_are_the_availability_dashboards(self):
         availability = dashboard_exprs("proxy-availability.json")
-        for group in ("ha-general", "ha-all", "lines"):
+        for group in ("ha-general", "ha-private", "proxies"):
             for key, expr in queries.STATUS[group].items():
                 self.assertIn(expr, availability, f"{group} {key}")
         for expr in queries.HISTORY.values():

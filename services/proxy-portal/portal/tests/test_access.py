@@ -40,11 +40,11 @@ class AccessTest(PortalTestCase):
             {"network": "private", "host": "192.168.233.8", "http": "192.168.233.8:30889",
              "socks": "192.168.233.8:30089"},
             {"network": "campus", "host": "10.0.1.68", "http": "10.0.1.68:30889", "socks": "10.0.1.68:30089"}])
-        line = view["entries"][3]
-        self.assertEqual(line["id"], "usca5-bwh-sla-1tb")
-        self.assertEqual(line["ports"], {"http": 59889, "socks": 59880})
-        self.assertFalse(line["requires_account"])
-        self.assertNotIn("ha-all", json.dumps(view["entries"]))
+        proxy = view["entries"][3]
+        self.assertEqual(proxy["id"], "usca5-bwh-sla-1tb")
+        self.assertEqual(proxy["ports"], {"http": 59889, "socks": 59880})
+        self.assertFalse(proxy["requires_account"])
+        self.assertNotIn("ha-private", json.dumps(view["entries"]))
         texts = [t["text"] for t in view["templates"]["networks"]["private"]]
         self.assertIn("export http_proxy=http://alice:<password>@192.168.233.8:30889", texts[0])
         self.assertTrue(any("socks5h://alice:<password>@192.168.233.8:30089" in t for t in texts))
@@ -55,26 +55,26 @@ class AccessTest(PortalTestCase):
     def test_admin_account(self):
         view = self.get("carol")
         self.assertTrue(view["account"]["admin"])
-        self.assertEqual([e["id"] for e in view["entries"]], ["ha-general", "ha-all"] + PUBLIC + PRIVATE)
-        ha_all = view["entries"][1]
-        self.assertEqual((ha_all["access"], ha_all["ports"], ha_all["usable"]),
-                         ("admin-only", {"http": 31889, "socks": 31089}, True))
+        self.assertEqual([e["id"] for e in view["entries"]], ["ha-general", "ha-private"] + PUBLIC + PRIVATE)
+        ha_private = view["entries"][1]
+        self.assertEqual((ha_private["access"], ha_private["ports"], ha_private["usable"]),
+                         ("private", {"http": 31889, "socks": 31089}, True))
         page = self.client.get("/access")
         self.assertContains(page, "This is an admin account")
-        self.assertContains(page, "Admins only")
+        self.assertContains(page, "<span class=\"tag admin\">Private</span>", count=len(PRIVATE))
 
     def test_proxy_admin_flag_is_not_the_determined_role(self):
-        # Determined admin, regular proxy account: no ha-all
+        # Determined admin, regular proxy account: no ha-private
         self.master.users["alice"] = ("pw-alice", True, True)
         view = self.get("alice")
         self.assertIs(self.client.session["is_determined_admin"], True)
-        self.assertNotIn("ha-all", [e["id"] for e in view["entries"]])
-        # proxy admin, not a Determined admin: ha-all
+        self.assertNotIn("ha-private", [e["id"] for e in view["entries"]])
+        # proxy admin, not a Determined admin: ha-private
         self.client.post("/signout")
         self.master.users["carol"] = ("pw-carol", False, True)
         view = self.get("carol")
         self.assertIs(self.client.session["is_determined_admin"], False)
-        self.assertIn("ha-all", [e["id"] for e in view["entries"]])
+        self.assertIn("ha-private", [e["id"] for e in view["entries"]])
 
     def test_disabled_account_raw_auth_off(self):
         view = self.get("bob")
@@ -86,8 +86,8 @@ class AccessTest(PortalTestCase):
         page = self.client.get("/access")
         self.assertContains(page, "Proxy access is <b>off</b>")
         # what stops for a non-admin account, once, without the raw-auth paragraph repeating it
-        self.assertContains(page, "ha-general refuses it. The public lines' own entries still work for you: they need no account while raw auth (accounts on")
-        self.assertNotContains(page, "ha-all and the private lines refuse it")
+        self.assertContains(page, "ha-general refuses it. The public proxies' own entries still work for you: they need no account while raw auth (accounts on")
+        self.assertNotContains(page, "ha-private and the private proxies refuse it")
         self.assertNotContains(page, "turning an account off stops only")
         self.assertContains(page, "is not a change to your cluster account")
 
@@ -102,9 +102,9 @@ class AccessTest(PortalTestCase):
     def test_disabled_admin(self):
         view = self.get("erin")
         usable = {e["id"]: e["usable"] for e in view["entries"]}
-        self.assertFalse(usable["ha-all"])
+        self.assertFalse(usable["ha-private"])
         self.assertFalse(any(usable[name] for name in PRIVATE))
-        self.assertContains(self.client.get("/access"), "ha-general, ha-all and the private lines refuse it.")
+        self.assertContains(self.client.get("/access"), "ha-general, ha-private and the private proxies refuse it.")
 
     def test_raw_auth_on(self):
         self.write_status(lambda d: d.update(raw_auth=True))
@@ -160,5 +160,5 @@ class AccessTest(PortalTestCase):
     def test_page_says_raw_auth_off_plainly(self):
         self.sign_in("alice")
         page = self.client.get("/access")
-        self.assertContains(page, "a public line's own entry accepts anyone")
+        self.assertContains(page, "a public proxy's own entry accepts anyone")
         self.assertContains(page, "Replace &lt;password&gt; with your account")

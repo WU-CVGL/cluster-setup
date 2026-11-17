@@ -21,21 +21,21 @@
   {% if view.account is None %}
   <div class="notice">
     <p><b>{% blocktranslate with name=view.username %}{{ name }} has no proxy account.{% endblocktranslate %}</b> {% translate "To get one, ask an admin: the account is named after your Determined username, and the admin gives you its password." %}</p>
-    {% if not view.raw_auth %}<p>{% translate "Without an account you can use the public lines' own entries: they accept anyone while raw auth is off." %}</p>{% endif %}
+    {% if not view.raw_auth %}<p>{% translate "Without an account you can use the public proxies' own entries: they accept anyone while raw auth is off." %}</p>{% endif %}
   </div>
   {% elif view.account.enabled %}
   <div class="notice ok">
     <p>{% blocktranslate with name=view.account.name %}Proxy access is <b>on</b> for the account <b>{{ name }}</b>.{% endblocktranslate %}</p>
-    {% if view.account.admin %}<p>{% translate "This is an admin account: it may also use ha-all and the private lines." %}</p>{% endif %}
+    {% if view.account.admin %}<p>{% translate "This is an admin account: it may also use ha-private and the private proxies." %}</p>{% endif %}
   </div>
   {% else %}
   <div class="notice warn">
     <p>{% blocktranslate with name=view.account.name %}Proxy access is <b>off</b> for the account <b>{{ name }}</b>.{% endblocktranslate %}
-    {% if view.raw_auth %}{% translate "Every entry refuses it, the public lines' own entries included." %}{% elif view.account.admin %}{% translate "ha-general, ha-all and the private lines refuse it. The public lines' own entries still work for you: they need no account while raw auth (accounts on the public lines' own entries) is off." %}{% else %}{% translate "ha-general refuses it. The public lines' own entries still work for you: they need no account while raw auth (accounts on the public lines' own entries) is off." %}{% endif %}</p>
+    {% if view.raw_auth %}{% translate "Every entry refuses it, the public proxies' own entries included." %}{% elif view.account.admin %}{% translate "ha-general, ha-private and the private proxies refuse it. The public proxies' own entries still work for you: they need no account while raw auth (accounts on the public proxies' own entries) is off." %}{% else %}{% translate "ha-general refuses it. The public proxies' own entries still work for you: they need no account while raw auth (accounts on the public proxies' own entries) is off." %}{% endif %}</p>
   </div>
   {% endif %}
   <div class="notice">
-    {% if view.account is None or view.account.enabled %}{% if not view.raw_auth %}<p>{% translate "Raw auth (accounts on the public lines' own entries) is off: a public line's own entry accepts anyone, without an account, so turning an account off stops only the HA entries and the private lines for it." %}</p>{% else %}<p>{% translate "Raw auth (accounts on the public lines' own entries) is on: every entry requires an enabled account." %}</p>{% endif %}{% endif %}
+    {% if view.account is None or view.account.enabled %}{% if not view.raw_auth %}<p>{% translate "Raw auth (accounts on the public proxies' own entries) is off: a public proxy's own entry accepts anyone, without an account, so turning an account off stops only the HA entries and the private proxies for it." %}</p>{% else %}<p>{% translate "Raw auth (accounts on the public proxies' own entries) is on: every entry requires an enabled account." %}</p>{% endif %}{% endif %}
     <p>{% translate "Proxy access off is not a change to your cluster account: your Determined login, jobs and files are not affected." %}</p>
     <p>{% translate "The proxy admin flag is set per proxy account by the admins; it is not the Determined admin role." %}</p>
     <p>{% translate "Need an account or a new password? Ask an admin." %}</p>
@@ -43,19 +43,19 @@
 </section>
 
 <section class="section" aria-labelledby="entries-title">
-  <div class="section-bar"><div><h2 id="entries-title">{% translate "Entries" %}</h2><p>{% translate "Every account may use ha-general and the public lines; admin accounts also ha-all and the private lines. Same ports on both networks: the private network from the nodes, the campus network from the login node." %}</p></div></div>
+  <div class="section-bar"><div><h2 id="entries-title">{% translate "Entries" %}</h2><p>{% translate "Every account may use ha-general and the public proxies; admin accounts also ha-private and the private proxies. Same ports on both networks: the private network from the nodes, the campus network from the login node." %}</p></div></div>
   <div class="access-list">
     {% for entry in view.entries %}
     <div class="card access-card{% if not entry.usable %} locked{% endif %}">
       <div class="card-head">
-        <h3>{% if entry.id == 'ha-general' %}{% translate "Default proxy" %} <code>ha-general</code>{% elif entry.id == 'ha-all' %}{% translate "Admin entry" %} <code>ha-all</code>{% else %}<code>{{ entry.id }}</code>{% endif %}
-          {% if entry.access == 'admin-only' %}<span class="tag admin">{% translate "Admins only" %}</span>{% endif %}</h3>
+        <h3>{% if entry.id == 'ha-general' %}{% translate "Default proxy" %} <code>ha-general</code>{% elif entry.id == 'ha-private' %}{% translate "Private entry" %} <code>ha-private</code>{% else %}<code>{{ entry.id }}</code>{% endif %}
+          {% if entry.access == 'private' and entry.kind != 'ha' %}<span class="tag admin">{% translate "Private" %}</span>{% endif %}</h3>
         {% if entry.usable and not entry.requires_account %}<span class="chip info">{% translate "No account needed" %}</span>
         {% elif entry.usable %}<span class="chip ok">{% translate "Usable" %}</span>
         {% elif view.account is None %}<span class="chip">{% translate "Needs an account" %}</span>
         {% else %}<span class="chip warn">{% translate "Proxy access off" %}</span>{% endif %}
       </div>
-      <div class="small muted">{% if entry.kind == 'ha' %}{% if entry.id == 'ha-general' %}{% translate "HA over the public lines, with your account." %}{% else %}{% translate "HA over every line, with your admin account." %}{% endif %}{% elif entry.requires_account %}{% translate "One line, no failover, with your account." %}{% else %}{% translate "One line, no failover, without an account." %}{% endif %}</div>
+      <div class="small muted">{% if entry.kind == 'ha' %}{% if entry.id == 'ha-general' %}{% translate "HA over the public proxies, with your account." %}{% else %}{% translate "HA over every proxy, with your admin account." %}{% endif %}{% elif entry.requires_account %}{% translate "One proxy, no failover, with your account." %}{% else %}{% translate "One proxy, no failover, without an account." %}{% endif %}</div>
       {% for address in entry.addresses %}
       <div class="endpoint">
         <div><div class="tiny">{% if address.network == 'private' %}{% translate "Private network" %}{% else %}{% translate "Campus network" %}{% endif %}</div>
