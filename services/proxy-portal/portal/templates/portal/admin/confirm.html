@@ -18,7 +18,8 @@
     <p>{{ effect }}</p>
     <p>{{ restart }}</p>
     {% if raw_auth %}<p>{{ raw_auth }}</p>{% endif %}
-    {% if row.kind == 'service' and op in 'rotate remove disable' %}<p>{% translate "This is a node's Docker daemon: update proxy.env on the node and restart Docker on the drained node after the change." %}</p>{% endif %}
+    {% if row.kind == 'service' and op == 'rotate' %}<p>{% translate "This is a node's Docker daemon: once the change is live, put the new password in proxy.env on the node and restart Docker on the drained node; until then its pulls through the HA entry are refused." %}</p>
+    {% elif row.kind == 'service' and op == 'remove' or row.kind == 'service' and op == 'disable' %}<p>{% translate "This is a node's Docker daemon: after the change, its pulls through the HA entry are refused." %}</p>{% endif %}
   </div>
   {% if destructive %}
   <div class="field"><label for="confirm">{% blocktranslate with name=username %}Type {{ name }} to confirm{% endblocktranslate %}</label>

@@ -2,7 +2,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: proxy-portal\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-11-18 04:52+0800\n"
+"POT-Creation-Date: 2026-11-18 05:27+0800\n"
 "PO-Revision-Date: 2026-11-18 00:00+0800\n"
 "Last-Translator: \n"
 "Language-Team: \n"
@@ -52,7 +52,7 @@ msgstr "HA 入口 (xray-ha)"
 msgid ""
 "Applying restarts %(services)s. Established connections through them drop, "
 "and new ones fail for a few seconds."
-msgstr "应用时会重启%(services)s。经过它们的已建立连接会断开，新连接会有几秒失败。"
+msgstr "应用时会重启 %(services)s。经过它们的已建立连接会断开，新连接会有几秒失败。"
 
 #, python-format
 msgid ""
@@ -175,12 +175,17 @@ msgid "Not taken after %(n)d minutes: the applier may not be running."
 msgstr "已 %(n)d 分钟未被处理：执行器可能没有运行。"
 
 msgid ""
-"Being applied; the affected entries restart. A revoke not yet confirmed: the "
-"old access may still work."
+"Being applied; the affected entries restart. The revoke is not confirmed "
+"yet: the old access may still work."
 msgstr "正在应用，受影响的入口会重启。撤销尚未确认：原有访问可能仍然有效。"
 
 msgid "Being applied; the affected entries restart."
 msgstr "正在应用，受影响的入口会重启。"
+
+msgid ""
+"Nothing to change: the account was already in that state. The entries "
+"restarted for other requests of the same batch."
+msgstr "无需变更：账号已处于该状态。入口因同一批次的其他请求而重启。"
 
 msgid ""
 "Nothing to change: the account was already in that state. Nothing restarted."
@@ -214,12 +219,15 @@ msgid ""
 msgstr "失败，且回滚未完成：入口可能不可用或处于混合状态。请在虚拟机上检查执行器 (journalctl -u proxy-apply)。"
 
 msgid ""
-"Failed; the previous state is back. Nothing changed: the old access still "
-"works."
-msgstr "失败，已恢复到之前的状态。没有任何变更：原有访问仍然有效。"
+"Failed; the previous state is back: the account is unchanged and the old "
+"access still works."
+msgstr "失败，已恢复到之前的状态：账号未变更，原有访问仍然有效。"
 
-msgid "Failed; the previous state is back. Nothing changed."
-msgstr "失败，已恢复到之前的状态。没有任何变更。"
+msgid "Failed; the previous state is back: the account is unchanged."
+msgstr "失败，已恢复到之前的状态：账号未变更。"
+
+msgid "The entries restarted: established connections dropped."
+msgstr "入口已重启：已建立的连接已断开。"
 
 msgid "The new password is handed out once the change is live."
 msgstr "变更生效后才会提供新密码。"
@@ -233,19 +241,14 @@ msgid "Only %(admin)s, who made this request, can see the new password."
 msgstr "只有提交该请求的 %(admin)s 可以查看新密码。"
 
 msgid ""
-"The password was shown once and is not kept anywhere. For a new one, request "
-"a new password."
-msgstr "该密码已显示过一次，任何地方都不会保存。如需新密码，请再申请一次新密码。"
+"The password was shown once; the portal does not keep it. For a new one, "
+"request a new password."
+msgstr "该密码已显示过一次，门户不会保存它。如需新密码，请再申请一次新密码。"
 
 msgid ""
 "The one-time password expired: results are deleted after 10 minutes. For a "
 "new one, request a new password."
 msgstr "一次性密码已过期：结果会在 10 分钟后删除。如需新密码，请再申请一次新密码。"
-
-#, python-format
-msgid ""
-"A later request replaced this password: use the password of request %(id)s."
-msgstr "之后的请求替换了这个密码：请使用请求 %(id)s 的密码。"
 
 msgid ""
 "No password was handed out for this request. For a new one, request a new "
@@ -259,6 +262,16 @@ msgstr "无法读取一次性结果，已将其删除。如需新密码，请再
 
 msgid "No password: the change was not applied."
 msgstr "没有密码：变更未应用。"
+
+#, python-format
+msgid ""
+"The account was removed by request %(id)s: this password no longer works."
+msgstr "该账号已被请求 %(id)s 删除：此密码已失效。"
+
+#, python-format
+msgid ""
+"A later request replaced this password: use the password of request %(id)s."
+msgstr "之后的请求替换了这个密码：请使用请求 %(id)s 的密码。"
 
 msgctxt "incident component"
 msgid "Default proxy (ha-general)"
@@ -310,11 +323,11 @@ msgstr "新密码"
 
 msgctxt "account op"
 msgid "Turn on"
-msgstr "开启"
+msgstr "开启访问"
 
 msgctxt "account op"
 msgid "Turn off"
-msgstr "关闭"
+msgstr "关闭访问"
 
 msgctxt "account op"
 msgid "Remove"
@@ -632,9 +645,9 @@ msgid ""
 msgstr "账号状态已有一段时间没有更新：执行器可能没有运行。"
 
 msgid ""
-"The accounts file holds a change made with proxy_accounts.py that the "
-"applier has not applied: it may not be running yet."
-msgstr "账号文件中有用 proxy_accounts.py 做的、执行器尚未应用的变更：它可能还没有生效。"
+"The accounts file holds a change made with proxy_accounts.py since the "
+"applier's last apply: it may not be live yet."
+msgstr "账号文件中有执行器上次应用之后用 proxy_accounts.py 做的变更：它可能尚未生效。"
 
 msgid ""
 "Every change restarts the affected entries: established connections through "
@@ -681,7 +694,7 @@ msgid "Off"
 msgstr "关闭"
 
 msgid "Off at the HA entries"
-msgstr "HA 入口已关闭"
+msgstr "已关闭（仅 HA 入口）"
 
 msgid "Changed with proxy_accounts.py only"
 msgstr "只能用 proxy_accounts.py 修改"
@@ -715,9 +728,15 @@ msgid "Back to the accounts"
 msgstr "返回账号列表"
 
 msgid ""
-"This is a node's Docker daemon: update proxy.env on the node and restart "
-"Docker on the drained node after the change."
-msgstr "这是节点的 Docker 守护进程：变更后请更新该节点的 proxy.env，并在排空的节点上重启 Docker。"
+"This is a node's Docker daemon: once the change is live, put the new "
+"password in proxy.env on the node and restart Docker on the drained node; "
+"until then its pulls through the HA entry are refused."
+msgstr "这是节点的 Docker 守护进程：变更生效后，请把新密码写入该节点的 proxy.env，并在排空的节点上重启 Docker；在此之前它经 HA 入口的拉取会被拒绝。"
+
+msgid ""
+"This is a node's Docker daemon: after the change, its pulls through the HA "
+"entry are refused."
+msgstr "这是节点的 Docker 守护进程：变更后，它经 HA 入口的拉取会被拒绝。"
 
 #, python-format
 msgid "Type %(name)s to confirm"
@@ -809,9 +828,9 @@ msgstr "仅显示一次：此密码不会再次显示。"
 
 #, python-format
 msgid ""
-"It is not kept anywhere. Copy it now and give it to the user of %(name)s "
+"The portal does not keep it. Copy it now and give it to the user of %(name)s "
 "privately."
-msgstr "它不会保存在任何地方。请立即复制，并私下交给 %(name)s 的使用者。"
+msgstr "门户不会保存它。请立即复制，并私下交给 %(name)s 的使用者。"
 
 msgid "Leaving or reloading this page does not show it again."
 msgstr "离开或刷新此页面后不会再次显示。"

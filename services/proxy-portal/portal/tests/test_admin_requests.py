@@ -219,6 +219,15 @@ class AccountsListTest(PortalTestCase):
         self.assertNotContains(page, '<option value="svc-docker-cvgl-node01">')  # exists already
         self.assertContains(page, "uses svc-docker-&lt;node&gt;.")
 
+    def test_docker_daemon_note(self):
+        rotate = self.client.get("/admin/accounts/rotate?username=svc-docker-cvgl-node01")
+        self.assertContains(rotate, "put the new password in proxy.env on the node")
+        for op in ("disable", "remove"):
+            page = self.client.get(f"/admin/accounts/{op}?username=svc-docker-cvgl-node01")
+            self.assertContains(page, "its pulls through the HA entry are refused.")
+            self.assertNotContains(page, "proxy.env")
+        self.assertNotContains(self.client.get("/admin/accounts/rotate?username=alice"), "Docker daemon")
+
     def test_pending_shown(self):
         self.client.post("/admin/accounts/disable", {"username": "alice", "confirm": "alice"})
         rows = {a["name"]: a for a in self.client.get("/api/admin/accounts").json()["accounts"]}
@@ -246,14 +255,22 @@ class LifecycleTest(PortalTestCase):
     def test_states(self):
         cases = [
             ("disable", None, "pending", "the old access still works"),
-            ("disable", {"status": "applying"}, "applying", "A revoke not yet confirmed: the old access may still work"),
+            ("disable", {"status": "applying"}, "applying",
+             "The revoke is not confirmed yet: the old access may still work"),
             ("enable", {"status": "applying"}, "applying", "Being applied"),
             ("disable", {"status": "applied", "changed": True, "restarted": ["xray-ha"]}, "applied",
              "Applied and verified."),
-            ("enable", {"status": "applied", "changed": False, "restarted": []}, "applied", "Nothing to change"),
+            ("enable", {"status": "applied", "changed": False, "restarted": []}, "applied",
+             "Nothing to change: the account was already in that state. Nothing restarted."),
+            ("enable", {"status": "applied", "changed": False, "restarted": ["xray-ha"]}, "applied",
+             "Nothing to change: the account was already in that state. The entries restarted for other requests "
+             "of the same batch."),
             ("disable", {"status": "failed", "stage": "test", "error": "xray-ha/config/config.json: bad",
-                         "restored": True}, "failed", "the previous state is back. Nothing changed: the old access "
-                                                       "still works"),
+                         "restored": True}, "failed", "the previous state is back: the account is unchanged and the "
+                                                       "old access still works."),
+            ("enable", {"status": "failed", "stage": "verify", "error": "no 204", "restored": True}, "failed",
+             "the previous state is back: the account is unchanged. The entries restarted: established "
+             "connections dropped."),
             ("enable", {"status": "failed", "stage": "verify", "error": "x", "restored": False}, "failed",
              "the rollback did not finish"),
             ("enable", {"status": "failed", "stage": "request", "error": "account exists", "restored": True},
@@ -278,6 +295,8 @@ class LifecycleTest(PortalTestCase):
                 self.assertContains(page, "data-poll=")
             else:
                 self.assertNotContains(page, "data-poll=")
+        test_failure = AccountRequest.objects.get(state="failed", stage="test")
+        self.assertNotIn("The entries restarted", lifecycle.describe(test_failure))
         failed = AccountRequest.objects.filter(state="failed", stage="test").get()
         self.assertEqual((failed.error, failed.restored), ("xray-ha/config/config.json: bad", True))
 

@@ -157,6 +157,19 @@ def take_result(request_id, username):
     return password
 
 
+def drop_result(request_id):
+    """Delete results/<id>.json, if any: a result a later request made invalid."""
+    assert ID_RE.fullmatch(request_id)
+    try:
+        dfd = _dir("results")
+    except OSError:
+        return
+    try:
+        _unlink(dfd, f"{request_id}.json")
+    finally:
+        os.close(dfd)
+
+
 def _unlink(dfd, name):
     try:
         os.unlink(name, dir_fd=dfd)

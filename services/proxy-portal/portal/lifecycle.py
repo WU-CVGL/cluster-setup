@@ -19,6 +19,8 @@ from django.utils.translation import gettext as _
 from . import spool
 
 REVOKES = ("disable", "remove", "rotate", "admin-off")  # take an access away: the old one works until applied
+REPLACES = ("add", "rotate", "remove")  # a live one makes an earlier one-time password of the account invalid
+ROLLBACK_RESTARTS = ("swap", "restart", "verify", "commit")  # stages whose rollback restarts the entries
 RESULT_RECHECK = datetime.timedelta(hours=1)  # a later request of the same run can supersede a result
 
 
@@ -79,9 +81,12 @@ def describe(row, now=None):
             text += " " + _("Not taken after %(n)d minutes: the applier may not be running.") % {"n": waited // 60}
         return text
     if row.state == "applying":
-        return _("Being applied; the affected entries restart. A revoke not yet confirmed: the old access may "
-                 "still work.") if revoke else _("Being applied; the affected entries restart.")
+        return _("Being applied; the affected entries restart. The revoke is not confirmed yet: the old access "
+                 "may still work.") if revoke else _("Being applied; the affected entries restart.")
     if row.state == "applied":
+        if row.changed is False and row.restarted:
+            return _("Nothing to change: the account was already in that state. The entries restarted for other "
+                     "requests of the same batch.")
         if row.changed is False:
             return _("Nothing to change: the account was already in that state. Nothing restarted.")
         return _("Applied and verified.")
@@ -100,8 +105,29 @@ def describe(row, now=None):
     if row.restored is False:
         return _("Failed, and the rollback did not finish: the entries may be down or in a mixed state. Check the "
                  "applier on the VM (journalctl -u proxy-apply).")
-    return _("Failed; the previous state is back. Nothing changed: the old access still works.") if revoke \
-        else _("Failed; the previous state is back. Nothing changed.")
+    text = _("Failed; the previous state is back: the account is unchanged and the old access still works.") \
+        if revoke else _("Failed; the previous state is back: the account is unchanged.")
+    if row.stage in ROLLBACK_RESTARTS:
+        text += " " + _("The entries restarted: established connections dropped.")
+    return text
+
+
+def superseded_by(row):
+    """
+    The request that made this one-time password invalid: (id, op), op None when that request is unknown here.
+    The applier marks it within one run (superseded_by); across runs, a later live add, rotate or remove of the
+    same account does. None when there is none.
+    """
+    if row.superseded_by:
+        later = type(row).objects.filter(id=row.superseded_by).first()
+        return row.superseded_by, later.op if later else None
+    rows = type(row).objects.filter(username=row.username, op__in=REPLACES, requested_at__gt=row.requested_at) \
+        .exclude(id=row.id).exclude(state="failed").order_by("requested_at", "id")
+    for later in rows:
+        refresh(later)
+        if later.state in ("applied", "unconfirmed") and later.changed is not False:
+            return later.id, later.op
+    return None
 
 
 def password_state(row, username):
@@ -127,6 +153,8 @@ def password_state(row, username):
         return "waiting"
     if not spool.result_exists(row.id):
         return "expired"
+    if superseded_by(row):
+        return "superseded"
     return "ready" if row.requested_by == username else "other"
 
 
@@ -135,16 +163,23 @@ def password_text(state, row):
         "waiting": _("The new password is handed out once the change is live."),
         "ready": _("The new password is ready. It is shown once, to you only, and then deleted."),
         "other": _("Only %(admin)s, who made this request, can see the new password.") % {"admin": row.requested_by},
-        "shown": _("The password was shown once and is not kept anywhere. For a new one, request a new password."),
+        "shown": _("The password was shown once; the portal does not keep it. For a new one, request a new "
+                   "password."),
         "expired": _("The one-time password expired: results are deleted after 10 minutes. For a new one, request "
                      "a new password."),
-        "superseded": _("A later request replaced this password: use the password of request %(id)s.")
-        % {"id": row.superseded_by},
+        "superseded": _superseded_text(row) if state == "superseded" else "",
         "missing": _("No password was handed out for this request. For a new one, request a new password."),
         "unreadable": _("The one-time result could not be read and was deleted. For a new one, request a new "
                         "password."),
         "none": _("No password: the change was not applied."),
     }.get(state, "")
+
+
+def _superseded_text(row):
+    later_id, op = superseded_by(row) or (row.superseded_by, None)
+    if op == "remove":
+        return _("The account was removed by request %(id)s: this password no longer works.") % {"id": later_id}
+    return _("A later request replaced this password: use the password of request %(id)s.") % {"id": later_id}
 
 
 def as_json(row, username):

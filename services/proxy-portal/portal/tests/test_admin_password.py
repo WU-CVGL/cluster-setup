@@ -87,13 +87,14 @@ class PasswordTest(PortalTransactionTestCase):
         shown = self.client.post(f"/admin/requests/{request_id}/password")
         self.assertContains(shown, SENTINEL, count=1)
         self.assertContains(shown, "Shown once: this password will not be shown again.")
+        self.assertContains(shown, "The portal does not keep it.")
         self.assertContains(shown, 'data-copy="one-time-password"')
         self.assertIn("no-store", shown["Cache-Control"])
         self.assertFalse(path.exists())
 
         again = self.client.post(f"/admin/requests/{request_id}/password")
         self.assertNotContains(again, SENTINEL)
-        self.assertContains(again, "The password was shown once and is not kept anywhere.")
+        self.assertContains(again, "The password was shown once; the portal does not keep it.")
         self.assertNotContains(self.client.get(f"/admin/requests/{request_id}"), "Show the password once")
         row = AccountRequest.objects.get(id=request_id)
         self.assertEqual(row.result_state, "shown")
@@ -140,6 +141,54 @@ class PasswordTest(PortalTransactionTestCase):
         self.assertContains(self.client.get(f"/admin/requests/{request_id}"),
                             "A later request replaced this password: use the password of request "
                             "1b2c3d4e-0000-4000-8000-000000000000.")
+
+    def test_superseded_by_a_remove(self):
+        rotate = self.add("bob", op="rotate")
+        remove = self.add("bob", op="remove")
+        self.applied(rotate, "bob", op="rotate", result=False, superseded_by=remove)
+        self.applied(remove, "bob", op="remove", result=False)
+        text = self.client.get(f"/api/admin/requests/{rotate}").json()["password_text"]
+        self.assertEqual(text, f"The account was removed by request {remove}: this password no longer works.")
+
+    def test_superseded_in_a_later_run(self):
+        # two applier runs: the first result stays, and its status names no later request
+        first = self.add("alice", op="rotate")
+        first_path = self.applied(first, "alice", op="rotate", password="Old-Pass-1111")
+        second = self.add("alice", op="rotate")
+        second_path = self.applied(second, "alice", op="rotate")
+        data = self.client.get(f"/api/admin/requests/{first}").json()  # the second is not looked at first
+        self.assertEqual(data["password"], "superseded")
+        self.assertIn(f"use the password of request {second}", data["password_text"])
+        self.assertNotContains(self.client.get(f"/admin/requests/{first}"), "Show the password once")
+        response = self.client.post(f"/admin/requests/{first}/password")
+        self.assertNotContains(response, "Old-Pass-1111")
+        self.assertContains(response, f"use the password of request {second}")
+        self.assertFalse(first_path.exists())
+        self.assertEqual(self.client.get(f"/api/admin/requests/{second}").json()["password"], "ready")
+        self.assertContains(self.client.post(f"/admin/requests/{second}/password"), SENTINEL)
+        self.assertFalse(second_path.exists())
+
+    def test_removed_in_a_later_run(self):
+        first = self.add("bob", op="rotate")
+        path = self.applied(first, "bob", op="rotate", password="Old-Pass-2222")
+        remove = self.add("bob", op="remove")
+        self.applied(remove, "bob", op="remove", result=False)
+        response = self.client.post(f"/admin/requests/{first}/password")
+        self.assertNotContains(response, "Old-Pass-2222")
+        self.assertContains(response, f"The account was removed by request {remove}: this password no longer works.")
+        self.assertFalse(path.exists())
+
+    def test_not_superseded_by_a_failed_or_unchanged_request(self):
+        first = self.add("alice", op="rotate")
+        self.applied(first, "alice", op="rotate")
+        failed = self.add("alice", op="rotate")
+        (self.spool / "status" / f"{failed}.json").write_text(json.dumps(
+            {"id": failed, "status": "failed", "stage": "verify", "error": "x", "restored": True}))
+        self.add("alice", op="disable")  # not a password change
+        pending = self.add("alice", op="remove")  # not live yet: the password still works
+        self.assertEqual(AccountRequest.objects.get(id=pending).state, "pending")
+        self.assertEqual(self.client.get(f"/api/admin/requests/{first}").json()["password"], "ready")
+        self.assertContains(self.client.post(f"/admin/requests/{first}/password"), SENTINEL)
 
     def test_not_written(self):
         request_id = self.add()

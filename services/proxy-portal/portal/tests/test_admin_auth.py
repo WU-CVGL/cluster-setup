@@ -45,7 +45,7 @@ class AdminGuardTest(PortalTestCase):
     def test_anonymous(self):
         for name, path, kind in admin_patterns():
             for method in ("get", "post"):
-                response = getattr(https_client(), method)(path)
+                response = getattr(https_client(enforce_csrf_checks=True), method)(path)
                 if kind == "api":
                     self.assertEqual(response.status_code, 401, (method, path))
                     self.assertEqual(response.json(), {"error": "sign-in required"})
@@ -119,6 +119,22 @@ class CsrfTest(PortalTestCase):
         response = self.client.post("/admin/accounts/disable", {"username": "alice", "confirm": "alice",
                                                                 "csrfmiddlewaretoken": self.token()})
         self.assertEqual(response.status_code, 302)
+
+    def test_not_admin_without_token(self):
+        alice = https_client(enforce_csrf_checks=True)
+        alice.get("/signin")
+        alice.post("/signin", {"username": "alice", "password": "pw-alice",
+                               "csrfmiddlewaretoken": alice.cookies["proxyportal_csrf"].value})
+        self.assertEqual(alice.session["username"], "alice")
+        for name, path, kind in admin_patterns():
+            response = alice.post(path, {"op": "disable", "username": "bob", "confirm": "bob"})
+            self.assertEqual(response.status_code, 403, path)
+            if kind == "page":
+                self.assertContains(response, "Admins only", status_code=403)
+            else:
+                self.assertEqual(response.json(), {"error": "Determined admins only"})
+        self.assertEqual(os.listdir(self.spool / "requests"), [])
+        self.assertEqual(Incident.objects.count(), 0)
 
     def test_other_origin_refused(self):
         token = self.token()

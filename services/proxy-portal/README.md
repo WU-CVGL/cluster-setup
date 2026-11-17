@@ -91,15 +91,15 @@ Read from the applier's `status/<id>.json` ([statuses](applier/README.md#statuse
 | :--- | :--- |
 | Pending | written, not taken yet; nothing has changed, so the old access still works. After 6 minutes the page says the applier may not be running |
 | Applying | being applied; the entries restart. A revoke is not confirmed yet: the old access may still work |
-| Applied | live and verified; "nothing to change" when the account was already in that state |
-| Failed | not applied, with the stage and error. The previous state is back, or, when the rollback did not finish, the entries may be down or mixed: check `journalctl -u proxy-apply` on the VM |
+| Applied | live and verified; "nothing to change" when the account was already in that state (the entries still restart when another request of the same batch changed something) |
+| Failed | not applied, with the stage and error. The previous state is back (after a failure at `swap`, `restart`, `verify` or `commit` the rollback restarted the entries, so established connections dropped), or, when the rollback did not finish, the entries may be down or mixed: check `journalctl -u proxy-apply` on the VM |
 | Unconfirmed | live, and every login that must be refused is refused, but the logins that must pass got no answer in time (proxies or the check target down) |
 
 **My access** shows the applied state only, never a pending request. The change log lists every request with its outcome, filterable by account, admin, operation and state.
 
 ### One-time passwords
 
-For an add or a new password, the applier writes the password to `results/<id>.json` once the change is live (applied or unconfirmed), readable only by uid 3089. The admin who made the request clicks **Show the password once**: the portal reads the file, deletes it at once and shows the password on a page that says it will not be shown again, with a copy button. It is never stored in the database, session, cache or logs. Another admin cannot see it. Afterwards, or once the applier has deleted an uncollected result (after 10 minutes), or when a later request of the same applier run replaced it, the page says so; request a new password to get another.
+For an add or a new password, the applier writes the password to `results/<id>.json` once the change is live (applied or unconfirmed), readable only by uid 3089. The admin who made the request clicks **Show the password once**: the portal reads the file, deletes it at once and shows the password on a page that says it will not be shown again, with a copy button. It is never stored in the database, session, cache or logs. Another admin cannot see it. Afterwards, or once the applier has deleted an uncollected result (after 10 minutes), or when a later live add, new password or removal of the account replaced it (in the same applier run or a later one), the page says so; request a new password to get another. The portal does not see a password changed or an account removed with `proxy_accounts.py`.
 
 ### Incidents
 

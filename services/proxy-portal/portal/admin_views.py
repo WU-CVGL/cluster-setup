@@ -19,6 +19,7 @@ from django.urls import reverse
 from django.utils import timezone
 from django.utils.translation import gettext as _
 from django.views.decorators.cache import never_cache
+from django.views.decorators.csrf import csrf_exempt, csrf_protect
 from django.views.decorators.debug import sensitive_variables
 from django.views.decorators.http import require_GET, require_http_methods, require_POST
 
@@ -32,9 +33,14 @@ LOG_LIMIT = 200
 
 
 def admin_only(kind):
-    """kind "page": anonymous users go to sign-in; "api": 401. Non-admins get 403 either way."""
+    """
+    kind "page": anonymous users go to sign-in; "api": 401. Non-admins get 403 either way, with nothing done; then
+    the CSRF check (403) for every post.
+    """
 
     def decorator(view):
+        protected = csrf_protect(view)
+
         @functools.wraps(view)
         def wrapped(request, *args, **kwargs):
             if session_user(request) is None:
@@ -45,10 +51,11 @@ def admin_only(kind):
                 if kind == "api":
                     return JsonResponse({"error": "Determined admins only"}, status=403)
                 return render(request, "portal/admin/forbidden.html", {"nav": "admin"}, status=403)
-            return view(request, *args, **kwargs)
+            return protected(request, *args, **kwargs)  # the CSRF check, for admins only
 
         wrapped.admin_only = kind
-        return never_cache(wrapped)
+        # the sign-in and admin checks come first, so an anonymous post gets 401 or the sign-in redirect
+        return csrf_exempt(never_cache(wrapped))
 
     return decorator
 
@@ -196,6 +203,8 @@ def password_page(request, request_id):
     state = lifecycle.password_state(row, username)
     if state == "other":
         return render(request, "portal/admin/forbidden.html", {"nav": "admin"}, status=403)
+    if state == "superseded":
+        spool.drop_result(row.id)
     password = None
     if state == "ready":
         # one claim only: a second response, or a reload of this one, finds it claimed
