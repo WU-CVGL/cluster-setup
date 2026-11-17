@@ -11,7 +11,7 @@ PORTAL = Path(__file__).resolve().parents[2]
 @unittest.skipUnless(shutil.which("git") and (PORTAL / ".gitignore").exists(), "needs git")
 class IgnoredTest(SimpleTestCase):
     def test_secret_and_data_paths_are_ignored(self):
-        for path in ("data/secret_key", "data/portal.sqlite3", "data/portal.sqlite3-journal", "e2e/run/ssl/Server-unsecure.pvk", "e2e/run/spool/status.json",
+        for path in ("data/secret_key", "data/portal.sqlite3", "data/portal.sqlite3-journal", "e2e/run/ssl/Server-unsecure.pvk", "e2e/run/spool/status.json", "e2e/run/spool/results/x.json",
                      "portal/locale/zh_Hans/LC_MESSAGES/django.mo"):
             result = subprocess.run(["git", "check-ignore", "-q", path], cwd=PORTAL)
             self.assertEqual(result.returncode, 0, path)

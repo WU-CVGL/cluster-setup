@@ -337,3 +337,38 @@ class DescribeUnitTest(SimpleTestCase):
                     row = AccountRequest(id="x" * 8, op=op, username="a", requested_by="c", state=state,
                                          restored=restored, requested_at=timezone.now())
                     self.assertTrue(lifecycle.describe(row))
+
+
+class RawAuthAndEscapingTest(PortalTestCase):
+    def setUp(self):
+        super().setUp()
+        self.sign_in("carol")
+
+    def test_raw_auth_caveat_wherever_access_is_shown(self):
+        response = self.client.post("/api/admin/requests", json.dumps({"op": "disable", "username": "alice",
+                                                                        "confirm": "alice"}),
+                                    content_type="application/json")
+        request_id = response.json()["id"]
+        caveat = "A public proxy's own entry needs no account, so it still works for that user."
+        self.assertIn(caveat, response.json()["raw_auth_text"])
+        self.assertIn(caveat, self.client.get(f"/api/admin/requests/{request_id}").json()["raw_auth_text"])
+        self.assertIn(caveat, self.client.get("/api/admin/requests").json()["requests"][0]["raw_auth_text"])
+        html = caveat.replace("'", "&#x27;")
+        for path in ("/admin/log", f"/admin/requests/{request_id}", "/admin/accounts",
+                     "/admin/accounts/disable?username=bob"):
+            self.assertContains(self.client.get(path), html, msg_prefix=path)
+        self.write_status(lambda d: d.update(raw_auth=True))
+        self.assertIn("Raw auth is on", self.client.get(f"/api/admin/requests/{request_id}").json()["raw_auth_text"])
+        enable = self.client.post("/api/admin/requests", json.dumps({"op": "admin-on", "username": "alice"}),
+                                  content_type="application/json")
+        self.assertIsNone(enable.json()["raw_auth_text"])
+
+    def test_reflected_input_is_escaped(self):
+        tag = "<script>x</script>"
+        for path in (f"/admin/accounts?q={tag}", f"/admin/accounts/disable?username={tag}",
+                     f"/admin/accounts/add?username={tag}",
+                     f"/admin/log?username={tag}&requested_by={tag}&op={tag}&state={tag}"):
+            page = self.client.get(path).content.decode()
+            self.assertNotIn(tag, page, path)
+        page = self.client.post("/admin/accounts/disable", {"username": tag, "confirm": tag}).content.decode()
+        self.assertNotIn(tag, page)

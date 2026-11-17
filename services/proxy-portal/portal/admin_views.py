@@ -182,8 +182,7 @@ def request_page(request, request_id):
     return render(request, "portal/admin/request.html", {
         "nav": "admin", "subnav": "log", "row": row, "level": lifecycle.level(row), "text": lifecycle.describe(row),
         "password": pw, "password_text": lifecycle.password_text(pw, row) if pw else None,
-        "raw_auth": raw_auth_text(status) if row.op in ("disable", "enable", "remove") and status.available
-        else None,
+        "raw_auth": raw_auth_text(status) if row.op in ACCESS_OPS and status.available else None,
     })
 
 
@@ -222,6 +221,15 @@ def password_page(request, request_id):
     return response
 
 
+def _request_json(row, user, status):
+    data = lifecycle.as_json(row, user)
+    # proxy access on or off: say where it applies
+    data["raw_auth_text"] = raw_auth_text(status) if row.op in ACCESS_OPS and status.available else None
+    return data
+
+
+ACCESS_OPS = ("disable", "enable", "remove")
+
 # ------------------------------------------------------------------ change log
 
 
@@ -246,9 +254,11 @@ def log_page(request):
     # outcomes are copied from the status files first, so a state filter sees them
     lifecycle.refresh_all(AccountRequest.objects.exclude(state__in=AccountRequest.FINAL)[:LOG_LIMIT])
     rows, applied = _filtered(request.GET)
+    status = proxy_status.load()
     return render(request, "portal/admin/log.html", {
         "nav": "admin", "subnav": "log", "rows": [(row, lifecycle.level(row), lifecycle.describe(row))
                                                   for row in rows],
+        "raw_auth_text": raw_auth_text(status) if status.available else None,
         "filters": applied, "ops": AccountRequest.OPS, "states": AccountRequest.STATES, "limit": LOG_LIMIT})
 
 
@@ -281,8 +291,8 @@ def api_requests(request):
     """GET: the change log, filtered. POST {"op", "username", "confirm"}: a new request (202)."""
     if request.method == "GET":
         rows, _applied = _filtered(request.GET)
-        user = session_user(request)
-        return JsonResponse({"requests": [lifecycle.as_json(row, user) for row in rows]})
+        user, status = session_user(request), proxy_status.load()
+        return JsonResponse({"requests": [_request_json(row, user, status) for row in rows]})
     if request.method != "POST":
         return HttpResponseNotAllowed(["GET", "POST"])
     try:
@@ -301,7 +311,7 @@ def api_requests(request):
         row = _create(request, op, username)
     except accounts.Refused as e:
         return JsonResponse({"error": str(e)}, status=e.status)
-    return JsonResponse(lifecycle.as_json(row, session_user(request)), status=202)
+    return JsonResponse(_request_json(row, session_user(request), proxy_status.load()), status=202)
 
 
 @admin_only("api")
@@ -311,7 +321,7 @@ def api_request(request, request_id):
     row = AccountRequest.objects.filter(id=request_id).first()
     if row is None:
         return JsonResponse({"error": "no such request"}, status=404)
-    return JsonResponse(lifecycle.as_json(lifecycle.refresh(row), session_user(request)))
+    return JsonResponse(_request_json(lifecycle.refresh(row), session_user(request), proxy_status.load()))
 
 
 # ------------------------------------------------------------------ incidents
