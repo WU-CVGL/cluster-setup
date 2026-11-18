@@ -1373,6 +1373,9 @@ msgstr "无法读取重置的状态，请刷新页面查看。"
 msgid "The portal could not be reached. Try again."
 msgstr "无法连接门户，请重试。"
 
+msgid "Getting the password…"
+msgstr "正在获取密码…"
+
 msgid "Enter your Determined username and password."
 msgstr "请输入 Determined 用户名和密码。"
 
