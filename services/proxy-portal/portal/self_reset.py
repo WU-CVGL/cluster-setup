@@ -72,13 +72,38 @@ def _current(username):
     return row if not row.final or lifecycle.password_state(row, username) in ("waiting", "ready") else None
 
 
+def _text(row):
+    """lifecycle.describe, but what a user can act on where the admins' text sends them to the applier."""
+    if row.state == "failed" and row.stage != "request" and row.restored is False:
+        return _("Failed, and the rollback did not finish: the proxies may be down. Tell an admin.")
+    return lifecycle.describe(row)
+
+
+def password_text(state, row):
+    """lifecycle.password_text, in a user's words: they reset again, and never see another request's password."""
+    if state == "superseded":
+        later = lifecycle.superseded_by(row) or (row.superseded_by, None)
+        if later[1] == "remove":
+            return _("The account was removed: this password no longer works.")
+        return _("A later change to your account replaced this password: it no longer works. Reset it again, or ask "
+                 "an admin.")
+    again = {
+        "shown": _("The password was shown once; the portal does not keep it. To get a new one, reset it again."),
+        "expired": _("The one-time password expired: results are deleted after 10 minutes. To get a new one, reset "
+                     "it again."),
+        "missing": _("No password was handed out for this reset. To get a new one, reset it again."),
+        "unreadable": _("The one-time result could not be read and was deleted. To get a new one, reset it again."),
+    }
+    return again.get(state) or lifecycle.password_text(state, row)
+
+
 def as_json(row, username):
     """What the requesting user sees of their reset: no stage, error or restarted services."""
     pw = lifecycle.password_state(row, username)
     return {"id": row.id, "state": row.state, "state_label": row.get_state_display(), "final": row.final,
-            "level": lifecycle.level(row), "text": lifecycle.describe(row),
+            "level": lifecycle.level(row), "text": _text(row),
             "requested_at": row.requested_at.isoformat(), "password": pw,
-            "password_text": lifecycle.password_text(pw, row) if pw else None}
+            "password_text": password_text(pw, row) if pw else None}
 
 
 def page_context(username):
@@ -184,7 +209,7 @@ def api_reset_password(request, request_id):
     username = session_user(request)
     state, password = lifecycle.collect(row, username)
     data = as_json(row, username)
-    data.update(password=state, password_text=None if password else lifecycle.password_text(state, row),
+    data.update(password=state, password_text=None if password else password_text(state, row),
                 value=password)
     response = JsonResponse(data, status=200 if password else 409)
     password = data = None

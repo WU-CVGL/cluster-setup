@@ -1,7 +1,7 @@
 // The self-service password reset on My access, in a browser against the e2e run (run.sh): the modal opens with
 // focus inside, keeps Tab and Shift+Tab inside, closes on Esc and returns focus; confirming writes a request, the
-// modal follows it through a stub applier status (applying, then applied with a result written as the portal's uid)
-// and reveals the password once, with a working copy button; the result file is deleted and a second reveal is
+// modal follows it through a stub applier status (applying, then applied with a result written as the portal's uid),
+// says so when a poll gets an error page instead of an answer, and reveals the password once, with a working copy button; the result file is deleted and a second reveal is
 // refused. In English at desktop width and in Chinese at phone width, without horizontal overflow.
 //   node e2e/self-reset.cjs <base URL> <screenshot folder>   (run from e2e/, as run.sh does; Playwright in NODE_PATH)
 const { chromium } = require('playwright');
@@ -42,9 +42,11 @@ os.write(fd, json.dumps({'id': '${id}', 'username': '${user}', 'password': '${pa
 
   const runs = [
     { lang: 'en', user: 'alice', viewport: { width: 1280, height: 900 }, device: 'desktop', locale: 'en-US', header: 'en-US,en;q=0.9',
-      t: { button: 'Reset proxy password', pending: 'Pending', applying: 'Applying', applied: 'Applied', warning: 'will not be shown again', copied: 'Copied' } },
+      t: { button: 'Reset proxy password', pending: 'Pending', applying: 'Applying', applied: 'Applied', warning: 'will not be shown again', copied: 'Copied',
+        state: "The reset's state could not be read. Reload the page to see it." } },
     { lang: 'zh', user: 'carol', viewport: { width: 390, height: 844 }, device: 'phone', locale: 'zh-CN', header: 'zh-CN,zh;q=0.9',
-      t: { button: '重置代理密码', pending: '等待中', applying: '应用中', applied: '已应用', warning: '不会再次显示', copied: '已复制' } },
+      t: { button: '重置代理密码', pending: '等待中', applying: '应用中', applied: '已应用', warning: '不会再次显示', copied: '已复制',
+        state: '无法读取重置的状态，请刷新页面查看。' } },
   ];
   for (const run of runs) {
     const tag = `${run.lang}/${run.device}`;
@@ -52,7 +54,7 @@ os.write(fd, json.dumps({'id': '${id}', 'username': '${user}', 'password': '${pa
       extraHTTPHeaders: { 'Accept-Language': run.header } });
     await context.grantPermissions(['clipboard-read', 'clipboard-write'], { origin: new URL(base).origin });
     const page = await context.newPage();
-    page.on('console', m => { if (m.type() === 'error' && !m.text().includes('409')) problems.push(`${tag} console: ${m.text()}`); });
+    page.on('console', m => { if (m.type() === 'error' && !/\b(409|502)\b/.test(m.text())) problems.push(`${tag} console: ${m.text()}`); });
     page.on('pageerror', e => problems.push(`${tag} page error: ${e.message}`));
     await page.goto(base + '/signin?next=/access', { waitUntil: 'networkidle' });
     await page.fill('#username', run.user);
@@ -98,6 +100,20 @@ os.write(fd, json.dumps({'id': '${id}', 'username': '${user}', 'password': '${pa
     await waitChip(page, run.t.pending);
     s = await state();
     check(`${tag}: pending`, s.step === 'progress' && s.chip === run.t.pending && s.inside, s);
+
+    // a poll answered with an error page, not JSON: the state could not be read (not "nothing changed")
+    const poll = `**/api/me/reset/${id}`;
+    await page.route(poll, r => r.fulfill({ status: 502, contentType: 'text/html', body: '<html>502 Bad Gateway</html>' }));
+    const pollError = page.locator('[data-step=progress] .reset-error');
+    await pollError.waitFor({ state: 'visible', timeout: 10000 });
+    check(`${tag}: a failed poll says the state could not be read`, (await pollError.textContent()) === run.t.state,
+      await pollError.textContent());
+    await page.unroute(poll);
+    await page.keyboard.press('Escape');
+    await opener.click();  // reopening resumes the reset
+    await waitChip(page, run.t.pending);
+    s = await state();
+    check(`${tag}: reopened on the same reset`, s.step === 'progress' && !(await pollError.isVisible()), s);
 
     // the applier takes it, then applies it and writes the one-time result
     writeStatus(id, run.user, 'applying');

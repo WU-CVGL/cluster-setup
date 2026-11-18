@@ -47,7 +47,7 @@
         <p class="small muted">{% translate "Forgot it, or it leaked? Reset it: your account gets a new random password, shown to you once." %}</p></div>
       <button class="btn primary" type="button" id="reset-open" hidden{% if not reset.available and not reset.current %} disabled{% endif %}>{% translate "Reset proxy password" %}</button>
     </div>
-    {% if reset.current %}<p class="small" id="reset-current">{% if reset.current.password == 'ready' %}{% translate "Your new password is ready: open the reset to see it once." %}{% else %}{% translate "A password reset is in progress: open the reset to follow it." %}{% endif %}</p>{% endif %}
+    {% if reset.current %}<p class="small" id="reset-current">{% if reset.current.password == 'ready' %}{% translate "Your new password is ready: select Reset proxy password to see it, once." %}{% else %}{% translate "A password reset is in progress: select Reset proxy password to follow it." %}{% endif %}</p>{% endif %}
     {% if reset.reason %}<div class="notice warn reset-reason" role="status"><p>{{ reset.reason }}</p></div>{% endif %}
     <noscript><p class="small muted">{% translate "Resetting the password needs JavaScript." %}</p></noscript>
   </div>
@@ -178,7 +178,7 @@ function render(d){var chip=q('[data-field=state]');chip.textContent=d.state_lab
   if(!d.final||d.password==='waiting'){stop();if(dlg.open&&tries<450){timer=setTimeout(poll,2000);}}
   else{stop();if(d.password!=='ready')current=null;}}
 function poll(){tries++;call('GET',create+'/'+current).then(function(res){
-    if(res.status===200)render(res.data);else{error(res.data.error||T.failed);}},
+    if(res.status===200)render(res.data);else{error(res.data.error||T.state);}},
   function(){error(T.network);if(dlg.open&&tries<450)timer=setTimeout(poll,5000);});}
 opener.hidden=false;
 opener.addEventListener('click',function(){tries=0;show(current?'progress':'confirm');dlg.showModal();focusStep();if(current)poll();});
@@ -191,11 +191,11 @@ dlg.addEventListener('click',function(e){var b=e.target.closest('[data-action]')
   if(action==='close'){secret.textContent='';dlg.close();}
   else if(action==='confirm'){b.disabled=true;call('POST',create).then(function(res){b.disabled=false;
       if(res.status===202){current=res.data.id;opener.disabled=false;show('progress');render(res.data);}
-      else{error(res.data.error||T.failed);}},function(){b.disabled=false;error(T.network);});}
+      else{error(res.data.error||(res.status>=500?T.state:T.failed));}},function(){b.disabled=false;error(T.network);});}
   else if(action==='reveal'){b.disabled=true;call('POST',create+'/'+current+'/password').then(function(res){b.disabled=false;
       if(res.status===200&&res.data.value){secret.textContent=res.data.value;current=null;
         var note=document.getElementById('reset-current');if(note)note.hidden=true;show('password');}
-      else{render(res.data.state?res.data:{state_label:'',level:'bad',text:res.data.error||T.failed,final:true});}},
+      else{render(res.data.state?res.data:{state_label:'',level:'bad',text:res.data.error||T.state,final:true});}},
     function(){b.disabled=false;error(T.network);});}});
 })();
 </script>{% endif %}{% endblock %}

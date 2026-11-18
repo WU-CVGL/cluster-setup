@@ -162,6 +162,11 @@ class SelfResetTest(SelfResetMixin, PortalTestCase):
         self.assertContains(page, "Applying restarts the HA entries (xray-ha). Established connections through them "
                                   "drop")
         self.assertNotContains(page, "private proxies. Established")
+        texts = json.loads(page.content.decode().split('<script id="reset-texts" type="application/json">')[1]
+                           .split("</script>")[0])
+        self.assertEqual(texts, {"failed": "The reset could not be started. Nothing changed.",
+                                 "state": "The reset's state could not be read. Reload the page to see it.",
+                                 "network": "The portal could not be reached. Try again."})
         carol = https_client()
         self.sign_in("carol", client=carol)  # an admin account: the private proxies restart too
         self.assertContains(carol.get("/access"), "the HA entries (xray-ha) and the private proxies")
@@ -300,7 +305,8 @@ class SelfResetPasswordTest(SelfResetMixin, PortalTransactionTestCase):
         self.assertEqual(again.status_code, 409)
         self.assertNotIn(SENTINEL, again.content.decode())
         self.assertEqual(again.json()["password"], "shown")
-        self.assertIn("The password was shown once", again.json()["password_text"])
+        self.assertEqual(again.json()["password_text"], "The password was shown once; the portal does not keep it. "
+                                                        "To get a new one, reset it again.")
         self.assertEqual(AccountRequest.objects.get(id=request_id).result_state, "shown")
         self.assertNotContains(self.client.get("/access"), "Your new password is ready")
         connection.close()
@@ -317,10 +323,41 @@ class SelfResetPasswordTest(SelfResetMixin, PortalTransactionTestCase):
                                                               "confirm": "alice"}),
                            content_type="application/json").json()["id"]
         self.status(later, password="Admin-Pass-1", applied_seq=5)
+        state = self.client.get(f"/api/me/reset/{request_id}").json()
+        # the admins' change log keeps its own wording, with the later request
+        self.assertIn(later, admin.get(f"/api/admin/requests/{request_id}").json()["password_text"])
         response = self.client.post(f"/api/me/reset/{request_id}/password")
         self.assertEqual(response.json()["password"], "superseded")
         self.assertNotIn(SENTINEL, response.content.decode())
         self.assertFalse(path.exists())
+        for data in (state, response.json()):
+            self.assertEqual(data["password_text"], "A later change to your account replaced this password: it no "
+                                                    "longer works. Reset it again, or ask an admin.")
+            self.assertNotIn(later, json.dumps(data))  # the admin's request, which alice cannot open
+        self.assertEqual(self.client.get(f"/api/me/reset/{later}").status_code, 403)
+
+    def test_superseded_by_a_removal(self):
+        request_id = self.reset().json()["id"]
+        self.status(request_id, applied_seq=4)
+        admin = https_client()
+        self.sign_in("carol", client=admin)
+        later = admin.post("/api/admin/requests", json.dumps({"op": "remove", "username": "alice",
+                                                              "confirm": "alice"}),
+                           content_type="application/json").json()["id"]
+        self.status(later, op="remove", result=False, applied_seq=5)
+        response = self.client.post(f"/api/me/reset/{request_id}/password")
+        self.assertEqual(response.json()["password_text"], "The account was removed: this password no longer works.")
+
+    def test_rollback_not_finished_says_tell_an_admin(self):
+        request_id = self.reset().json()["id"]
+        self.status(request_id, "failed", stage="restart", error="xray-ha: exit 1", restored=False)
+        data = self.client.get(f"/api/me/reset/{request_id}").json()
+        self.assertEqual(data["text"], "Failed, and the rollback did not finish: the proxies may be down. Tell an "
+                                       "admin.")
+        self.assertNotIn("journalctl", json.dumps(data))
+        admin = https_client()
+        self.sign_in("carol", client=admin)
+        self.assertIn("journalctl", admin.get(f"/api/admin/requests/{request_id}").json()["text"])
 
     def test_expired(self):
         request_id = self.reset().json()["id"]

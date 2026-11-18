@@ -135,7 +135,10 @@ def access_page(request):
                                                   "password_placeholder": "<password>",
                                                   "reset": self_reset.page_context(username),
                                                   "reset_texts": {
-                                                      "failed": _("The reset could not be started."),
+                                                      "failed": _("The reset could not be started. Nothing "
+                                                                  "changed."),
+                                                      "state": _("The reset's state could not be read. Reload the "
+                                                                 "page to see it."),
                                                       "network": _("The portal could not be reached. Try again.")}})
 
 

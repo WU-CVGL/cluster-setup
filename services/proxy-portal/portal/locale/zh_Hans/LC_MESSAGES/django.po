@@ -383,6 +383,38 @@ msgid_plural ""
 "You can reset your password %(n)d times per hour. Try again later."
 msgstr[0] "每小时最多可以重置 %(n)d 次密码，请稍后再试。"
 
+msgid ""
+"Failed, and the rollback did not finish: the proxies may be down. Tell an "
+"admin."
+msgstr "失败，且回滚未完成：代理可能不可用。请告知管理员。"
+
+msgid "The account was removed: this password no longer works."
+msgstr "该账号已被删除：此密码已失效。"
+
+msgid ""
+"A later change to your account replaced this password: it no longer works. "
+"Reset it again, or ask an admin."
+msgstr "之后的一项变更替换了此密码，它已失效。请再次重置，或联系管理员。"
+
+msgid ""
+"The password was shown once; the portal does not keep it. To get a new one, "
+"reset it again."
+msgstr "该密码已显示过一次，门户不会保存它。如需新密码，请再次重置。"
+
+msgid ""
+"The one-time password expired: results are deleted after 10 minutes. To get "
+"a new one, reset it again."
+msgstr "一次性密码已过期：结果会在 10 分钟后删除。如需新密码，请再次重置。"
+
+msgid ""
+"No password was handed out for this reset. To get a new one, reset it again."
+msgstr "此次重置没有发放密码。如需新密码，请再次重置。"
+
+msgid ""
+"The one-time result could not be read and was deleted. To get a new one, "
+"reset it again."
+msgstr "无法读取一次性结果，已将其删除。如需新密码，请再次重置。"
+
 msgid "My access"
 msgstr "我的接入"
 
@@ -496,11 +528,13 @@ msgstr "忘记了或泄露了？重置即可：你的账号会得到一个新的
 msgid "Reset proxy password"
 msgstr "重置代理密码"
 
-msgid "Your new password is ready: open the reset to see it once."
-msgstr "新密码已就绪：打开重置窗口查看，仅显示一次。"
+msgid ""
+"Your new password is ready: select Reset proxy password to see it, once."
+msgstr "新密码已就绪：点击“重置代理密码”查看，仅显示一次。"
 
-msgid "A password reset is in progress: open the reset to follow it."
-msgstr "密码重置正在进行：打开重置窗口查看进度。"
+msgid ""
+"A password reset is in progress: select Reset proxy password to follow it."
+msgstr "密码重置正在进行：点击“重置代理密码”查看进度。"
 
 msgid "Resetting the password needs JavaScript."
 msgstr "重置密码需要启用 JavaScript。"
@@ -911,7 +945,7 @@ msgid "Not in the user list"
 msgstr "不在用户列表中"
 
 msgid "Active"
-msgstr "启用"
+msgstr "已启用"
 
 msgid "Inactive"
 msgstr "已停用"
@@ -1330,8 +1364,11 @@ msgstr "%(n)d 小时前"
 msgid "%(n)d days ago"
 msgstr "%(n)d 天前"
 
-msgid "The reset could not be started."
-msgstr "无法开始重置。"
+msgid "The reset could not be started. Nothing changed."
+msgstr "无法开始重置，没有任何变更。"
+
+msgid "The reset's state could not be read. Reload the page to see it."
+msgstr "无法读取重置的状态，请刷新页面查看。"
 
 msgid "The portal could not be reached. Try again."
 msgstr "无法连接门户，请重试。"
