@@ -344,15 +344,26 @@ class UsersPageTest(PortalTestCase):
                          .status_code, 403)
 
     def test_open_proxies_with_raw_auth_off(self):
-        """Every public proxy's own address needs no account then: the open ones are not named again."""
+        """Named for what stays so once the public proxies' own addresses require an account."""
         page = self.client.get("/admin/users")
-        self.assertContains(page, "The public proxies&#x27; own addresses need no account: proxy access off stops "
-                                  "only the auto-switching proxies and the private proxies")
-        self.assertNotContains(page, "never need an account")
-        self.assertNotContains(page, "us-west-racknerd-12tb, usca1-bwh-megaboxpro-2tb")
+        self.assertContains(page, "a public proxy&#x27;s own address still works for that user. us-west-racknerd-12tb, "
+                                  "usca1-bwh-megaboxpro-2tb need no account at their own addresses even when the "
+                                  "public proxies require one.")
         zh = self.client.get("/admin/users", HTTP_ACCEPT_LANGUAGE="zh-CN")
-        self.assertContains(zh, "公共代理自己的地址无需账号")
-        self.assertNotContains(zh, "始终无需账号")
+        self.assertContains(zh, "该用户仍可使用公共代理自己的地址。即使公共代理需要账号，us-west-racknerd-12tb、"
+                                "usca1-bwh-megaboxpro-2tb 自己的地址也无需账号。")
+
+        def one_open(data):
+            next(p for p in data["proxies"] if p["name"] == "usca1-bwh-megaboxpro-2tb")["open"] = False
+        self.write_status(one_open)
+        self.assertContains(self.client.get("/admin/users"), "us-west-racknerd-12tb needs no account at its own "
+                                                             "address even when the public proxies require one.")
+
+        def none_open(data):
+            for proxy in data["proxies"]:
+                proxy["open"] = False
+        self.write_status(none_open)
+        self.assertNotContains(self.client.get("/admin/users"), "even when the public proxies require one")
 
     def test_open_proxies_with_raw_auth_on(self):
         self.write_status(lambda d: d.update(raw_auth=True))
