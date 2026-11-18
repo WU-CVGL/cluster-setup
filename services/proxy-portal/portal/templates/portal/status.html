@@ -37,7 +37,7 @@
       <div class="service-icon" aria-hidden="true">⇄</div>
       <div class="service-main">
         <h3>{% if entry.name == 'ha-general' %}{% translate "Default proxy" %} <code>ha-general</code>{% else %}{% translate "Private entry" %} <code>ha-private</code>{% endif %}</h3>
-        <div class="desc">{% if entry.name == 'ha-general' %}{% translate "Over the public proxies, for every proxy account" %}{% else %}{% translate "Over every proxy, public and private, for admin accounts" %}{% endif %} · {% blocktranslate with passing=entry.proxies.passing|default_if_none:"—" configured=entry.proxies.configured|default_if_none:"—" %}{{ passing }} of {{ configured }} proxies passing{% endblocktranslate %}</div>
+        <div class="desc">{% if entry.name == 'ha-general' %}{% translate "Over the public proxies, for every proxy account" %}{% else %}{% translate "Over every proxy, public and private, for admin accounts" %}{% endif %} · <span data-live-entry-count="{{ entry.name }}">{% blocktranslate with passing=entry.proxies.passing|default_if_none:"—" configured=entry.proxies.configured|default_if_none:"—" %}{{ passing }} of {{ configured }} proxies passing{% endblocktranslate %}</span></div>
       </div>
       <div class="service-side">
         <span class="small muted">HTTP</span><span data-live-state="entries.{{ entry.name }}.protocols.http" data-live-age-of="entries.{{ entry.name }}.protocols.http.last_check_age_seconds">{% include "portal/state.html" with state=entry.protocols.http.state %}</span>
@@ -162,6 +162,12 @@ function render(){
   var level=aged?'unknown':data.headline.level,hero=document.querySelector('[data-live-hero]');
   if(hero){hero.className='status-hero '+level;hero.querySelector('#headline').textContent=aged?texts.headline_unknown:data.headline.text;
     hero.querySelector('.emblem').textContent=level==='ok'?'\u2713':level==='unknown'?'?':'!';}
+  document.querySelectorAll('[data-live-entry-count]').forEach(function(el){var name=el.getAttribute('data-live-entry-count');
+    var late=['http','socks'].some(function(p){var c=document.querySelector('[data-live-state="entries.'+name+'.protocols.'+p+'"]');
+      return c&&state(c)!==get('entries.'+name+'.protocols.'+p+'.state');});
+    var n=get('entries.'+name+'.proxies')||{},none=late||n.configured===null||n.configured===undefined;
+    function v(x){return none||x===null||x===undefined?'\u2014':String(x);}
+    el.textContent=texts.entry_count.replace('%(passing)s',v(n.passing)).replace('%(configured)s',v(n.configured));});
   var proxies=get('entries.ha-general.proxies')||{},none=aged||proxies.configured===null||proxies.configured===undefined;
   document.querySelectorAll('[data-live-count]').forEach(function(el){
     if(none){el.textContent='\u2014';return;}

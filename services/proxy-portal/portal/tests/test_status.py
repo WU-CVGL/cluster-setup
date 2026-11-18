@@ -118,9 +118,13 @@ class StatusTest(PortalTestCase):
         self.assertIn("fetch('/api/status'", html)
         for proxy in api["proxies"]:
             self.assertIn(f'data-live-state="proxy:{proxy["name"]}.protocols.http"', html)
+        for entry in api["entries"]:
+            self.assertIn(f'data-live-entry-count="{entry}"', html)
+        self.assertEqual(texts["entry_count"], "%(passing)s of %(configured)s proxies passing")
         zh = self.client.get("/", HTTP_ACCEPT_LANGUAGE="zh-CN").content.decode()
         texts = json.loads(re.search(r'<script id="status-texts" type="application/json">(.*?)</script>', zh).group(1))
         self.assertNotEqual(texts["passing"], "Passing")
+        self.assertEqual(texts["entry_count"], "%(configured)s 个代理中 %(passing)s 个正常")
 
     def test_history(self):
         days = self.client.get("/api/status").json()["history"]["days"]
