@@ -1098,56 +1098,17 @@ msgstr "服务健康"
 msgid "Proxy status"
 msgstr "代理服务状态"
 
-msgid ""
-"Whether requests get through the HA entries and each proxy, from probes "
-"every 30 seconds. The status of an entry is not whether your account may use "
-"it: see My access."
-msgstr ""
-"根据每 30 秒一次的探测，显示请求能否通过高可用入口和各个代理。入口的状态不代"
-"表你的账号可以使用它：请看“我的接入”。"
-
 msgid "Last check"
 msgstr "最近检查"
 
 msgid "Monitoring data is unavailable, so every status is unknown."
 msgstr "监控数据不可用，所有状态均为未知。"
 
-msgid ""
-"The default proxy ha-general sends each new connection to a passing public "
-"proxy; open connections stay on their proxy."
-msgstr ""
-"默认代理 ha-general 把每个新连接发往一个正常的公共代理；已建立的连接留在原代"
-"理上。"
-
 msgid "public proxies passing"
 msgstr "公共代理正常"
 
-msgid "Default proxy · HTTP"
-msgstr "默认代理 · HTTP"
-
-msgid "Default proxy · SOCKS5"
-msgstr "默认代理 · SOCKS5"
-
 msgid "24 h success"
 msgstr "24 小时成功率"
-
-msgid "coverage"
-msgstr "覆盖率"
-
-msgid "Pool of the default proxy"
-msgstr "默认代理的代理池"
-
-msgid "passing / configured"
-msgstr "正常 / 已配置"
-
-#, python-format
-msgid "Unknown when older than %(s)s s"
-msgstr "超过 %(s)s 秒即为未知"
-
-msgid ""
-"The HA entries keep one address and choose a passing proxy for each new "
-"connection."
-msgstr "高可用入口地址固定，为每个新连接选择一个正常的代理。"
 
 msgid "Over the public proxies, for every proxy account"
 msgstr "在公共代理之间切换，所有代理账号可用"
@@ -1159,21 +1120,8 @@ msgstr "在所有公共和私有代理之间切换，仅管理员账号可用"
 msgid "%(passing)s of %(configured)s proxies passing"
 msgstr "%(configured)s 个代理中 %(passing)s 个正常"
 
-msgid "Past 30 days"
-msgstr "过去 30 天"
-
-msgid ""
-"The default proxy's probe success rate per 24 hours, HTTP and SOCKS5, the "
-"worse of the two. A day with probe results for less than half of it is grey."
-msgstr ""
-"默认代理每 24 小时的探测成功率，取 HTTP 和 SOCKS5 中较差的一个。探测结果不足"
-"半天的日子显示为灰色。"
-
 msgid "no probe results"
 msgstr "没有探测结果"
-
-msgid "success"
-msgstr "成功率"
 
 msgid "Degraded"
 msgstr "部分异常"
@@ -1190,21 +1138,8 @@ msgstr "现在"
 msgid "Proxies"
 msgstr "代理"
 
-msgid ""
-"Each proxy probed through its own entry. A proxy's own entry has no "
-"failover: when it fails, use the default proxy."
-msgstr ""
-"每个代理都通过它自己的入口探测。代理自己的入口没有故障切换：代理故障时请使用"
-"默认代理。"
-
 msgid "Proxy"
 msgstr "代理"
-
-msgid "Duration"
-msgstr "耗时"
-
-msgid "Coverage"
-msgstr "覆盖率"
 
 msgid "Public proxies"
 msgstr "公共代理"
@@ -1214,12 +1149,6 @@ msgstr "私有代理"
 
 msgid "No proxy results"
 msgstr "没有代理结果"
-
-msgid "Duration and 24 h success: HTTP / SOCKS5."
-msgstr "耗时和 24 小时成功率：HTTP / SOCKS5。"
-
-msgid "Duration, coverage and last check: on a wider screen."
-msgstr "耗时、覆盖率和最近检查：请在更宽的屏幕上查看。"
 
 msgid "Notices from the admins about outages and maintenance."
 msgstr "管理员发布的故障和维护通知。"
@@ -1246,14 +1175,6 @@ msgstr ""
 
 msgid "Failover"
 msgstr "故障切换"
-
-msgid ""
-"An HA entry chooses a passing proxy for each new connection, within about 15 "
-"seconds of a proxy failing. Open downloads, SSH sessions and WebSockets stay "
-"on their proxy and break with it; the client has to retry."
-msgstr ""
-"代理故障后约 15 秒内，高可用入口会为新连接选择正常的代理。已建立的下载、SSH "
-"会话和 WebSocket 留在原代理上，会随之中断，需要客户端重试。"
 
 msgid ""
 "No probe result in the last 90 seconds. An older result is never shown in "
@@ -1390,3 +1311,54 @@ msgstr "这个 Determined 账号已停用。"
 
 msgid "Wrong username or password."
 msgstr "用户名或密码错误。"
+
+msgid "Whether requests get through the high-availability proxies and each proxy, from probes every 30 seconds. The status of a proxy is not whether your account may use it: see My access."
+msgstr "根据每 30 秒一次的探测，显示请求能否通过高可用代理和各个代理。代理的状态不代表你的账号可以使用它：请看“我的接入”。"
+
+msgid "ha-general sends each new connection to a passing public proxy; open connections stay on their proxy."
+msgstr "ha-general 把每个新连接发往一个正常的公共代理；已建立的连接留在原代理上。"
+
+msgid "Auto-switching High-availability Proxies"
+msgstr "自动切换高可用代理"
+
+msgid "One address each; every new connection goes to a passing proxy."
+msgstr "每个地址固定不变；每个新连接都发往一个正常的代理。"
+
+msgid "Status bars"
+msgstr "状态条"
+
+msgid "96 hours"
+msgstr "96 小时"
+
+msgid "96 hours ago"
+msgstr "96 小时前"
+
+msgid "Each proxy probed through its own entry. A proxy's own entry has no failover: when it fails, use ha-general."
+msgstr "每个代理都通过它自己的入口探测。代理自己的入口没有故障切换：代理故障时请使用 ha-general。"
+
+msgid "Ports, latency and 24 h success: HTTP / SOCKS5."
+msgstr "端口、延迟和 24 小时成功率：HTTP / SOCKS5。"
+
+msgid "Latency, 24 h success and last check: on a wider screen."
+msgstr "延迟、24 小时成功率和最近检查：请在更宽的屏幕上查看。"
+
+msgid "A high-availability proxy chooses a passing proxy for each new connection, within about 15 seconds of a proxy failing. Open downloads, SSH sessions and WebSockets stay on their proxy and break with it; the client has to retry."
+msgstr "代理故障后约 15 秒内，高可用代理会为新连接选择正常的代理。已建立的下载、SSH 会话和 WebSocket 留在原代理上，会随之中断，需要客户端重试。"
+
+msgid "Ports"
+msgstr "端口"
+
+msgid "Latency"
+msgstr "延迟"
+
+#, python-format
+msgid "%(name)s, last 96 hours"
+msgstr "%(name)s，近 96 小时"
+
+#, python-format
+msgid "%(name)s, last 30 days"
+msgstr "%(name)s，近 30 天"
+
+#, python-format
+msgid "success %(rate)s, coverage %(coverage)s"
+msgstr "成功率 %(rate)s，覆盖率 %(coverage)s"

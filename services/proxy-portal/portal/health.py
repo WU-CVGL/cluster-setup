@@ -1,5 +1,5 @@
 """
-The public status: the HA entries, the proxies and the 30-day history, from the fixed queries of queries.py.
+The public status: the HA entries and the proxies, each with its status bars, from the fixed queries of queries.py.
 
 Results are cached for a few seconds and aged on every view: a probe result older than 90 s, counting the time it
 spent in the cache, is unknown, as is everything Prometheus does not answer. Unknown is never shown as passing.
@@ -19,11 +19,11 @@ log = logging.getLogger("portal.status")
 PROTOCOLS = ("http", "socks")
 HA_ENTRIES = ("ha-general", "ha-private")
 
-# History thresholds: a day needs probe results for at least half of it, or it is grey; then it is green from
-# 99 % probe success, amber from 90 %, red below.
-DAY_OK = 0.99
-DAY_DEGRADED = 0.90
-DAY_MIN_COVERAGE = 0.5
+# Status bar thresholds: a bucket needs probe results for at least half of it, or it is grey; then it is green from
+# 99 % probe success, amber from 90 %, red below, on the worse of HTTP and SOCKS5.
+BAR_OK = 0.99
+BAR_DEGRADED = 0.90
+BAR_MIN_COVERAGE = 0.5
 
 
 def _run_instant(expr, at):
@@ -116,10 +116,16 @@ def _seconds(value):
     return None if value is None else round(value, 3)
 
 
-def entry_view(data, entry, now):
+def _no_ports():
+    return {protocol: None for protocol in PROTOCOLS}
+
+
+def entry_view(data, entry, status, now):
     ha = data["ha"][entry]
     last = ha["last_check"] or {}
-    view = {"name": entry, "access": "public" if entry == "ha-general" else "private", "protocols": {}}
+    view = {"name": entry, "access": "public" if entry == "ha-general" else "private",
+            "ports": status.entry_ports.get(entry) or _no_ports() if status.available else _no_ports(),
+            "protocols": {}}
     for protocol in PROTOCOLS:
         age = last.get(protocol)
         current = state(ha[protocol], age, data["time"], now)
@@ -131,6 +137,8 @@ def entry_view(data, entry, now):
             "success_rate_24h": _ratio((ha["rate_24h"] or {}).get(protocol)),
             "coverage_24h": _ratio((ha["coverage_24h"] or {}).get(protocol)),
         }
+    ages = [p["last_check_age_seconds"] for p in view["protocols"].values() if p["last_check_age_seconds"] is not None]
+    view["last_check_age_seconds"] = max(ages) if ages else None
     passing, configured = ha["proxies_passing"], ha["proxies_configured"]
     view["proxies"] = {"passing": None if passing is None or configured is None else int(passing),
                        "configured": None if configured is None else int(configured)}
@@ -139,7 +147,8 @@ def entry_view(data, entry, now):
 
 def proxies_view(data, status, now):
     """The proxies, public ones first: from the probes, and from the applier's status for proxies without results."""
-    access = {proxy.name: proxy.public for proxy in status.proxies} if status.available else {}
+    known = {proxy.name: proxy for proxy in status.proxies} if status.available else {}
+    access = {name: proxy.public for name, proxy in known.items()}
     names = set(data["proxies"]) | set(access)
     rows = []
     for name in names:
@@ -148,6 +157,7 @@ def proxies_view(data, status, now):
         public = access.get(name, labels.get("access") == "public")
         age = proxy.get("last_check")
         row = {"name": name, "access": "public" if public else "private", "pool": labels.get("pool"),
+               "ports": dict(known[name].ports) if name in known else _no_ports(),
                "last_check_age_seconds": None if age is None else round(age + now - data["time"]),
                "coverage_24h": _ratio(proxy.get("coverage_24h")), "protocols": {}}
         for protocol in PROTOCOLS:
@@ -162,57 +172,80 @@ def proxies_view(data, status, now):
     return rows
 
 
-def day_state(rate, coverage):
-    if rate is None or coverage is None or coverage < DAY_MIN_COVERAGE:
+def bucket_state(rate, coverage):
+    if rate is None or coverage is None or coverage < BAR_MIN_COVERAGE:
         return "unknown"
-    if rate < DAY_DEGRADED:
+    if rate < BAR_DEGRADED:
         return "bad"
-    if rate < DAY_OK:
+    if rate < BAR_OK:
         return "degraded"
     return "ok"
 
 
-def collect_history(end):
-    """30 values a day apart, the last at end: ha-general's 24-hour probe success rate and coverage."""
-    start = end - (queries.HISTORY_DAYS - 1) * queries.DAY
+def bars_end(now):
+    """The end of the last bucket: the last full hour, for both bucket sizes."""
+    return int(now // 3600 * 3600)
+
+
+def _round(value):
+    return None if value is None else round(value, 5)
+
+
+def collect_bars(window, end):
+    """
+    Every entry's buckets of one size, the last ending at end: {"rows": {entry: {"state", "success_rate",
+    "coverage"}}}, a list of one value per bucket each, oldest first; None when Prometheus failed. A bucket's rate is
+    the worse of HTTP and SOCKS5 and its coverage the lower one; a protocol without results covers nothing.
+    """
+    _, step, count = queries.BAR_WINDOWS[window]
+    start = end - (count - 1) * step
     try:
-        rates = prom.series(queries.HISTORY["rate"], start, end, queries.DAY)
-        coverages = prom.series(queries.HISTORY["coverage"], start, end, queries.DAY)
+        rates = prom.series(queries.BARS[window]["rate"], start, end, step)
+        coverages = prom.series(queries.BARS[window]["coverage"], start, end, step)
     except prom.PrometheusError as e:
-        log.warning("Prometheus history query failed: %s", e)
+        log.warning("Prometheus status bars query failed: %s", e)
         return None
-    by_protocol = {"rate": {}, "coverage": {}}
+    found = {"rate": {}, "coverage": {}}
     for key, rows in (("rate", rates), ("coverage", coverages)):
         for labels, points in rows:
-            by_protocol[key][labels.get("protocol", "")] = points
-    days = []
-    for i in range(queries.HISTORY_DAYS):
-        ts = int(start + i * queries.DAY)
-        per = {}
-        for protocol in PROTOCOLS:
-            per[protocol] = {"success_rate": _ratio(by_protocol["rate"].get(protocol, {}).get(ts)),
-                             "coverage": _ratio(by_protocol["coverage"].get(protocol, {}).get(ts))}
-        known = [p["success_rate"] for p in per.values() if p["success_rate"] is not None]
-        rate = min(known) if known else None
-        # a protocol without results covers nothing of that day
-        coverage = min((p["coverage"] or 0.0) for p in per.values())
-        days.append({"end": ts, "success_rate": rate, "coverage": coverage if known else None,
-                     "state": day_state(rate, coverage if known else None), "protocols": per})
-    return days
+            found[key][(labels.get("entry", ""), labels.get("protocol", ""))] = points
+    names = {name for values in found.values() for name, _ in values}
+    names.discard("")
+    result = {}
+    for name in names:
+        row = {"state": [], "success_rate": [], "coverage": []}
+        for i in range(count):
+            ts = int(start + i * step)
+            per = [(_ratio(found["rate"].get((name, p), {}).get(ts)),
+                    _ratio(found["coverage"].get((name, p), {}).get(ts))) for p in PROTOCOLS]
+            known = [rate for rate, _ in per if rate is not None]
+            rate = min(known) if known else None
+            coverage = min(c or 0.0 for _, c in per) if known else None
+            row["state"].append(bucket_state(rate, coverage))
+            row["success_rate"].append(_round(rate))
+            row["coverage"].append(_round(coverage))
+        result[name] = row
+    return {"rows": result}
 
 
-def cached_history(now):
-    end = int(now // 60 * 60)
-    days = cache.get("history")
-    if days is None:
-        days = collect_history(end)
-        cache.set("history", days, settings.HISTORY_CACHE_SECONDS if days is not None else 5)
-    if days is None:
-        start = end - (queries.HISTORY_DAYS - 1) * queries.DAY
-        days = [{"end": int(start + i * queries.DAY), "success_rate": None, "coverage": None, "state": "unknown",
-                 "protocols": {p: {"success_rate": None, "coverage": None} for p in PROTOCOLS}}
-                for i in range(queries.HISTORY_DAYS)]
-    return days
+def cached_bars(window, now):
+    end = bars_end(now)
+    key = f"bars:{window}:{end}"
+    found = cache.get(key)
+    if found is None:
+        rows = collect_bars(window, end)
+        found = rows if rows is not None else {"rows": None}
+        cache.set(key, found, settings.BARS_CACHE_SECONDS if rows is not None else 5)
+    _, step, count = queries.BAR_WINDOWS[window]
+    return {"end": end, "step_seconds": step, "count": count, "rows": found["rows"] or {}}
+
+
+def bars_view(window, now, names):
+    """The bars of one size for the rows shown, every row with its buckets: grey where there is no data."""
+    found = cached_bars(window, now)
+    empty = {"state": ["unknown"] * found["count"], "success_rate": [None] * found["count"],
+             "coverage": [None] * found["count"]}
+    return dict(found, rows={name: found["rows"].get(name, empty) for name in names})
 
 
 def build(now=None):
@@ -220,7 +253,9 @@ def build(now=None):
     now = time.time() if now is None else now
     data = cached_collect(now)
     status = proxy_status.load()
-    entries = {entry: entry_view(data, entry, now) for entry in HA_ENTRIES}
+    entries = {entry: entry_view(data, entry, status, now) for entry in HA_ENTRIES}
+    proxies = proxies_view(data, status, now)
+    names = list(entries) + [proxy["name"] for proxy in proxies]
     general = entries["ha-general"]
     level, text = headline(general["protocols"]["http"]["state"], general["protocols"]["socks"]["state"],
                            general["proxies"]["passing"], general["proxies"]["configured"])
@@ -233,6 +268,6 @@ def build(now=None):
         "last_check_age_seconds": max(ages) if ages else None,
         "stale_after_seconds": settings.STALE_SECONDS,
         "entries": entries,
-        "proxies": proxies_view(data, status, now),
-        "history": {"entry": "ha-general", "days": cached_history(now)},
+        "proxies": proxies,
+        "bars": {window: bars_view(window, now, names) for window in queries.BAR_WINDOWS},
     }

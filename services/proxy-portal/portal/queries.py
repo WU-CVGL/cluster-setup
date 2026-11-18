@@ -49,14 +49,24 @@ STATUS = {
     },
 }
 
-# The 30-day history: the dashboard's 24-hour probe success rate and coverage of ha-general, evaluated once a day
-# (a range query with a one-day step), so each value covers the 24 hours before its time.
-HISTORY = {
-    "rate": STATUS["ha-general"]["rate_24h"],
-    "coverage": STATUS["ha-general"]["coverage_24h"],
-}
-HISTORY_DAYS = 30
-DAY = 86400
+# The status bars: every probed entry's (the HA entries' and each proxy's) probe success rate and coverage per
+# bucket, by protocol, from range queries whose step is the bucket, so each value covers the bucket before its time:
+# 96 one-hour buckets, or 30 one-day buckets. One query per value and bucket size covers every row.
+BAR_WINDOWS = {"hours": ("1h", 3600, 96), "days": ("24h", 86400, 30)}
+PROBE_INTERVAL = 30  # seconds between two probes of a target, as in Prometheus
+
+
+def _bars(width, seconds):
+    sel = 'job="proxy-probe"'
+    expected = seconds // PROBE_INTERVAL
+    return {
+        "rate": f"max by (entry, protocol) (avg_over_time(probe_success{{{sel}}}[{width}]))",
+        "coverage": (f"min by (entry, protocol) (clamp_max(count_over_time(probe_success{{{sel}}}[{width}]) / "
+                     f"{expected}, 1))"),
+    }
+
+
+BARS = {window: _bars(width, seconds) for window, (width, seconds, _) in BAR_WINDOWS.items()}
 
 
 def _user_totals(direction, window):
@@ -86,7 +96,7 @@ def all_queries():
             found.add(value)
 
     walk(STATUS)
-    walk(HISTORY)
+    walk(BARS)
     walk(USAGE_TOTALS)
     walk(USAGE_TREND)
     return frozenset(found)

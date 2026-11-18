@@ -1,7 +1,8 @@
 #!/usr/bin/env bash
 # The portal behind nginx with a self-signed stand-in certificate, against the stub master and Prometheus:
 # checks the redirect, headers and sign-in, takes screenshots with e2e/shots.cjs, checks the Status page's refresh
-# with e2e/status-refresh.cjs and the self-service password reset with e2e/self-reset.cjs, also without Prometheus,
+# with e2e/status-refresh.cjs, its status bars with e2e/status-bars.cjs and the self-service password reset with
+# e2e/self-reset.cjs, also without Prometheus,
 # then removes everything.
 #   e2e/run.sh <screenshot folder>     (needs Docker, openssl, and Playwright for Node in NODE_PATH)
 set -euo pipefail
@@ -52,6 +53,7 @@ echo "incidents:     $(r https://proxy.cvgl.lab/api/status | python3 -c 'import 
 sleep 3   # Chromium aborts with ERR_NETWORK_CHANGED while Docker is still setting up interfaces
 RESOLVE="proxy.cvgl.lab 127.0.0.1" node shots.cjs https://proxy.cvgl.lab "$out" carol pw-carol
 RESOLVE="proxy.cvgl.lab 127.0.0.1" node status-refresh.cjs https://proxy.cvgl.lab
+RESOLVE="proxy.cvgl.lab 127.0.0.1" node status-bars.cjs https://proxy.cvgl.lab "$out"
 RESOLVE="proxy.cvgl.lab 127.0.0.1" node self-reset.cjs https://proxy.cvgl.lab "$out"
 
 stats() { compose exec -T proxy-portal python -c "import urllib.request as u; print(u.urlopen('$1/stub/stats').read().decode())"; }

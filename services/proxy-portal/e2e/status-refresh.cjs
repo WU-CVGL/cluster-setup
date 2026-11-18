@@ -35,20 +35,27 @@ const { chromium } = require('playwright');
     for (const p of ['http', 'socks']) {
       Object.assign(data.entries['ha-general'].protocols[p], { state: 'passing', last_check_age_seconds: 11 });
     }
+    data.entries['ha-general'].last_check_age_seconds = 11;
     for (const proxy of data.proxies) if (proxy.last_check_age_seconds !== null) proxy.last_check_age_seconds = 11;
     data.last_check_age_seconds = 11;
     return route.fulfill({ json: data });
   };
   // selectors that the page had before it refreshed itself too
+  // the HA rows and the first proxy row of the tables
   const read = (on = page) => on.evaluate(() => {
     const text = el => (el ? el.textContent.replace(/\s+/g, ' ').trim() : null);
-    const cards = document.querySelectorAll('.summary-grid .card .m-value');
-    return { http: text(cards[0]), socks: text(cards[1]), last: text(document.querySelector('.hero-head .small.muted')),
+    const general = document.querySelector('tr.row-main[data-row="ha-general"]');
+    const proxy = document.querySelector('section[aria-labelledby="proxies-title"] tr.row-main');
+    return { http: text(general.querySelector('[data-live-state="entries.ha-general.protocols.http"]')),
+      socks: text(general.querySelector('[data-live-state="entries.ha-general.protocols.socks"]')),
+      last: text(document.querySelector('.hero-head .small.muted')),
       headline: text(document.querySelector('#headline')), hero: document.querySelector('.status-hero').className,
-      count: text(document.querySelector('.status-number')), pool: text(cards[2]),
+      count: text(document.querySelector('.status-number')),
+      haDuration: text(general.querySelector('td.mono.wide')), haLast: text(general.querySelector('[data-live-age]')),
       notes: Array.from(document.querySelectorAll('.status-hero p')).filter(p => p.offsetParent !== null).map(text),
-      entries: Array.from(document.querySelectorAll('.service .desc')).map(el => text(el).split(' · ').pop()),
-      duration: text(document.querySelector('.table tbody tr:nth-child(2) td.mono.wide')) };
+      entries: Array.from(document.querySelectorAll('[data-live-entry-count]')).map(text),
+      duration: text(proxy.querySelector('td.mono.wide')),
+      cards: document.querySelectorAll('.summary-grid, .metric').length };
   });
   const results = [];
   const check = (label, ok, got) => { results.push(`${ok ? 'ok  ' : 'FAIL'} ${label}: ${JSON.stringify(got)}`); if (!ok) problems.push(label); };
@@ -61,8 +68,9 @@ const { chromium } = require('playwright');
   };
   const fresh = (d, monitoring) => {  // an answer from /api/status, fresh: both entries passing, results 11 s old
     const data = JSON.parse(JSON.stringify(d));
-    for (const entry of Object.values(data.entries)) for (const p of ['http', 'socks']) {
-      Object.assign(entry.protocols[p], { state: 'passing', last_check_age_seconds: 11 });
+    for (const entry of Object.values(data.entries)) {
+      for (const p of ['http', 'socks']) Object.assign(entry.protocols[p], { state: 'passing', last_check_age_seconds: 11 });
+      entry.last_check_age_seconds = 11;
     }
     for (const proxy of data.proxies) if (proxy.last_check_age_seconds !== null) proxy.last_check_age_seconds = 11;
     data.last_check_age_seconds = 11;
@@ -83,7 +91,7 @@ const { chromium } = require('playwright');
       s.notes.length === 1 && s.notes[0].startsWith('Monitoring data is unavailable') && s.http === 'Unknown', [down.monitoring_available, s]);
     s = await advance(30);
     check('a poll with monitoring data: the note gone, Passing', answers === 1 && s.notes.length === 1 &&
-      !s.notes[0].startsWith('Monitoring data is unavailable') && s.http === 'Passing' && s.count === '4 / 4', [answers, s]);
+      !s.notes[0].startsWith('Monitoring data is unavailable') && s.http === 'Passing' && /s ago$/.test(s.haLast) && s.count === '4 / 4', [answers, s]);
     await browser.close();
     return report();
   }
@@ -93,7 +101,8 @@ const { chromium } = require('playwright');
   await page.route('**/api/status', stub);
   let s = await read();
   const loaded = s.entries;
-  check('loaded: Passing, as rendered', s.http === 'Passing' && /s ago$/.test(s.last) &&
+  check('loaded: Passing, as rendered, without metric cards', s.http === 'Passing' && /s ago$/.test(s.last) &&
+    s.cards === 0 && /^\d+ ms \/ \d+ ms$/.test(s.haDuration) && /s ago$/.test(s.haLast) &&
     loaded.length === 2 && loaded.every(e => /^\d+ of \d+ proxies passing$/.test(e)), s);
   s = await advance(30);
   check('30 s later: one poll, its result 11 s old', polls === 1 && s.http === 'Passing' && /: 1[1-4] s ago$/.test(s.last), [polls, s]);
@@ -107,7 +116,7 @@ const { chromium } = require('playwright');
   s = await advance(20);
   check('older than 90 s: Unknown, no duration, headline unknown', s.http === 'Unknown' && s.socks === 'Unknown' &&
     s.hero === 'status-hero unknown' && s.headline.startsWith('Status unknown') && s.count === '—' &&
-    s.duration === '— / —' && /: 9[5-9] s ago$/.test(s.last) &&
+    s.duration === '— / —' && s.haDuration === '— / —' && /: 9[5-9] s ago$/.test(s.last) &&
     s.entries.every(e => e === '— of — proxies passing'), [polls, s]);
   mode = 'fresh';
   await page.evaluate(() => document.dispatchEvent(new Event('visibilitychange')));
@@ -154,12 +163,12 @@ const { chromium } = require('playwright');
   await unknownPage.waitForTimeout(1500);
   s = await read(unknownPage);
   check('Unknown from the start: the counts still shown', s.http === 'Unknown' && s.hero === 'status-hero unknown' &&
-    s.count === '3 / 4' && s.pool === '3 / 4' &&
+    s.count === '3 / 4' &&
     JSON.stringify(s.entries) === JSON.stringify(['3 of 4 proxies passing', '7 of 9 proxies passing']), s);
   s = await advance(60, unknownPage);
   check('Unknown from the start, about 60 s: the counts still shown', s.count === '3 / 4', s);
   s = await advance(40, unknownPage);
-  check('Unknown from the start, polls failing, older than 90 s: no counts', s.count === '—' && s.pool === '—' &&
+  check('Unknown from the start, polls failing, older than 90 s: no counts', s.count === '—' &&
     s.entries.every(e => e === '— of — proxies passing'), s);
 
   // the same entry line in Chinese, once the results are older than 90 s
@@ -168,8 +177,8 @@ const { chromium } = require('playwright');
   zhPage.on('pageerror', e => problems.push(e.message));
   await zhPage.goto(base + '/', { waitUntil: 'networkidle' });
   await zhPage.route('**/api/status', route => route.fulfill({ status: 503, body: 'unavailable' }));
-  const zhEntries = () => zhPage.evaluate(() => Array.from(document.querySelectorAll('.service .desc'))
-    .map(el => el.textContent.replace(/\s+/g, ' ').trim().split(' · ').pop()));
+  const zhEntries = () => zhPage.evaluate(() => Array.from(document.querySelectorAll('[data-live-entry-count]'))
+    .map(el => el.textContent.replace(/\s+/g, ' ').trim()));
   const zhLoaded = await zhEntries();
   await zhPage.evaluate(ms => window.__advance(ms), 100000);
   await zhPage.waitForTimeout(1500);

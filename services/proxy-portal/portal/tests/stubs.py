@@ -186,6 +186,13 @@ PRIVATE_PROXIES = ["jpty1-bwh-2tb", "miyaip-uk-01_relay_jpty1-bwh-2tb", "miyaip-
                  "miyaip-jp-01_relay_usca5-bwh-sla-2tb", "miyaip-jp-01_relay_jpty1-bwh-2tb"]
 FAILING_PROXY = "us-west-racknerd-12tb"
 STALE_PROXY = "miyaip-jp-01_relay_jpty1-bwh-2tb"
+BAR_LABELS = [{"entry": name, "protocol": protocol} for name in ["ha-general", "ha-private"] + PUBLIC_PROXIES +
+              PRIVATE_PROXIES for protocol in ("http", "socks")]
+
+
+def count(params):
+    """The number of points of a range query."""
+    return round((float(params["end"]) - float(params["start"])) / int(params["step"])) + 1
 
 
 def _range(params, fn, labels_list):
@@ -205,8 +212,9 @@ def _range(params, fn, labels_list):
 
 
 def demo_answers():
-    """One public proxy failing (failover working), one private proxy without recent results, a 30-day history with
-    a day without data, a day with too little data and two bad days, and usage for alice and carol."""
+    """One public proxy failing (failover working), one private proxy without recent results, status bars for every
+    entry with a bucket without data, a bucket with too little data, two bad buckets and a degraded one, and usage for
+    alice and carol."""
     s = queries.STATUS
     a = {}
     for pool, configured, passing in (("ha-general", 4, 3), ("ha-private", 9, 7)):
@@ -234,35 +242,40 @@ def demo_answers():
     a[proxies["rate_24h_socks"]] = vector(*[({"entry": n}, 0.39 if n == FAILING_PROXY else 0.995) for n, _, _ in rows])
     a[proxies["coverage_24h"]] = vector(*[({"entry": n}, 0.2 if n == STALE_PROXY else 1) for n, _, _ in rows])
 
-    def day_index(params, t):
-        return round((t - float(params["start"])) / queries.DAY)
+    def bucket_index(params, t):
+        return round((t - float(params["start"])) / int(params["step"]))
 
-    def history_rate(params):
+    def bars_rate(params):
         def fn(labels, t):
-            i = day_index(params, t)
+            i = bucket_index(params, t)
             if i == 14:
-                return None                   # no samples that day
+                return None                   # no samples in that bucket
             if i == 20:
                 return 1.0                    # few samples, all passing
             if i in (8, 9):
                 return 0.82 if labels["protocol"] == "http" else 0.9
             if i == 25:
                 return 0.955
+            if labels["entry"] == FAILING_PROXY and i >= count(params) - 3:
+                return 0.4 if labels["protocol"] == "http" else 0.38
             return 0.9995
-        return _range(params, fn, [{"protocol": "http"}, {"protocol": "socks"}])
+        return _range(params, fn, BAR_LABELS)
 
-    def history_coverage(params):
+    def bars_coverage(params):
         def fn(labels, t):
-            i = day_index(params, t)
+            i = bucket_index(params, t)
             if i == 14:
                 return None
             if i == 20:
                 return 0.18
+            if labels["entry"] == STALE_PROXY and i == count(params) - 1:
+                return 0.2
             return 0.999
-        return _range(params, fn, [{"protocol": "http"}, {"protocol": "socks"}])
+        return _range(params, fn, BAR_LABELS)
 
-    a[("range", queries.HISTORY["rate"])] = history_rate
-    a[("range", queries.HISTORY["coverage"])] = history_coverage
+    for window in queries.BARS:
+        a[("range", queries.BARS[window]["rate"])] = bars_rate
+        a[("range", queries.BARS[window]["coverage"])] = bars_coverage
 
     users = {"alice": (3.1e9, 0.42e9), "carol": (12.4e9, 1.1e9), "bob": (0.2e9, 0.01e9)}
     scale = {"24h": 0.06, "7d": 0.3, "30d": 1.0}
