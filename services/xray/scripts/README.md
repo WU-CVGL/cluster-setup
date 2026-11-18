@@ -208,14 +208,21 @@ python3 xray/scripts/proxy_accounts.py render
   - `xray/*/config/config.json`：私有代理的入站始终要求启用的管理员账号、`svc-ha` 和 `svc-monitor`；公共代理在
     `raw-auth on` 时要求所有启用的账号（含 `svc-ha`），`off` 时带账号的入站恢复为无认证，其他文件不动。
     修改用的是 `XrayConfigHandler.set_inbound_users`，`build_xray_config(..., inbound_users=...)` 也用它；
-    不传 `inbound_users` 时 HTTP/SOCKS5 入站不要求认证（SOCKS5 `auth: noauth`）
+    不传 `inbound_users` 时 HTTP/SOCKS5 入站不要求认证（SOCKS5 `auth: noauth`）。账号只写在 `users` 中，
+    旧字段名 `accounts` 总是删除：两者同时存在时 Xray 用 `accounts`，留下的 `accounts: []` 会关闭 HTTP 认证
+- 账号写在入站的 `users` 中，要求代理运行 `docker-compose.yml` 中固定的镜像（与 `xray-ha` 相同的版本和 digest，
+  `create_xray_service.py` 也写这个镜像）：旧版本（如 1.8.24）不读 HTTP 的 `users`，入站不认证。容器保留创建时的镜像，
+  换镜像后用 `docker compose up -d` 重新创建代理，`docker compose restart` 不会换
 - 缺少 `svc-monitor` 或 `svc-ha`、某个需要账号的代理配置没有 HTTP/SOCKS5 入站，或 HA 示例配置没有通过上面的检查时，
   `render` 报错，不写任何文件
 - 之后重启 `xray-ha` 和 `render` 写入了配置的代理（管理员变化时是私有代理，`raw-auth on` 时连同所有代理一起），
-  并 `docker compose kill -s SIGHUP blackbox-exporter`
+  并 `docker compose kill -s SIGHUP blackbox-exporter`；部署私有代理和 `raw-auth on` 之前，在每个相关代理上确认
+  不带账号和带已撤销密码的请求得到 `407`（[docs/00](../../../docs/00_Network_Proxy.md#accounts-on-the-proxies)）
 
 `create_xray_service.py --private` 新建的代理在创建时就要求管理员和服务账号；`raw-auth on` 时，`--public` 新建的代理
 在创建时就要求所有账号（配置文件权限 `0600`）；账号文件中没有所需账号时拒绝创建。
+`create_xray_service.py` 从读取账号到写完新代理的文件（含 `xray/public-proxies.txt`）都持有 `proxy-accounts/.lock`，
+同时进行的账号修改和 `render` 等它写完，之后的 `render` 也覆盖新代理。
 
 ## 测试
 
