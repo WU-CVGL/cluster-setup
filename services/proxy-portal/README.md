@@ -56,6 +56,15 @@ On the supplementary services VM, with the [applier](applier/README.md#install) 
 
     The image is built from a digest-pinned Python base with hash-pinned requirements, and runs as uid and gid 3089, the owner the applier requires of the spool's requests. On start it applies its database migrations.
 
+    Before the build, pull the pinned base with `docker pull`: the build looks it up without the Docker daemon's proxy and fails while Docker Hub is unreachable, whereas `docker pull` uses that proxy. When downloads from PyPI are unreliable, pass a proxy to the build; any public proxy works, for example:
+
+    ```sh
+    docker pull "$(sed -n 's/^FROM \([^ ]*\).*/\1/p' proxy-portal/Dockerfile | head -1)"
+    docker compose build \
+      --build-arg HTTP_PROXY=http://192.168.233.8:58889 --build-arg HTTPS_PROXY=http://192.168.233.8:58889 \
+      --build-arg NO_PROXY=localhost,127.0.0.1 proxy-portal
+    ```
+
 3. The nginx virtual host `proxy.cvgl.lab` is in [`nginx/build/nginx.conf`](../nginx/build/nginx.conf), with the lab certificate (its `*.cvgl.lab` name covers it) and a redirect from HTTP. It resolves the portal through Docker's DNS on each request, so nginx starts and serves its other hosts while the portal is down. Rebuild and recreate nginx, which also joins it to the `proxy_portal` network: `docker compose up -d --build nginx`.
 
 4. Add the name `proxy.cvgl.lab` where the other `*.cvgl.lab` names are: `192.168.233.8` in the nodes' and the login node's hosts files ([reference](../system-configurations/etc/hosts)), `10.0.1.68` on campus PCs ([docs/04](../../docs/04_Setup_Supplementary_Services.md#configure-nginx)).
