@@ -446,6 +446,10 @@ class RenderTest(_Base):
         for rel in (pa.HA_CONFIG, pa.BLACKBOX_CONFIG):
             self.assertEqual(mode(self.base / rel), 0o600)
         self.assertEqual(run(self.base, "render")[1], "")  # nothing changed
+        # A full apply restarts what render_files lists: the proxy too, though render leaves it as it is
+        accounts = pa.Accounts(self.base)
+        self.assertIn((self.raw, self.raw_text), pa.render_files(accounts))
+        self.assertEqual(pa.render_outputs(accounts), [])
 
     def test_admin_changes_reach_ha_private_and_the_private_proxies(self):
         self.add("alice", "bob", "svc-monitor", "svc-ha")

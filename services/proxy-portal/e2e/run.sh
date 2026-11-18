@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 # The portal behind nginx with a self-signed stand-in certificate, against the stub master and Prometheus:
-# checks the redirect, headers and sign-in, takes screenshots with e2e/shots.cjs, then removes everything.
+# checks the redirect, headers and sign-in, takes screenshots with e2e/shots.cjs, checks the Status page's refresh
+# with e2e/status-refresh.cjs, also without Prometheus, then removes everything.
 #   e2e/run.sh <screenshot folder>     (needs Docker, openssl, and Playwright for Node in NODE_PATH)
 set -euo pipefail
 unset http_proxy https_proxy HTTP_PROXY HTTPS_PROXY all_proxy ALL_PROXY   # everything here is local
@@ -61,3 +62,11 @@ import urllib.request as u
 try: u.urlopen('https://1.1.1.1/', timeout=3); print('reachable')
 except Exception as e: print('blocked', type(e).__name__)")"
 compose logs proxy-portal 2>&1 | grep -c 'pw-carol' | sed 's/^/password in portal logs: /' || true
+
+# without Prometheus (and the master): the Status page loads with monitoring data unavailable, then recovers
+compose stop stubs >/dev/null 2>&1
+for _ in $(seq 30); do
+  [ "$(r https://proxy.cvgl.lab/api/status | python3 -c 'import json,sys; print(json.load(sys.stdin)["monitoring_available"])')" = False ] && break
+  sleep 1
+done
+RESOLVE="proxy.cvgl.lab 127.0.0.1" node status-refresh.cjs https://proxy.cvgl.lab monitoring-down

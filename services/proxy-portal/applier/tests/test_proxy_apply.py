@@ -678,7 +678,8 @@ class RunningStateTest(_Base):
         self.assertEqual(self.run_applier(), 0)
         record = self.status("abcdefgh-1")
         self.assertEqual((record["status"], record["changed"]), ("applied", False))
-        self.assertEqual(record["restarted"], ["xray-ha", "xray-" + PRIVATE, "blackbox-exporter"])
+        self.assertEqual(record["restarted"],  # in full
+                         ["xray-ha", "xray-" + PRIVATE, "xray-" + PROXY, "blackbox-exporter"])
         self.assertIn(("alice", alice), self.probe.logins)
         self.request("abcdefgh-2", "enable", "alice")  # now known: nothing restarts
         self.assertEqual(self.run_applier(), 0)
@@ -776,6 +777,33 @@ class RunningStateTest(_Base):
         self.assertEqual(record["status"], "applied")
         self.assertEqual(sorted(record["restarted"]),
                          sorted(["xray-ha", "xray-" + PROXY, "xray-" + PRIVATE, "blackbox-exporter"]))
+
+    def test_cli_raw_auth_off_without_the_restart_restarts_the_proxies(self):
+        """Raw auth on and applied; off and rendered without the restart: the proxies still require accounts."""
+        self.cli("raw-auth", "on")
+        self.cli("render")
+        self.request("abcdefgh-1", "disable", "alice")
+        self.assertEqual(self.run_applier(), 0)
+        self.assertIn("xray-" + PROXY, self.status("abcdefgh-1")["restarted"])
+        self.cli("raw-auth", "off")
+        self.cli("render")  # the restart is missed
+        self.assertFalse((self.base / pa.APPLIED_FILE).exists())
+        restarts = len(self.docker.restarts())
+        self.request("abcdefgh-2", "enable", "bob")
+        self.assertEqual(self.run_applier(), 0)
+        record = self.status("abcdefgh-2")
+        self.assertEqual((record["status"], record["changed"]), ("applied", False))
+        self.assertEqual(sorted(record["restarted"]),
+                         sorted(["xray-ha", "xray-" + PROXY, "xray-" + PRIVATE, "blackbox-exporter"]))
+        self.assertEqual(self.docker.restarts()[restarts:], [record["restarted"]])
+        # known again: an enable that changes nothing restarts nothing, a rotation only the HA entry
+        self.request("abcdefgh-3", "enable", "bob")
+        self.assertEqual(self.run_applier(), 0)
+        self.assertEqual(self.status("abcdefgh-3")["restarted"], [])
+        self.request("abcdefgh-4", "rotate", "bob")
+        self.assertEqual(self.run_applier(), 0)
+        self.assertEqual(self.status("abcdefgh-4")["restarted"], ["xray-ha"])
+        self.assertEqual(len(self.docker.restarts()), restarts + 2)
 
     def test_noop_with_a_record_that_does_not_match_the_entry_is_applied_in_full(self):
         """applied.json matches the files, but the entry runs another state: the target check catches it."""

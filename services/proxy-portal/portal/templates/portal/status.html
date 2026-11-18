@@ -14,7 +14,8 @@
 <section class="status-hero {{ data.headline.level }}" aria-labelledby="headline" data-live-hero>
   <div>
     <div class="status-title"><span class="emblem" aria-hidden="true">{% if data.headline.level == 'ok' %}✓{% elif data.headline.level == 'unknown' %}?{% else %}!{% endif %}</span><h2 id="headline">{{ data.headline.text }}</h2></div>
-    <p>{% if not data.monitoring_available %}{% translate "Monitoring data is unavailable, so every status is unknown." %}{% else %}{% translate "The default proxy ha-general sends each new connection to a passing public proxy; open connections stay on their proxy." %}{% endif %}</p>
+    <p data-live-monitoring="off"{% if data.monitoring_available %} hidden{% endif %}>{% translate "Monitoring data is unavailable, so every status is unknown." %}</p>
+    <p data-live-monitoring="on"{% if not data.monitoring_available %} hidden{% endif %}>{% translate "The default proxy ha-general sends each new connection to a passing public proxy; open connections stay on their proxy." %}</p>
   </div>
   <div class="status-right">
     <div class="status-number" data-live-count>{% if general.proxies.configured is None %}—{% else %}{{ general.proxies.passing }} / {{ general.proxies.configured }}{% endif %}</div>
@@ -130,7 +131,8 @@
 {% block scripts %}{{ live|json_script:"status-live" }}{{ live_texts|json_script:"status-texts" }}
 <script nonce="{{ csp_nonce }}">
 // Polls /api/status every 30 s and when the tab becomes visible, and ages what it shows every second: a result
-// older than 90 s, counted from the last answer that came, is Unknown, with no duration.
+// older than 90 s, counted from the last answer that came, is Unknown, with no duration; the proxy counts are "—"
+// once that answer is older than 90 s, or once the entry's results are.
 (function(){'use strict';
 var POLL_MS=30000,texts=JSON.parse(document.getElementById('status-texts').textContent);
 var data=JSON.parse(document.getElementById('status-live').textContent),stale=data.stale_after_seconds;
@@ -151,6 +153,9 @@ function chip(el,s){var c=document.createElement('span'),dot=document.createElem
   dot.className='dot '+s;dot.setAttribute('aria-hidden','true');c.appendChild(dot);c.appendChild(document.createTextNode(texts[s]));
   el.replaceChildren(c);}
 function render(){
+  var old=(performance.now()-fetched)/1000>stale;
+  if(typeof data.monitoring_available==='boolean')document.querySelectorAll('[data-live-monitoring]').forEach(function(el){
+    el.hidden=(el.getAttribute('data-live-monitoring')==='on')!==data.monitoring_available;});
   document.querySelectorAll('[data-live-state]').forEach(function(el){chip(el,state(el));});
   document.querySelectorAll('[data-live-age]').forEach(function(el){el.textContent=ageText(age(el.getAttribute('data-live-age')));});
   document.querySelectorAll('[data-live-pct]').forEach(function(el){el.textContent=pct(get(el.getAttribute('data-live-pct')),+(el.getAttribute('data-live-digits')||1));});
@@ -165,10 +170,10 @@ function render(){
   document.querySelectorAll('[data-live-entry-count]').forEach(function(el){var name=el.getAttribute('data-live-entry-count');
     var late=['http','socks'].some(function(p){var c=document.querySelector('[data-live-state="entries.'+name+'.protocols.'+p+'"]');
       return c&&state(c)!==get('entries.'+name+'.protocols.'+p+'.state');});
-    var n=get('entries.'+name+'.proxies')||{},none=late||n.configured===null||n.configured===undefined;
+    var n=get('entries.'+name+'.proxies')||{},none=late||old||n.configured===null||n.configured===undefined;
     function v(x){return none||x===null||x===undefined?'\u2014':String(x);}
     el.textContent=texts.entry_count.replace('%(passing)s',v(n.passing)).replace('%(configured)s',v(n.configured));});
-  var proxies=get('entries.ha-general.proxies')||{},none=aged||proxies.configured===null||proxies.configured===undefined;
+  var proxies=get('entries.ha-general.proxies')||{},none=aged||old||proxies.configured===null||proxies.configured===undefined;
   document.querySelectorAll('[data-live-count]').forEach(function(el){
     if(none){el.textContent='\u2014';return;}
     if(el.getAttribute('data-live-count')==='small'){var s=document.createElement('span');s.className='muted small';
