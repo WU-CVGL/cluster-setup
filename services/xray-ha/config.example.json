@@ -212,6 +212,30 @@
                     }
                 ]
             }
+        },
+        {
+            "protocol": "socks",
+            "tag": "private-miyaip-jp-02_relay_usca5-bwh-sla-2tb",
+            "settings": {
+                "servers": [
+                    {
+                        "address": "xray-miyaip-jp-02_relay_usca5-bwh-sla-2tb",
+                        "port": 1089
+                    }
+                ]
+            }
+        },
+        {
+            "protocol": "socks",
+            "tag": "private-miyaip-us-01_relay_usca5-bwh-sla-2tb",
+            "settings": {
+                "servers": [
+                    {
+                        "address": "xray-miyaip-us-01_relay_usca5-bwh-sla-2tb",
+                        "port": 1089
+                    }
+                ]
+            }
         }
     ],
     "observatory": {

@@ -407,6 +407,60 @@ services:
     expose:
       - 9550
 
+  xray-miyaip-jp-02_relay_usca5-bwh-sla-2tb:
+    image: teddysun/xray:26.11.9@sha256:b3e117b834878d1e12f91e7b16270db104c2f0e5f0effbc0ece9088c473b5393
+    restart: unless-stopped
+    environment:
+      TZ: Asia/Shanghai
+    networks:
+      - grafana_monitor
+    ports:
+      - 57089:1089
+      - 57889:8889
+    volumes:
+      - ./xray/miyaip-jp-02_relay_usca5-bwh-sla-2tb/config:/etc/xray
+      - ./xray/miyaip-jp-02_relay_usca5-bwh-sla-2tb/log:/var/log/xray
+    expose:
+      - 10085
+
+  xray-miyaip-jp-02_relay_usca5-bwh-sla-2tb-exporter:
+    image: wi1dcard/v2ray-exporter:master
+    environment:
+      TZ: Asia/Shanghai
+    networks:
+      - grafana_monitor
+    restart: unless-stopped
+    command: 'v2ray-exporter --v2ray-endpoint "xray-miyaip-jp-02_relay_usca5-bwh-sla-2tb:10085" --listen ":9550"'
+    expose:
+      - 9550
+
+  xray-miyaip-us-01_relay_usca5-bwh-sla-2tb:
+    image: teddysun/xray:26.11.9@sha256:b3e117b834878d1e12f91e7b16270db104c2f0e5f0effbc0ece9088c473b5393
+    restart: unless-stopped
+    environment:
+      TZ: Asia/Shanghai
+    networks:
+      - grafana_monitor
+    ports:
+      - 60089:1089
+      - 60889:8889
+    volumes:
+      - ./xray/miyaip-us-01_relay_usca5-bwh-sla-2tb/config:/etc/xray
+      - ./xray/miyaip-us-01_relay_usca5-bwh-sla-2tb/log:/var/log/xray
+    expose:
+      - 10085
+
+  xray-miyaip-us-01_relay_usca5-bwh-sla-2tb-exporter:
+    image: wi1dcard/v2ray-exporter:master
+    environment:
+      TZ: Asia/Shanghai
+    networks:
+      - grafana_monitor
+    restart: unless-stopped
+    command: 'v2ray-exporter --v2ray-endpoint "xray-miyaip-us-01_relay_usca5-bwh-sla-2tb:10085" --listen ":9550"'
+    expose:
+      - 9550
+
   # End-to-end probes through the HA entry and every xray proxy (blackbox/blackbox.example.yml), scraped
   # by the proxy-probe job; the Proxy Availability dashboard shows them.
   blackbox-exporter:

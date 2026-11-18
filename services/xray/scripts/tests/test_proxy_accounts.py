@@ -426,7 +426,7 @@ class RenderTest(_Base):
         relay = self.outbound_users(ha)
         self.assertEqual(sorted(t for t, users in relay.items() if users == ["svc-ha"]),
                          sorted(t for t in relay if t.startswith("private-")))
-        self.assertEqual(len(relay), 10)
+        self.assertEqual(len(relay), 12)
         self.assertTrue(all(users in ([], ["svc-ha"]) for users in relay.values()))
         private = self.inbound_users(json.loads(self.private.read_text()))
         proxy_users = {k: pw[k] for k in ("alice", "svc-ha", "svc-monitor")}
@@ -502,7 +502,7 @@ class RenderTest(_Base):
         self.assertEqual(self.inbound_users(raw), {"http": accounts, "socks": accounts})
         self.assertEqual(mode(self.raw), 0o600)
         relay = [o for o in self.ha()["outbounds"] if o["tag"].startswith(("pool-", "private-"))]
-        self.assertEqual(len(relay), 10)
+        self.assertEqual(len(relay), 12)
         for outbound in relay:
             self.assertEqual(outbound["settings"]["servers"][0]["users"],
                              [{"user": "svc-ha", "pass": accounts["svc-ha"]}])
@@ -615,7 +615,8 @@ class RenderTest(_Base):
                  ("socks5", "xray-ha:1090")]
         for proxy in ("jpty1-bwh-2tb", "miyaip-uk-01_relay_jpty1-bwh-2tb", "miyaip-uk-01_relay_usca5-bwh-sla-2tb",
                       "miyaip-jp-01_relay_usca5-bwh-sla-2tb", "miyaip-jp-01_relay_jpty1-bwh-2tb",
-                      "miyaip-jp-02_relay_jpty1-bwh-2tb"):
+                      "miyaip-jp-02_relay_jpty1-bwh-2tb",
+                      "miyaip-jp-02_relay_usca5-bwh-sla-2tb", "miyaip-us-01_relay_usca5-bwh-sla-2tb"):
             hosts += [("http", f"xray-{proxy}:8889"), ("socks5", f"xray-{proxy}:1089")]
         self.assertEqual(changed, [(f"      proxy_url: {s}://svc-monitor:PASSWORD@{h}", f"      proxy_url: {s}://{auth}{h}")
                                    for s, h in hosts])
@@ -648,8 +649,10 @@ class ExampleTest(unittest.TestCase):
             pa.public_proxies(SERVICES) | {"jpty1-bwh-2tb", "miyaip-uk-01_relay_jpty1-bwh-2tb",
                                            "miyaip-uk-01_relay_usca5-bwh-sla-2tb",
                                            "miyaip-jp-01_relay_usca5-bwh-sla-2tb", "miyaip-jp-01_relay_jpty1-bwh-2tb",
-                                           "miyaip-jp-02_relay_jpty1-bwh-2tb"}))
-        self.assertEqual(len(proxies), 10)
+                                           "miyaip-jp-02_relay_jpty1-bwh-2tb",
+                                           "miyaip-jp-02_relay_usca5-bwh-sla-2tb",
+                                           "miyaip-us-01_relay_usca5-bwh-sla-2tb"}))
+        self.assertEqual(len(proxies), 12)
 
 
 class IsolationTest(unittest.TestCase):

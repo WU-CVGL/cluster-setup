@@ -46,6 +46,22 @@ See [scripts/README.md](scripts/README.md) (in Chinese):
   output replaces an existing `xray/<name>/config/config.json` (the exporter needs the stats API below).
 
 
+## SLA relays
+
+The name describes the exit country. The `relay_usca5` suffix identifies the VLESS server.
+
+| Service | SLA Reality port | SOCKS5 | HTTP |
+| --- | ---: | ---: | ---: |
+| `miyaip-jp-01_relay_usca5-bwh-sla-2tb` | 32792 | 51089 | 51889 |
+| `miyaip-jp-02_relay_usca5-bwh-sla-2tb` | 32793 | 57089 | 57889 |
+| `miyaip-us-01_relay_usca5-bwh-sla-2tb` | 32794 | 60089 | 60889 |
+
+For each new service, use its SLA Reality share link with `vless_to_config.py --stats-api` to
+write `xray/<service>/config/config.json` on the supplementary services VM. The compose entries
+already exist, so run `proxy_accounts.py render` before starting the services to apply private
+proxy authentication. The existing JP 01 client can keep using port 32792.
+
+
 ## Config
 
 > Reference: https://xtls.github.io/en/config/
