@@ -291,6 +291,12 @@ def render_blackbox(example: str, accounts: Accounts) -> str:
     return header + "".join(lines)
 
 
+def has_logins(config: dict) -> bool:
+    """Whether a proxy config's HTTP or SOCKS5 inbound holds logins."""
+    return any(AUTH_KEYS & set(i.get("settings") or {}) for i in config.get("inbounds") or []
+               if i.get("protocol") in ("http", "socks"))
+
+
 def render_files(accounts: Accounts) -> List[Tuple[Path, str]]:
     """
     Render every config in memory: the (path, text) of each file that render keeps, changed or not. A proxy
@@ -311,8 +317,7 @@ def render_files(accounts: Accounts) -> List[Tuple[Path, str]]:
     for path in sorted(base.glob(RAW_CONFIG_GLOB)):
         old_text = path.read_text(encoding="utf-8")
         old = json.loads(old_text)
-        if raw_users is None and not any(AUTH_KEYS & set(i.get("settings") or {}) for i in old.get("inbounds") or []
-                                         if i.get("protocol") in ("http", "socks")):
+        if raw_users is None and not has_logins(old):
             outputs.append((path, old_text))
             continue  # raw auth off and no accounts there: leave the proxy's config as it is
         new = json.loads(json.dumps(old))
@@ -332,9 +337,18 @@ def render_outputs(accounts: Accounts) -> List[Tuple[Path, str]]:
 
 
 def render_sha256(base_dir: Path, files: List[Tuple[Path, str]]) -> str:
-    """One hash over the rendered files' paths and texts (render_files), as the applier records it."""
-    lines = sorted(f"{path.relative_to(base_dir).as_posix()}\0{sha256_text(text)}\n" for path, text in files)
-    return sha256_text("".join(lines))
+    """
+    One hash over the rendered files' paths and texts (render_files), as the applier records it. A proxy config
+    without logins is left out: it holds no account state, so adding, editing or removing one leaves the hash as
+    it is.
+    """
+    lines = []
+    for path, text in files:
+        rel = path.relative_to(base_dir)
+        if rel.match(RAW_CONFIG_GLOB) and not has_logins(json.loads(text)):
+            continue
+        lines.append(f"{rel.as_posix()}\0{sha256_text(text)}\n")
+    return sha256_text("".join(sorted(lines)))
 
 
 def forget_applied(base_dir: Path) -> None:

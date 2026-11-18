@@ -638,6 +638,20 @@ class RunningStateTest(_Base):
         self.assertEqual(self.status("abcdefgh-4")["restarted"], ["xray-ha"])
         self.assertEqual(len(self.docker.restarts()), restarts + 2)
 
+    def test_proxy_config_without_logins_added_or_removed_keeps_the_state_known(self):
+        """Raw auth off: a proxy config with no logins holds no account state, so a no-op still restarts nothing."""
+        other = self.base / "xray" / "proxy-b" / "config" / "config.json"
+        other.parent.mkdir(parents=True)
+        shutil.copy(self.proxy, other)
+        self.request("abcdefgh-1", "enable", "bob")
+        self.assertEqual(self.run_applier(), 0)
+        self.assertEqual((self.status("abcdefgh-1")["status"], self.status("abcdefgh-1")["restarted"]), ("applied", []))
+        other.unlink()
+        self.request("abcdefgh-2", "enable", "bob")
+        self.assertEqual(self.run_applier(), 0)
+        self.assertEqual((self.status("abcdefgh-2")["status"], self.status("abcdefgh-2")["restarted"]), ("applied", []))
+        self.assertEqual(self.docker.restarts(), [])
+
     def test_noop_with_a_record_that_does_not_match_the_entry_is_applied_in_full(self):
         """applied.json matches the files, but the entry runs another state: the target check catches it."""
         alice = self.cli_disable_without_restart()

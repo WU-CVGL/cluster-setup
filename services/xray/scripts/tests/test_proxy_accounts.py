@@ -353,6 +353,14 @@ class RenderTest(_Base):
         accounts = pa.Accounts(self.base)
         self.assertIn((self.raw, self.raw_text), pa.render_files(accounts))
         self.assertEqual(pa.render_outputs(accounts), [])
+        # A proxy config without logins holds no account state: the recorded hash leaves it out
+        digest = pa.render_sha256(self.base, pa.render_files(accounts))
+        other = self.base / "xray" / "proxy-b" / "config" / "config.json"
+        other.parent.mkdir(parents=True)
+        shutil.copy(self.raw, other)
+        self.assertEqual(pa.render_sha256(self.base, pa.render_files(accounts)), digest)
+        self.raw.unlink()
+        self.assertEqual(pa.render_sha256(self.base, pa.render_files(accounts)), digest)
 
     def test_render_with_raw_auth_and_back(self):
         self.add("alice", "svc-monitor", "svc-ha")
