@@ -128,8 +128,29 @@ class AccessTest(PortalTestCase):
         self.assertContains(page, "Every proxy refuses it, except us-west-racknerd-12tb, "
                                   "usca1-bwh-megaboxpro-2tb at their own addresses, which need no account.")
         zh = self.client.get("/access", HTTP_ACCEPT_LANGUAGE="zh-CN")
-        self.assertContains(zh, "除 us-west-racknerd-12tb, usca1-bwh-megaboxpro-2tb 自己的地址外，所有代理都拒绝它")
+        self.assertContains(zh, "除 us-west-racknerd-12tb、usca1-bwh-megaboxpro-2tb 自己的地址（无需账号）外，所有代理都拒绝它。")
         self.assertContains(zh, "无需账号")
+
+    def test_raw_auth_on_with_one_open_proxy(self):
+        """One open proxy: the sentences in the singular."""
+        def change(data):
+            data["raw_auth"] = True
+            next(p for p in data["proxies"] if p["name"] == OPEN[1])["open"] = False
+        self.write_status(change)
+        self.get("alice")
+        self.assertContains(self.client.get("/access"), "Every proxy requires an enabled account, except "
+                                                        "us-west-racknerd-12tb at its own address, which needs none.")
+        self.client.post("/signout")
+        self.get("bob")
+        self.assertContains(self.client.get("/access"), "Every proxy refuses it, except us-west-racknerd-12tb at its "
+                                                        "own address, which needs no account.")
+        self.client.post("/signout")
+        self.master.users["frank"] = ("pw-frank", False, True)
+        self.get("frank")
+        page = self.client.get("/access")
+        self.assertContains(page, "Without an account you can use us-west-racknerd-12tb at its own address: it never "
+                                  "needs one.")
+        self.assertNotContains(page, "at their own addresses")
 
     def test_raw_auth_on_without_open_proxies(self):
         def change(data):

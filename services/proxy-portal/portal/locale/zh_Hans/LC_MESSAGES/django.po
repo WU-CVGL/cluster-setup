@@ -140,10 +140,6 @@ msgid ""
 "proxy's own address still works for that user."
 msgstr "公共代理自己的地址无需账号：关闭代理访问只会让两个自动切换代理和私有代理拒绝该账号，该用户仍可使用公共代理自己的地址。"
 
-#, python-format
-msgid "%(open)s never need an account at their own addresses."
-msgstr "%(open)s 自己的地址始终无需账号。"
-
 msgid "Type the account name to confirm."
 msgstr "请输入账号名确认。"
 
@@ -608,9 +604,12 @@ msgstr "没有账号时可以通过公共代理自己的地址使用它们：这
 
 #, python-format
 msgid ""
+"Without an account you can use %(open)s at its own address: it never needs "
+"one."
+msgid_plural ""
 "Without an account you can use %(open)s at their own addresses: they never "
 "need one."
-msgstr "没有账号时可以通过 %(open)s 自己的地址使用它们：这些地址始终无需账号。"
+msgstr[0] "没有账号时也可以通过自己的地址使用 %(open)s：始终无需账号。"
 
 #, python-format
 msgid "Proxy access is <b>on</b> for the account <b>%(name)s</b>."
@@ -627,9 +626,12 @@ msgstr "账号 <b>%(name)s</b> 的代理访问已<b>关闭</b>。"
 
 #, python-format
 msgid ""
+"Every proxy refuses it, except %(open)s at its own address, which needs no "
+"account."
+msgid_plural ""
 "Every proxy refuses it, except %(open)s at their own addresses, which need "
 "no account."
-msgstr "除 %(open)s 自己的地址外，所有代理都拒绝它；这些地址无需账号。"
+msgstr[0] "除 %(open)s 自己的地址（无需账号）外，所有代理都拒绝它。"
 
 msgid "Every proxy refuses it, the public proxies' own addresses included."
 msgstr "所有代理都拒绝它，包括公共代理自己的地址。"
@@ -651,9 +653,12 @@ msgstr "公共代理自己的地址无需账号，所以关闭一个账号的代
 
 #, python-format
 msgid ""
+"Every proxy requires an enabled account, except %(open)s at its own address, "
+"which needs none."
+msgid_plural ""
 "Every proxy requires an enabled account, except %(open)s at their own "
 "addresses, which need none."
-msgstr "所有代理都需要已启用的账号，%(open)s 自己的地址除外，这些地址无需账号。"
+msgstr[0] "所有代理都需要已启用的账号，%(open)s 自己的地址除外（无需账号）。"
 
 msgid "Every proxy, at every address, requires an enabled account."
 msgstr "所有代理的所有地址都需要已启用的账号。"
@@ -1393,6 +1398,10 @@ msgstr "这些是观测总量，不是账单或配额，包括访问内网和国
 
 msgid "Only the signed-in user's own usage is shown."
 msgstr "这里只显示当前登录用户自己的流量。"
+
+msgctxt "list separator"
+msgid ", "
+msgstr "、"
 
 #, python-format
 msgid "%(n)d s ago"

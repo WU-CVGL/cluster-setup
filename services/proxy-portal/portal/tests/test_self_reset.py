@@ -188,6 +188,16 @@ class SelfResetTest(SelfResetMixin, PortalTestCase):
         self.assertContains(self.client.get("/access"), "Applying restarts the Auto-switching Proxy and every public "
                                                         "proxy but us-west-racknerd-12tb, usca1-bwh-megaboxpro-2tb. "
                                                         "Established connections through them drop")
+        self.assertContains(self.client.get("/access", HTTP_ACCEPT_LANGUAGE="zh-CN"),
+                            "us-west-racknerd-12tb、usca1-bwh-megaboxpro-2tb")
+
+        def none_open(data):
+            data["raw_auth"] = True
+            for proxy in data["proxies"]:
+                proxy["open"] = False
+        self.write_status(none_open)
+        self.assertContains(self.client.get("/access"), "Applying restarts the Auto-switching Proxy and every public "
+                                                        "proxy. Established connections through them drop")
 
     def test_my_access_shows_the_applied_state_only(self):
         request_id = self.reset().json()["id"]

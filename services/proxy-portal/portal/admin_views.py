@@ -26,6 +26,7 @@ from django.views.decorators.http import require_GET, require_http_methods, requ
 
 from . import accounts, lifecycle, proxy_status
 from .models import AccountRequest, ClusterUser, Incident, IncidentUpdate
+from .templatetags.portal import names
 from .views import SESSION_ADMIN, _signin_redirect, session_user
 
 log = logging.getLogger("portal.admin")
@@ -88,16 +89,12 @@ def raw_auth_text(status):
     if status.raw_auth and status.open_proxies:
         return _("The public proxies' own addresses require an account, except those of %(open)s, which need none: "
                  "an account whose proxy access is off is refused everywhere else.") % {
-            "open": ", ".join(status.open_proxies)}
+            "open": names(status.open_proxies)}
     if status.raw_auth:
         return _("The public proxies' own addresses require an account: an account whose proxy access is off is "
                  "refused at every proxy.")
-    text = _("The public proxies' own addresses need no account: proxy access off stops only the auto-switching "
+    return _("The public proxies' own addresses need no account: proxy access off stops only the auto-switching "
              "proxies and the private proxies, and a public proxy's own address still works for that user.")
-    if status.open_proxies:
-        text += " " + _("%(open)s never need an account at their own addresses.") % {
-            "open": ", ".join(status.open_proxies)}
-    return text
 
 
 def _pending_by_account():

@@ -122,11 +122,14 @@ class WordingTest(PortalTestCase):
             self.assertIn(label, text)
             self.assertIn("ha-general, ha-private, jpty1-bwh-2tb", text)
             self.assertIn(label, self.check("/admin/log"))
-            self.assertIn(label_zh, self.check(f"/admin/requests/{request_id}", HTTP_ACCEPT_LANGUAGE="zh-CN"))
+            zh = self.check(f"/admin/requests/{request_id}", HTTP_ACCEPT_LANGUAGE="zh-CN")
+            self.assertIn(label_zh, zh)
+            self.assertIn("ha-general、ha-private、jpty1-bwh-2tb", zh)
             self.assertEqual(AccountRequest.objects.get(id=request_id).stage, stage)
         # a stage or service this portal does not know is shown as it is
         self.assertEqual(lifecycle.stage_label("later-stage"), "later-stage")
-        self.assertEqual(lifecycle.restarted_names("other xray-ha"), "other, ha-general, ha-private")
+        with translation.override("en"):
+            self.assertEqual(lifecycle.restarted_names("other xray-ha"), "other, ha-general, ha-private")
 
     def test_error_pages(self):
         """A stale form, an unknown address and a server error: plain words in the page's language."""

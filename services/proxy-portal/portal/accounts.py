@@ -10,6 +10,7 @@ from django.utils.translation import gettext as _
 
 from . import spool
 from .proxy_status import PROTECTED
+from .templatetags.portal import names
 
 log = logging.getLogger("portal.requests")
 
@@ -102,7 +103,7 @@ def restart_text(op, row, status, own=False):
     """What applying op restarts, for an account row (a status.AccountRow, or None for a new account). own: for the
     account's user, who sees only the proxies they may use: a user without an admin account uses one auto-switching
     proxy. The open proxies never restart: they take no accounts."""
-    open_proxies = ", ".join(status.open_proxies)
+    open_proxies = names(status.open_proxies)
     if own and not (row is not None and row.admin):
         if status.raw_auth and status.open_proxies:
             return _("Applying restarts the Auto-switching Proxy and every public proxy but %(open)s. Established "

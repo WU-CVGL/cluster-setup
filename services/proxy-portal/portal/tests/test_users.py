@@ -344,17 +344,15 @@ class UsersPageTest(PortalTestCase):
                          .status_code, 403)
 
     def test_open_proxies_with_raw_auth_off(self):
+        """Every public proxy's own address needs no account then: the open ones are not named again."""
         page = self.client.get("/admin/users")
-        self.assertContains(page, "us-west-racknerd-12tb, usca1-bwh-megaboxpro-2tb never need an account at their "
-                                  "own addresses.")
+        self.assertContains(page, "The public proxies&#x27; own addresses need no account: proxy access off stops "
+                                  "only the auto-switching proxies and the private proxies")
+        self.assertNotContains(page, "never need an account")
+        self.assertNotContains(page, "us-west-racknerd-12tb, usca1-bwh-megaboxpro-2tb")
         zh = self.client.get("/admin/users", HTTP_ACCEPT_LANGUAGE="zh-CN")
-        self.assertContains(zh, "us-west-racknerd-12tb, usca1-bwh-megaboxpro-2tb 自己的地址始终无需账号。")
-
-        def none_open(data):
-            for proxy in data["proxies"]:
-                proxy["open"] = False
-        self.write_status(none_open)
-        self.assertNotContains(self.client.get("/admin/users"), "never need an account at their own addresses")
+        self.assertContains(zh, "公共代理自己的地址无需账号")
+        self.assertNotContains(zh, "始终无需账号")
 
     def test_open_proxies_with_raw_auth_on(self):
         self.write_status(lambda d: d.update(raw_auth=True))
@@ -363,7 +361,7 @@ class UsersPageTest(PortalTestCase):
                                   "usca1-bwh-megaboxpro-2tb, which need none: an account whose proxy access is off is "
                                   "refused everywhere else.")
         zh = self.client.get("/admin/users", HTTP_ACCEPT_LANGUAGE="zh-CN")
-        self.assertContains(zh, "us-west-racknerd-12tb, usca1-bwh-megaboxpro-2tb 的地址除外（无需账号）")
+        self.assertContains(zh, "us-west-racknerd-12tb、usca1-bwh-megaboxpro-2tb 的地址除外（无需账号）")
 
     def test_chinese(self):
         page = self.client.get("/admin/users", HTTP_ACCEPT_LANGUAGE="zh-CN")
