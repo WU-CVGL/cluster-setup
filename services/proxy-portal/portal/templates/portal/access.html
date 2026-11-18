@@ -188,7 +188,7 @@ dlg.addEventListener('keydown',function(e){if(e.key!=='Tab')return;var f=focusab
   else if(!e.shiftKey&&(document.activeElement===last||!dlg.contains(document.activeElement))){e.preventDefault();first.focus();}});
 dlg.addEventListener('close',function(){stop();secret.textContent='';opener.focus();});
 dlg.addEventListener('click',function(e){var b=e.target.closest('[data-action]');if(!b)return;var action=b.getAttribute('data-action');
-  if(action==='close'){dlg.close();}
+  if(action==='close'){secret.textContent='';dlg.close();}
   else if(action==='confirm'){b.disabled=true;call('POST',create).then(function(res){b.disabled=false;
       if(res.status===202){current=res.data.id;opener.disabled=false;show('progress');render(res.data);}
       else{error(res.data.error||T.failed);}},function(){b.disabled=false;error(T.network);});}
