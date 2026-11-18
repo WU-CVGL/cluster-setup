@@ -181,6 +181,8 @@ python3 xray/scripts/proxy_accounts.py render
   仍可直接使用代理自身入口
 - 修改账号文件和 `render` 的命令持有排他锁 `proxy-accounts/.lock`；门户的 applier
   （[proxy-portal/applier](../../proxy-portal/applier/README.md)）在一次应用的全过程持有同一把锁
+- `render` 写入任何文件之前删除 applier 的记录 `proxy-accounts/applied.json`：手动重启不会被记录，所以之后门户的下一个请求
+  重启并验证所有服务；`status` 中的 `unapplied_changes` 在此之前为 `null`（未知）
 - `render` 先在内存中生成全部文件并检查，再逐个原子替换（同目录临时文件 + rename，权限 `0600`），内容未变的文件不写：
   - `xray-ha/config/config.json`：`xray-ha/config.example.json` 的 HTTP 和 SOCKS5 入站换成除 `svc-ha` 外的所有账号
     （SOCKS5 `auth: password`）；`raw-auth on` 时 `pool-*` 出站以 `svc-ha` 登录代理

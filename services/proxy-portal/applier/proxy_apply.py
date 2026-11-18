@@ -579,10 +579,18 @@ class Applier:
             outputs = [(path, text) for path, text in files
                        if not (path.exists() and path.read_text(encoding="utf-8") == text)]
             if not changed_any and not outputs and known:
-                seq = self.next_sequence()
-                for request, _ in active:
-                    records[request["id"]].update(status="applied", restarted=[], applied_seq=seq)
-                return self.finish(records, {}, active)
+                # Nothing to change, by the record: still check each request's own account at the entry
+                outcome, detail = self.verify(*self.target_checks([r for r, _ in active], old_passwords, accounts))
+                if outcome != "failed":
+                    seq = self.next_sequence()
+                    for request, _ in active:
+                        records[request["id"]].update(status="applied" if outcome == "ok" else "unconfirmed",
+                                                      restarted=[], applied_seq=seq)
+                        if outcome == "unconfirmed":
+                            records[request["id"]].update(stage="verify", error=detail)
+                    return self.finish(records, {}, active)
+                log(f"the running services do not hold the files ({scrub(detail, secrets_seen)}): applying all")
+                known = False
             # Unless the running services are known to hold the files, every rendered file counts as changed
             changed = outputs if known else files
             image = self.compose.pinned_image(HA_SERVICE)
@@ -932,11 +940,13 @@ class Applier:
         self.fail_stale_applying()
 
     def finish_committed(self, data: dict) -> None:
-        """The interrupted apply was verified and live: write what it had not written yet, restart nothing."""
+        """
+        The interrupted apply was verified and live: write what it had not written yet, restart nothing. Changes
+        with proxy_accounts.py may have followed it, so applied.json is removed rather than written: the next
+        batch restarts and verifies every service.
+        """
         log("finishing an interrupted apply that was already live")
-        render_sha256 = data.get("render_sha256")
-        self.write_applied(str(data["accounts_sha256"]), render_sha256 if isinstance(render_sha256, str) else None,
-                           str(data["applied_at"]))
+        self.forget_applied()
         results = {i for i in data.get("results", []) if isinstance(i, str)}
         for record in data["records"]:
             if not isinstance(record, dict) or not ID_RE.fullmatch(str(record.get("id", ""))):
