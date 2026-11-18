@@ -166,7 +166,8 @@ class SelfResetTest(SelfResetMixin, PortalTestCase):
                            .split("</script>")[0])
         self.assertEqual(texts, {"failed": "The reset could not be started. Nothing changed.",
                                  "state": "The reset's state could not be read. Reload the page to see it.",
-                                 "network": "The portal could not be reached. Try again."})
+                                 "network": "The portal could not be reached. Try again.",
+                                 "collecting": "Getting the password…"})
         carol = https_client()
         self.sign_in("carol", client=carol)  # an admin account: the private proxies restart too
         self.assertContains(carol.get("/access"), "the HA entries (xray-ha) and the private proxies")

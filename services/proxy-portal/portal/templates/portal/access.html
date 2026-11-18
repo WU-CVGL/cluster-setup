@@ -155,7 +155,15 @@ if(!dlg||!opener||typeof dlg.showModal!=='function')return;
 var T=JSON.parse(document.getElementById('reset-texts').textContent);
 var csrf=dlg.querySelector('input[name=csrfmiddlewaretoken]').value,create=dlg.getAttribute('data-create');
 var current=dlg.getAttribute('data-current')||null,timer=null,tries=0,secret=document.getElementById('reset-password');
+// collecting: the password is on its way and the server no longer has it, so the dialog stays open; received: a
+// password not yet shown (it arrived while the dialog was closed anyway), shown at the next opening
+var collecting=false,received=null;
 function q(sel){return dlg.querySelector(sel);}
+var reveal=q('[data-action=reveal]'),revealLabel=reveal.textContent;
+function setCollecting(on){collecting=on;reveal.disabled=on;reveal.textContent=on?T.collecting:revealLabel;
+  q('[data-step=progress]').setAttribute('aria-busy',on?'true':'false');
+  dlg.querySelectorAll('[data-action=close]').forEach(function(b){b.disabled=on;});}
+function showPassword(){secret.textContent=received;show('password');}
 function steps(){return dlg.querySelectorAll('[data-step]');}
 function focusables(){return Array.prototype.filter.call(dlg.querySelectorAll('button,a[href],input:not([type=hidden])'),
   function(el){return !el.disabled&&!el.closest('[hidden]');});}
@@ -181,21 +189,27 @@ function poll(){tries++;call('GET',create+'/'+current).then(function(res){
     if(res.status===200)render(res.data);else{error(res.data.error||T.state);}},
   function(){error(T.network);if(dlg.open&&tries<450)timer=setTimeout(poll,5000);});}
 opener.hidden=false;
-opener.addEventListener('click',function(){tries=0;show(current?'progress':'confirm');dlg.showModal();focusStep();if(current)poll();});
+opener.addEventListener('click',function(){tries=0;
+  if(received){showPassword();dlg.showModal();focusStep();return;}
+  show(current?'progress':'confirm');dlg.showModal();focusStep();if(current&&!collecting)poll();});
+document.addEventListener('keydown',function(e){if(collecting&&dlg.open&&e.key==='Escape'){e.preventDefault();e.stopPropagation();}},true);
+dlg.addEventListener('cancel',function(e){if(collecting)e.preventDefault();});
 dlg.addEventListener('keydown',function(e){if(e.key!=='Tab')return;var f=focusables();if(!f.length)return;
   var first=f[0],last=f[f.length-1];
   if(e.shiftKey&&(document.activeElement===first||!dlg.contains(document.activeElement))){e.preventDefault();last.focus();}
   else if(!e.shiftKey&&(document.activeElement===last||!dlg.contains(document.activeElement))){e.preventDefault();first.focus();}});
-dlg.addEventListener('close',function(){stop();secret.textContent='';opener.focus();});
+function closed(){if(!q('[data-step=password]').hidden)received=null;secret.textContent='';}
+dlg.addEventListener('close',function(){stop();closed();opener.focus();});
 dlg.addEventListener('click',function(e){var b=e.target.closest('[data-action]');if(!b)return;var action=b.getAttribute('data-action');
-  if(action==='close'){secret.textContent='';dlg.close();}
+  if(action==='close'){if(!collecting){closed();dlg.close();}}
   else if(action==='confirm'){b.disabled=true;call('POST',create).then(function(res){b.disabled=false;
       if(res.status===202){current=res.data.id;opener.disabled=false;show('progress');render(res.data);}
       else{error(res.data.error||(res.status>=500?T.state:T.failed));}},function(){b.disabled=false;error(T.network);});}
-  else if(action==='reveal'){b.disabled=true;call('POST',create+'/'+current+'/password').then(function(res){b.disabled=false;
-      if(res.status===200&&res.data.value){secret.textContent=res.data.value;current=null;
-        var note=document.getElementById('reset-current');if(note)note.hidden=true;show('password');}
+  else if(action==='reveal'){setCollecting(true);call('POST',create+'/'+current+'/password').then(function(res){
+      setCollecting(false);
+      if(res.status===200&&res.data.value){received=res.data.value;current=null;
+        var note=document.getElementById('reset-current');if(note)note.hidden=true;if(dlg.open)showPassword();}
       else{render(res.data.state?res.data:{state_label:'',level:'bad',text:res.data.error||T.state,final:true});}},
-    function(){b.disabled=false;error(T.network);});}});
+    function(){setCollecting(false);error(T.network);});}});
 })();
 </script>{% endif %}{% endblock %}
