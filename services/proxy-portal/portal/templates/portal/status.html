@@ -129,13 +129,13 @@
 {% endblock %}
 {% block scripts %}{{ live|json_script:"status-live" }}{{ live_texts|json_script:"status-texts" }}
 <script nonce="{{ csp_nonce }}">
-// Polls /api/status every 30 s and when the tab becomes visible, and ages what it shows every second: a result
-// older than 90 s, counted from the last answer that came, is Unknown, with no duration; the proxy counts are "—"
-// once that answer is older than 90 s, or once the entry's results are.
+// Polls /api/status every 30 s and when the tab becomes visible, dropping a poll with no answer after 15 s, and
+// ages what it shows every second: a result older than 90 s, counted from the last answer that came, is Unknown,
+// with no duration; the proxy counts are "—" once that answer is older than 90 s, or once the entry's results are.
 (function(){'use strict';
-var POLL_MS=30000,texts=JSON.parse(document.getElementById('status-texts').textContent);
+var POLL_MS=30000,TIMEOUT_MS=15000,texts=JSON.parse(document.getElementById('status-texts').textContent);
 var data=JSON.parse(document.getElementById('status-live').textContent),stale=data.stale_after_seconds;
-var fetched=performance.now(),polled=fetched,busy=false;
+var fetched=performance.now(),polled=fetched,busy=false,pending=null;
 function get(path){var parts=path.split('.'),v=data,i=0;
   if(parts[0].indexOf('proxy:')===0){var name=parts[0].slice(6);v=null;
     (data.proxies||[]).forEach(function(p){if(p.name===name)v=p;});i=1;}
@@ -178,12 +178,13 @@ function render(){
     if(el.getAttribute('data-live-count')==='small'){var s=document.createElement('span');s.className='muted small';
       s.textContent='/ '+proxies.configured;el.replaceChildren(document.createTextNode(proxies.passing+' '),s);}
     else{el.textContent=proxies.passing+' / '+proxies.configured;}});}
-function poll(){if(busy)return;busy=true;var started=performance.now();polled=started;
-  fetch('/api/status',{credentials:'same-origin',cache:'no-store',headers:{'Accept':'application/json'}})
+function poll(){if(busy)return;busy=true;var started=performance.now();polled=started;pending=new AbortController();
+  fetch('/api/status',{credentials:'same-origin',cache:'no-store',headers:{'Accept':'application/json'},signal:pending.signal})
     .then(function(r){if(!r.ok)throw new Error(String(r.status));return r.json();})
     .then(function(d){data=d;stale=d.stale_after_seconds;fetched=started;},function(){})
-    .then(function(){busy=false;render();});}
-setInterval(function(){if(document.visibilityState!=='hidden'&&performance.now()-polled>=POLL_MS)poll();render();},1000);
+    .then(function(){busy=false;pending=null;render();});}
+setInterval(function(){var now=performance.now();if(pending&&now-polled>=TIMEOUT_MS){pending.abort();pending=null;}
+  if(document.visibilityState!=='hidden'&&now-polled>=POLL_MS)poll();render();},1000);
 document.addEventListener('visibilitychange',function(){if(document.visibilityState==='visible')poll();});
 })();
 </script>{% endblock %}
