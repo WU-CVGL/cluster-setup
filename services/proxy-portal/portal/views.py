@@ -99,7 +99,7 @@ def _live_texts():
         "passing": _("Passing"), "failing": _("Failing"), "unknown": _("Unknown"),
         "s_ago": _("%(n)d s ago"), "min_ago": _("%(n)d min ago"), "h_ago": _("%(n)d h ago"),
         "days_ago": _("%(n)d days ago"),
-        "headline_unknown": _("Status unknown: no recent probe results for the default proxy"),
+        "headline_unknown": _("Status unknown: no recent probe results for the Auto-switching Proxy"),
         "entry_count": _("%(passing)s of %(configured)s proxies passing"),
     }
 

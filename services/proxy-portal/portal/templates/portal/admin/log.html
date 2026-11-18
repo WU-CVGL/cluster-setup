@@ -4,7 +4,7 @@
 <div class="hero-head"><div>
   <div class="eyebrow">{% translate "Admin" %}</div>
   <h1>{% translate "Change log" %}</h1>
-  <p class="sub">{% blocktranslate with n=limit %}Every account request from the portal, who made it and when, and the applier's outcome. The newest {{ n }} that match.{% endblocktranslate %}</p>
+  <p class="sub">{% blocktranslate with n=limit %}Every account request from the portal, who made it and when, and its outcome. The newest {{ n }} that match.{% endblocktranslate %}</p>
 </div></div>
 {% include "portal/admin/_nav.html" %}
 {% if raw_auth_text %}<div class="notice section-gap"><p>{{ raw_auth_text }}</p></div>{% endif %}
@@ -27,7 +27,7 @@
       <td>{{ row.op|op_label }}</td>
       <td class="mono">{{ row.username }}</td>
       <td>{% include "portal/admin/_state.html" with level=level %}</td>
-      <td class="wrap wide small">{{ text }}{% if row.stage %} <span class="mono">({{ row.stage }})</span>{% endif %}{% if row.status_at %}<div class="tiny">{{ row.status_at|date:"Y-m-d H:i:s" }}</div>{% endif %}</td>
+      <td class="wrap wide small">{{ text }}{% if row.stage %} ({{ row.stage|stage_label }}){% endif %}{% if row.status_at %}<div class="tiny">{{ row.status_at|date:"Y-m-d H:i:s" }}</div>{% endif %}</td>
       <td><a href="{% url 'admin_request' row.id %}">{% translate "Details" %}</a></td>
     </tr>
     {% empty %}

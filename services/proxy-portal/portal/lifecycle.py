@@ -18,6 +18,7 @@ import logging
 from django.conf import settings
 from django.utils import timezone
 from django.utils.translation import gettext as _
+from django.utils.translation import pgettext_lazy
 from django.views.decorators.debug import sensitive_variables
 
 from . import spool
@@ -26,7 +27,34 @@ log = logging.getLogger("portal.requests")
 
 REVOKES = ("disable", "remove", "rotate", "admin-off")  # take an access away: the old one works until applied
 REPLACES = ("add", "rotate", "remove")  # a live one makes an earlier one-time password of the account invalid
-ROLLBACK_RESTARTS = ("swap", "restart", "verify", "commit")  # stages whose rollback restarts the entries
+ROLLBACK_RESTARTS = ("swap", "restart", "verify", "commit")  # stages whose rollback restarts the proxies
+# the applier's stages, as admins read them; the stored value stays the applier's
+STAGES = {
+    "request": pgettext_lazy("request stage", "Request check"),
+    "accounts": pgettext_lazy("request stage", "Reading the accounts"),
+    "precheck": pgettext_lazy("request stage", "Checks before applying"),
+    "render": pgettext_lazy("request stage", "Preparing the settings"),
+    "test": pgettext_lazy("request stage", "Testing the settings"),
+    "backup": pgettext_lazy("request stage", "Backup"),
+    "swap": pgettext_lazy("request stage", "Replacing the settings"),
+    "restart": pgettext_lazy("request stage", "Restarting the proxies"),
+    "verify": pgettext_lazy("request stage", "Verifying"),
+    "commit": pgettext_lazy("request stage", "Recording the result"),
+    "interrupted": pgettext_lazy("request stage", "Interrupted"),
+}
+HA_SERVICE = "xray-ha"  # the Compose service of ha-general and ha-private
+
+
+def stage_label(stage):
+    return STAGES.get(stage, stage)
+
+
+def restarted_names(restarted):
+    """The restarted Compose services as the proxies' names: xray-ha is ha-general and ha-private."""
+    names = []
+    for service in restarted.split():
+        names += ["ha-general", "ha-private"] if service == HA_SERVICE else [service.removeprefix("xray-")]
+    return ", ".join(names)
 RESULT_RECHECK = datetime.timedelta(hours=1)  # a later request of the same run can supersede a result
 
 
@@ -93,26 +121,27 @@ def describe(row, now=None):
     now = now or timezone.now()
     revoke = row.op in REVOKES
     if row.state == "pending":
-        text = _("Waiting for the applier. Not applied yet: the old access still works.") if revoke \
-            else _("Waiting for the applier. Not applied yet.")
+        text = _("Waiting to be applied: the old access still works.") if revoke \
+            else _("Waiting to be applied.")
         waited = (now - row.requested_at).total_seconds()
         if waited > settings.REQUEST_PENDING_WARN:
-            text += " " + _("Not taken after %(n)d minutes: the applier may not be running.") % {"n": waited // 60}
+            text += " " + _("Not started after %(n)d minutes: the service that applies account changes may not be "
+                            "running.") % {"n": waited // 60}
         return text
     if row.state == "applying":
-        return _("Being applied; the affected entries restart. The revoke is not confirmed yet: the old access "
-                 "may still work.") if revoke else _("Being applied; the affected entries restart.")
+        return _("Being applied; the affected proxies restart. The revoke is not confirmed yet: the old access may "
+                 "still work.") if revoke else _("Being applied; the affected proxies restart.")
     if row.state == "applied":
         if row.changed is False and row.restarted:
-            return _("Nothing to change: the account was already in that state. The entries restarted to apply "
-                     "other changes.")
+            return _("Nothing to change: the account was already in that state. The proxies restarted to apply other "
+                     "changes.")
         if row.changed is False:
             return _("Nothing to change: the account was already in that state. Nothing restarted.")
         return _("Applied and verified.")
     if row.state == "unconfirmed":
         if row.op in ("disable", "remove", "admin-off"):
-            return _("Live: the entries refuse the old access (verified), but no proxy answered the checks that "
-                     "must pass in time, so the entries may not be passing traffic right now.")
+            return _("Live: the proxies refuse the old access (verified), but no proxy answered the checks that must "
+                     "pass in time, so the proxies may not be passing traffic right now.")
         if row.op == "rotate":
             return _("Live: the old password is refused (verified). The new password is not confirmed yet: no "
                      "proxy answered in time.")
@@ -120,14 +149,14 @@ def describe(row, now=None):
                  "target may be down).")
     # failed
     if row.stage == "request":
-        return _("Refused by the applier. Nothing changed.")
+        return _("The request was refused. Nothing changed.")
     if row.restored is False:
-        return _("Failed, and the rollback did not finish: the entries may be down or in a mixed state. Check the "
-                 "applier on the VM (journalctl -u proxy-apply).")
+        return _("Failed, and the rollback did not finish: the affected proxies may be down or in a mixed state. "
+                 "Check the log of the proxy-apply service (journalctl -u proxy-apply).")
     text = _("Failed; the previous state is back: the account is unchanged and the old access still works.") \
         if revoke else _("Failed; the previous state is back: the account is unchanged.")
     if row.stage in ROLLBACK_RESTARTS:
-        text += " " + _("The entries restarted: established connections dropped.")
+        text += " " + _("The affected proxies restarted: established connections dropped.")
     return text
 
 

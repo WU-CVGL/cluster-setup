@@ -1,7 +1,7 @@
 // The Status page refreshes itself: a controlled clock (performance.now, offset by the test) and a stubbed
 // /api/status/live. It polls every 30 s and when the tab becomes visible, drops a poll that gets no answer in 15 s,
 // advances "N s ago" between polls, and turns results older than 90 s, counted from the last answer, to Unknown
-// when polls fail, and the counts to "—", also when the default proxy was Unknown from the start. With
+// when polls fail, and the counts to "—", also when the Auto-switching Proxy was Unknown from the start. With
 // "monitoring-down" (run.sh stops the stubs first), the page loads with monitoring data unavailable and drops that
 // note once a poll answers with monitoring data.
 //   node e2e/status-refresh.cjs <base URL> [monitoring-down]   (Playwright for Node in NODE_PATH; CHROME optional)
@@ -83,7 +83,7 @@ const { chromium } = require('playwright');
     let answers = 0;
     await page.goto(base + '/', { waitUntil: 'networkidle' });
     const down = await page.evaluate(() => fetch('/api/status/live').then(r => r.json()));
-    const up = fresh(down, { monitoring_available: true, headline: { level: 'ok', text: 'Default proxy available' } });
+    const up = fresh(down, { monitoring_available: true, headline: { level: 'ok', text: 'Auto-switching Proxy available' } });
     up.entries['ha-general'].proxies = { passing: 4, configured: 4 };
     await page.route('**/api/status/live', route => { answers++; return route.fulfill({ json: up }); });
     let s = await read();
@@ -117,7 +117,8 @@ const { chromium } = require('playwright');
   check('another failed poll: Passing at about 75 s', polls === 3 && s.http === 'Passing', [polls, s]);
   s = await advance(20);
   check('older than 90 s: Unknown, no duration, headline unknown', s.http === 'Unknown' && s.socks === 'Unknown' &&
-    s.hero === 'status-hero unknown' && s.headline.startsWith('Status unknown') && s.count === '—' &&
+    s.hero === 'status-hero unknown' && s.count === '—' &&
+    s.headline === 'Status unknown: no recent probe results for the Auto-switching Proxy' &&
     s.duration === '— / —' && s.haDuration === '— / —' && /: 9[5-9] s ago$/.test(s.last) &&
     s.entries.every(e => e === '— of — proxies passing'), [polls, s]);
   mode = 'fresh';
@@ -144,7 +145,7 @@ const { chromium } = require('playwright');
     /: 1[1-4] s ago$/.test(s.last), [hangPolls, s]);
   await hangPage.close();
 
-  // both HA entries Unknown from the start, the proxy counts known, every poll failing: the counts age out too
+  // both auto-switching proxies Unknown from the start, the proxy counts known, every poll failing: the counts age out too
   const unknownPage = await context.newPage();
   unknownPage.on('pageerror', e => problems.push(e.message));
   // the page as the portal serves it, fetched by the browser (which resolves the test host), with its CSP
@@ -157,7 +158,7 @@ const { chromium } = require('playwright');
           Object.assign(entry.protocols[p], { state: 'unknown', last_check_age_seconds: null });
         }
         Object.assign(data, { last_check_age_seconds: null,
-          headline: { level: 'unknown', text: 'Status unknown: no recent probe results for the default proxy' } });
+          headline: { level: 'unknown', text: 'Status unknown: no recent probe results for the Auto-switching Proxy' } });
         return open + JSON.stringify(data).replace(/</g, '\\u003C') + close;
       });
     return route.fulfill({ contentType: 'text/html; charset=utf-8', headers: { 'content-security-policy': served[1] }, body });

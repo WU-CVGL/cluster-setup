@@ -21,25 +21,27 @@ class HeadlineTest(SimpleTestCase):
     def test_table(self):
         cases = [
             # http, socks, passing, configured -> level, text
-            (PASSING, PASSING, 4, 4, "ok", "Default proxy available; all 4 pool proxies passing"),
-            (PASSING, PASSING, 3, 4, "degraded", "Default proxy available; 1 pool proxy not passing, failover working"),
+            (PASSING, PASSING, 4, 4, "ok", "Auto-switching Proxy available; all 4 public proxies passing"),
+            (PASSING, PASSING, 3, 4, "degraded",
+             "Auto-switching Proxy available; 1 public proxy not passing, switching still works"),
             (PASSING, PASSING, 2, 4, "degraded",
-             "Default proxy available; 2 pool proxies not passing, failover working"),
+             "Auto-switching Proxy available; 2 public proxies not passing, switching still works"),
             (PASSING, PASSING, 1, 4, "degraded",
-             "Default proxy available on its last passing pool proxy, without a spare"),
-            (PASSING, PASSING, 0, 4, "degraded", "Default proxy answering, but no pool proxy passes its probe"),
-            (PASSING, PASSING, None, None, "ok", "Default proxy available"),
-            (FAILING, PASSING, 4, 4, "degraded", "HTTP entry failing, SOCKS5 still available"),
-            (PASSING, FAILING, 4, 4, "degraded", "SOCKS5 entry failing, HTTP still available"),
-            (FAILING, FAILING, 3, 4, "down",
-             "Default proxy failing while its pool proxies pass: the HA entry itself is down"),
-            (FAILING, FAILING, 0, 4, "down", "Default proxy failing: no pool proxy passes its probe"),
-            (FAILING, FAILING, None, None, "down", "Default proxy failing"),
-            (UNKNOWN, UNKNOWN, 4, 4, "unknown", "Status unknown: no recent probe results for the default proxy"),
-            (PASSING, UNKNOWN, 4, 4, "degraded", "HTTP entry available; SOCKS5 status unknown"),
-            (UNKNOWN, PASSING, 4, 4, "degraded", "SOCKS5 entry available; HTTP status unknown"),
-            (FAILING, UNKNOWN, 4, 4, "down", "HTTP entry failing; SOCKS5 status unknown"),
-            (UNKNOWN, FAILING, 4, 4, "down", "SOCKS5 entry failing; HTTP status unknown"),
+             "Auto-switching Proxy available on its last passing public proxy, without a spare"),
+            (PASSING, PASSING, 0, 4, "degraded",
+             "Auto-switching Proxy answering, but no public proxy passes its probe"),
+            (PASSING, PASSING, None, None, "ok", "Auto-switching Proxy available"),
+            (FAILING, PASSING, 4, 4, "degraded", "Auto-switching Proxy: HTTP failing, SOCKS5 still available"),
+            (PASSING, FAILING, 4, 4, "degraded", "Auto-switching Proxy: SOCKS5 failing, HTTP still available"),
+            (FAILING, FAILING, 3, 4, "down", "Auto-switching Proxy failing while public proxies pass"),
+            (FAILING, FAILING, 0, 4, "down", "Auto-switching Proxy failing: no public proxy passes its probe"),
+            (FAILING, FAILING, None, None, "down", "Auto-switching Proxy failing"),
+            (UNKNOWN, UNKNOWN, 4, 4, "unknown",
+             "Status unknown: no recent probe results for the Auto-switching Proxy"),
+            (PASSING, UNKNOWN, 4, 4, "degraded", "Auto-switching Proxy: HTTP available, SOCKS5 status unknown"),
+            (UNKNOWN, PASSING, 4, 4, "degraded", "Auto-switching Proxy: SOCKS5 available, HTTP status unknown"),
+            (FAILING, UNKNOWN, 4, 4, "down", "Auto-switching Proxy: HTTP failing, SOCKS5 status unknown"),
+            (UNKNOWN, FAILING, 4, 4, "down", "Auto-switching Proxy: SOCKS5 failing, HTTP status unknown"),
         ]
         for http, socks, passing, configured, level, text in cases:
             with self.subTest(http=http, socks=socks, passing=passing):
@@ -89,7 +91,8 @@ class StatusTest(PortalTestCase):
     def test_page_is_public(self):
         response = self.client.get("/")
         self.assertEqual(response.status_code, 200)
-        self.assertContains(response, "Default proxy available; 1 pool proxy not passing, failover working")
+        self.assertContains(response,
+                            "Auto-switching Proxy available; 1 public proxy not passing, switching still works")
         self.assertContains(response, "Private proxies")
         self.assertContains(response, "us-west-racknerd-12tb")
         self.assert_only_fixed_queries()
@@ -126,7 +129,8 @@ class StatusTest(PortalTestCase):
         self.assertNotIn("incidents", live)
         # both texts on the page, for the script to switch: the note on missing monitoring data hidden
         self.assertIn('<p data-live-monitoring="off" hidden>Monitoring data is unavailable', html)
-        self.assertIn('<p data-live-monitoring="on">The default proxy ha-general sends each new connection', html)
+        self.assertIn('<p data-live-monitoring="on">The Auto-switching Proxy sends each new connection to a passing '
+                      'public proxy; open connections stay on their proxy.</p>', html)
         texts = json.loads(re.search(r'<script id="status-texts" type="application/json">(.*?)</script>', html).group(1))
         self.assertEqual((texts["passing"], texts["s_ago"]), ("Passing", "%(n)d s ago"))
         nonce = response["Content-Security-Policy"].split("'nonce-")[1].split("'")[0]
@@ -234,7 +238,7 @@ class StatusTest(PortalTestCase):
         self.assertNotIn("summary-grid", page)
         self.assertNotIn('class="history"', page)
         self.assertNotIn("Past 30 days", page)
-        for old in (">Entries<", "Default proxy ·", "Private entry"):
+        for old in (">Entries<", "Default proxy", "Private entry", "pool prox", "HA entr", "ha-general sends"):
             self.assertNotIn(old, page)
         self.assertEqual(page.count('<table class="table status-table">'), 2)
         self.assertEqual(page.count("<thead>"), 2)
@@ -287,7 +291,7 @@ class StatusTest(PortalTestCase):
         data = self.client.get("/api/status").json()
         self.assertEqual(data["entries"]["ha-general"]["protocols"]["http"]["state"], "unknown")
         self.assertEqual(data["entries"]["ha-general"]["protocols"]["socks"]["state"], "passing")
-        self.assertEqual(data["headline"]["text"], "SOCKS5 entry available; HTTP status unknown")
+        self.assertEqual(data["headline"]["text"], "Auto-switching Proxy: SOCKS5 available, HTTP status unknown")
 
     def test_stale_by_prometheus_is_unknown(self):
         # the dashboard expression answers -1 for a target without a result in the last 90 s
@@ -354,7 +358,7 @@ class StatusTest(PortalTestCase):
 
     def test_incidents(self):
         now = timezone.now()
-        Incident.objects.create(title="Proxy us-west down", body="Use the default proxy.", component="proxies",
+        Incident.objects.create(title="Proxy us-west down", body="Use the Auto-switching Proxy.", component="proxies",
                                 state="investigating", started_at=now - datetime.timedelta(hours=1))
         Incident.objects.create(title="Old outage", component="ha-general", state="resolved",
                                 started_at=now - datetime.timedelta(days=40),

@@ -84,6 +84,18 @@ def op_label(op):
 
 
 @register.filter
+def stage_label(stage):
+    from portal import lifecycle
+    return lifecycle.stage_label(stage)
+
+
+@register.filter
+def restarted_names(restarted):
+    from portal import lifecycle
+    return lifecycle.restarted_names(restarted)
+
+
+@register.filter
 def incident_chip(incident):
     """A maintenance notice is information, never a passing state."""
     if incident.state == "maintenance":

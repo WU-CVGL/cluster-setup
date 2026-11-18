@@ -318,7 +318,7 @@ class UsersPageTest(PortalTestCase):
 
     def test_service_accounts_as_before(self):
         page = self.client.get("/admin/users")
-        self.assertContains(page, "Changed with proxy_accounts.py only", count=2)
+        self.assertContains(page, "Changed outside the portal only", count=2)
         self.assertContains(page, 'href="/admin/accounts/rotate?username=svc-docker-cvgl-node01"')
         self.assertNotContains(page, "username=svc-ha")
         self.assertEqual(self.client.post("/admin/accounts/disable", {"username": "svc-ha", "confirm": "svc-ha"})

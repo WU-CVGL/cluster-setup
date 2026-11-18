@@ -158,7 +158,7 @@ main.shell{padding-top:24px}.hero-head{display:block}h1{font-size:26px}.status-h
 {% block content %}{% endblock %}
 </main>
 <footer class="footer"><div class="shell">
-  <b>{% translate "CVGL Proxy" %}</b> · {% translate "Probe results from Prometheus. Account information from the proxy accounts file, refreshed at least every 5 minutes." %}
+  <b>{% translate "CVGL Proxy" %}</b> · {% translate "Probes every 30 seconds. Account information refreshed at least every 5 minutes." %}
   <div><a href="https://grafana.cvgl.lab/d/proxy-availability">{% translate "Proxy Availability in Grafana" %}</a> · <a href="https://grafana.cvgl.lab/d/proxy-usage">{% translate "Proxy Usage in Grafana" %}</a></div>
 </div></footer>
 <script nonce="{{ csp_nonce }}">

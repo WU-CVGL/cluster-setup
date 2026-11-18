@@ -5,12 +5,12 @@
   <div>
     <div class="eyebrow">{% translate "My usage" %}</div>
     <h1>{% translate "My proxy usage" %}</h1>
-    <p class="sub">{% blocktranslate with name=view.username %}Observed traffic of the account {{ name }}, counted where you enter the proxies: the HA entries, and a proxy's own entry when it requires accounts. Traffic through a proxy's own entry without an account is counted under no user.{% endblocktranslate %}</p>
+    <p class="sub">{% blocktranslate with name=view.username %}Observed traffic of the account {{ name }}, counted at the address you connect to: the auto-switching proxies, and a proxy's own address when it requires an account. Traffic through a proxy's own address without an account is counted under no user.{% endblocktranslate %}</p>
   </div>
 </div>
 
 {% if not view.available %}
-<div class="notice warn" role="status"><p>{% translate "Usage data is unavailable right now: Prometheus did not answer. Try again later." %}</p></div>
+<div class="notice warn" role="status"><p>{% translate "Usage data is unavailable right now. Try again later." %}</p></div>
 {% else %}
 <section aria-labelledby="totals-title">
   <div class="section-bar"><div><h2 id="totals-title">{% translate "Observed totals" %}</h2><p>{% translate "Download and upload through the proxies over the last 24 hours, 7 days and 30 days." %}</p></div></div>

@@ -7,8 +7,8 @@ class Incident(models.Model):
     """A notice on the status page: an outage, degradation or maintenance, written by an admin."""
 
     COMPONENTS = [
-        ("ha-general", pgettext_lazy("incident component", "Default proxy (ha-general)")),
-        ("ha-private", pgettext_lazy("incident component", "Private entry (ha-private)")),
+        ("ha-general", pgettext_lazy("incident component", "Auto-switching Proxy")),
+        ("ha-private", pgettext_lazy("incident component", "Private Auto-switching Proxy")),
         ("proxies", pgettext_lazy("incident component", "Individual proxies")),
         ("monitoring", pgettext_lazy("incident component", "Monitoring")),
         ("portal", pgettext_lazy("incident component", "Portal")),

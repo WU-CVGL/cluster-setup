@@ -14,10 +14,10 @@
     <dt>{% translate "Request" %}</dt><dd class="mono">{{ row.id }}</dd>
     <dt>{% translate "Requested" %}</dt><dd>{{ row.requested_at|date:"Y-m-d H:i:s" }} · {{ row.requested_by }}</dd>
     {% if row.status_at %}<dt>{% translate "Last update" %}</dt><dd>{{ row.status_at|date:"Y-m-d H:i:s" }}</dd>{% endif %}
-    {% if row.stage %}<dt>{% translate "Stage" %}</dt><dd class="mono">{{ row.stage }}</dd>{% endif %}
+    {% if row.stage %}<dt>{% translate "Stage" %}</dt><dd>{{ row.stage|stage_label }}</dd>{% endif %}
     {% if row.error %}<dt>{% translate "Error" %}</dt><dd class="mono">{{ row.error }}</dd>{% endif %}
     {% if row.state == 'failed' %}<dt>{% translate "Previous state" %}</dt><dd>{% if row.restored is False %}{% translate "not restored" %}{% else %}{% translate "restored" %}{% endif %}</dd>{% endif %}
-    {% if row.restarted %}<dt>{% translate "Restarted" %}</dt><dd class="mono">{{ row.restarted }}</dd>{% endif %}
+    {% if row.restarted %}<dt>{% translate "Restarted" %}</dt><dd class="mono">{{ row.restarted|restarted_names }}</dd>{% endif %}
   </dl>
   {% if not row.final %}<p class="tiny">{% translate "This page updates by itself." %}</p>{% endif %}
 </section>
