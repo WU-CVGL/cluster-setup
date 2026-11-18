@@ -330,6 +330,20 @@ class RenderTest(_Base):
     def ha(self):
         return json.loads((self.base / pa.HA_CONFIG).read_text())
 
+    def test_render_that_writes_removes_the_applied_state(self):
+        self.add("alice", "svc-monitor", "svc-ha")
+        self.assertEqual(run(self.base, "render")[0], 0)
+        applied = self.base / pa.APPLIED_FILE
+        applied.write_text("{}")
+        self.assertEqual(run(self.base, "render")[0], 0)  # nothing to write: the record stays
+        self.assertTrue(applied.exists())
+        run(self.base, "disable", "alice")
+        self.assertTrue(applied.exists())
+        self.assertEqual(run(self.base, "render")[0], 0)
+        self.assertFalse(applied.exists())
+        self.assertIsNone(json.loads(run(self.base, "status", "--json")[1])["unapplied_changes"])
+        self.assertIn("last applied sha256:  unknown", run(self.base, "status")[1])
+
     def inbound_users(self, config):
         users = {}
         for inbound in config["inbounds"]:
