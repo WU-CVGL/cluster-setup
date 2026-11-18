@@ -718,6 +718,21 @@ class RunningStateTest(_Base):
         self.assertNotIn("boss", self.docker.private_users)
         self.assertIn(("ha-private", "boss"), self.probe.entry_calls)  # her 407 on ha-private, checked directly
 
+    def test_noop_with_a_record_that_does_not_match_ha_private_is_applied_in_full(self):
+        """applied.json matches the files after "admin boss off; render", but ha-private still takes boss."""
+        self.request("abcdefgh-1", "disable", "bob")
+        self.assertEqual(self.run_applier(), 0)
+        self.cli("admin", "boss", "off")
+        self.cli("render")
+        self.mark_applied()  # as if the record had survived the change
+        self.request("abcdefgh-2", "admin-off", "boss")
+        self.assertEqual(self.run_applier(), 0)
+        record = self.status("abcdefgh-2")
+        self.assertEqual((record["status"], record["changed"]), ("applied", False))
+        self.assertIn("xray-" + PRIVATE, record["restarted"])
+        self.assertNotIn("boss", self.docker.ha_private_users)
+        self.assertNotIn("boss", self.docker.private_users)
+
     def test_cli_render_after_a_restart_by_hand_is_not_taken_as_applied(self):
         """Portal disable; CLI enable, render, restart; CLI disable, render, no restart; portal disable again."""
         self.request("abcdefgh-1", "disable", "alice")
