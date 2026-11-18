@@ -379,11 +379,12 @@ def incidents_page(request):
 @require_http_methods(["GET", "POST"])
 def incident_page(request, pk):
     incident = get_object_or_404(Incident, pk=pk)
+    started_at = incident.started_at  # validating the form writes the cleared field into incident
     form = IncidentForm(request.POST or None, instance=incident)
     update = UpdateForm(initial={"state": incident.state})
     if request.method == "POST" and form.is_valid():
         edited = form.save(commit=False)
-        edited.started_at = form.cleaned_data["started_at"] or incident.started_at
+        edited.started_at = form.cleaned_data["started_at"] or started_at
         edited.set_state(edited.state)
         edited.save()
         log.info("incident %s edited by %s", incident.id, session_user(request))

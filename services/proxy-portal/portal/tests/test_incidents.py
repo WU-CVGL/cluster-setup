@@ -60,6 +60,15 @@ class IncidentAdminTest(PortalTestCase):
         incident.refresh_from_db()
         self.assertIsNone(incident.resolved_at)
 
+    def test_edit_with_the_start_time_cleared_keeps_it(self):
+        incident = self.create(started_at="2026-11-01T08:30")
+        started = incident.started_at
+        response = self.client.post(f"/admin/incidents/{incident.id}", {
+            "title": "Slow downloads", "component": "proxies", "state": "identified", "body": "x", "started_at": ""})
+        self.assertEqual(response.status_code, 302)
+        incident.refresh_from_db()
+        self.assertEqual((incident.state, incident.started_at), ("identified", started))
+
     def test_invalid_input(self):
         response = self.client.post("/admin/incidents", {"title": "", "component": "nope", "state": "fine"})
         self.assertEqual(response.status_code, 400)
