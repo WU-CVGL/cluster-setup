@@ -1,0 +1,39 @@
+{% extends "portal/base.html" %}{% load i18n portal %}
+{% block title %}{% translate "Change log" %}{% endblock %}
+{% block content %}
+<div class="hero-head"><div>
+  <div class="eyebrow">{% translate "Admin" %}</div>
+  <h1>{% translate "Change log" %}</h1>
+  <p class="sub">{% blocktranslate with n=limit %}Every account request from the portal, who made it and when, and the applier's outcome. The newest {{ n }} that match.{% endblocktranslate %}</p>
+</div></div>
+{% include "portal/admin/_nav.html" %}
+{% if raw_auth_text %}<div class="notice section-gap"><p>{{ raw_auth_text }}</p></div>{% endif %}
+<form class="card card-pad filters" method="get" action="{% url 'admin_log' %}" role="search">
+  <div class="field"><label for="f-username">{% translate "Account" %}</label><input class="input mono" id="f-username" name="username" value="{{ filters.username|default:'' }}" maxlength="64"></div>
+  <div class="field"><label for="f-by">{% translate "By" %}</label><input class="input" id="f-by" name="requested_by" value="{{ filters.requested_by|default:'' }}" maxlength="128"></div>
+  <div class="field"><label for="f-op">{% translate "Operation" %}</label><select class="input" id="f-op" name="op"><option value="">{% translate "Any" %}</option>{% for value, label in ops %}<option value="{{ value }}"{% if filters.op == value %} selected{% endif %}>{{ label }}</option>{% endfor %}</select></div>
+  <div class="field"><label for="f-state">{% translate "State" %}</label><select class="input" id="f-state" name="state"><option value="">{% translate "Any" %}</option>{% for value, label in states %}<option value="{{ value }}"{% if filters.state == value %} selected{% endif %}>{{ label }}</option>{% endfor %}</select></div>
+  <button class="btn primary" type="submit">{% translate "Filter" %}</button>{% if filters %}<a class="btn" href="{% url 'admin_log' %}">{% translate "Clear" %}</a>{% endif %}
+</form>
+<div class="section card table-scroll">
+  <table class="table">
+    <caption class="sr-only">{% translate "Change log" %}</caption>
+    <thead><tr><th scope="col">{% translate "Requested" %}</th><th scope="col">{% translate "By" %}</th><th scope="col">{% translate "Operation" %}</th><th scope="col">{% translate "Account" %}</th><th scope="col">{% translate "State" %}</th><th scope="col" class="wide">{% translate "Outcome" %}</th><th scope="col"><span class="sr-only">{% translate "Details" %}</span></th></tr></thead>
+    <tbody>
+    {% for row, level, text in rows %}
+    <tr>
+      <td>{{ row.requested_at|date:"Y-m-d H:i:s" }}</td>
+      <td>{{ row.requested_by }}</td>
+      <td>{{ row.op|op_label }}</td>
+      <td class="mono">{{ row.username }}</td>
+      <td>{% include "portal/admin/_state.html" with level=level %}</td>
+      <td class="wrap wide small">{{ text }}{% if row.stage %} <span class="mono">({{ row.stage }})</span>{% endif %}{% if row.status_at %}<div class="tiny">{{ row.status_at|date:"Y-m-d H:i:s" }}</div>{% endif %}</td>
+      <td><a href="{% url 'admin_request' row.id %}">{% translate "Details" %}</a></td>
+    </tr>
+    {% empty %}
+    <tr><td colspan="7"><div class="empty">{% translate "No requests" %}</div></td></tr>
+    {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% endblock %}

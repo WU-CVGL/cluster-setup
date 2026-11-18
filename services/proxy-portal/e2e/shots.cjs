@@ -1,4 +1,4 @@
-// Renders Status, My access and My usage in English and Chinese, at desktop and phone width, and saves
+// Renders Status, My access, My usage and the admin console in English and Chinese, at desktop and phone width, and saves
 // screenshots. Needs Playwright for Node (NODE_PATH) and a Chromium (CHROME, optional).
 //   node e2e/shots.cjs <base URL> <output folder> [user] [password]
 // Fails on a console error, a failed request, a request to another origin, or a page without its main heading.
@@ -40,7 +40,14 @@ const fs = require('fs');
         await page.locator('.usage-card .big').first().textContent()]);
       const overflow = await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth);
       if (overflow > 0) problems.push(`${lang}/${device}: horizontal overflow ${overflow}px on usage`);
-      for (const path of ['/', '/access']) {
+      // the admin console (the user is a Determined admin in the stub master)
+      for (const [path, name] of [['/admin/accounts', 'admin-accounts'], ['/admin/accounts/disable?username=alice', 'admin-confirm'],
+                                  ['/admin/log', 'admin-log'], ['/admin/incidents', 'admin-incidents']]) {
+        await page.goto(base + path, { waitUntil: 'networkidle' });
+        await page.screenshot({ path: `${out}/${name}-${lang}-${device}.png`, fullPage: true });
+        results.push([`${name}-${lang}-${device}`, await page.locator('h1').first().textContent()]);
+      }
+      for (const path of ['/', '/access', '/admin/accounts', '/admin/log']) {
         await page.goto(base + path, { waitUntil: 'networkidle' });
         const o = await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth);
         if (o > 0) problems.push(`${lang}/${device}: horizontal overflow ${o}px on ${path}`);

@@ -435,13 +435,14 @@ services:
     expose:
       - 9550
 
-  # The proxy portal (proxy-portal/README.md): status, My access, My usage, behind nginx as
-  # https://proxy.cvgl.lab. It reads the applier's status.json from the spool (read-only; requests/
-  # and results/ masked), and queries Prometheus and checks sign-ins with the Determined master over
-  # proxy_portal_upstream. Its database and secret key are in the data folder, owned by uid 3089.
-  # No Docker socket, no accounts file. No published port, and on no network a proxy is on: nginx
-  # reaches it on proxy_portal only, so the X-Real-IP and X-Forwarded-Proto it trusts always come
-  # from nginx.
+  # The proxy portal (proxy-portal/README.md): status, My access, My usage and the admin console,
+  # behind nginx as https://proxy.cvgl.lab. The applier's spool is read-only (status/, status.json)
+  # except requests/, where it writes account requests, and results/, where it reads and deletes the
+  # one-time passwords; both are owned by uid 3089 (proxy-portal/applier/README.md#spool). It
+  # queries Prometheus and checks sign-ins with the Determined master over proxy_portal_upstream. Its
+  # database and secret key are in the data folder, owned by uid 3089. No Docker socket, no accounts
+  # file. No published port, and on no network a proxy is on: nginx reaches it on proxy_portal only,
+  # so the X-Real-IP and X-Forwarded-Proto it trusts always come from nginx.
   proxy-portal:
     build: ./proxy-portal
     image: proxy-portal
@@ -455,10 +456,10 @@ services:
       - proxy_portal_upstream
     volumes:
       - ${PROXY_PORTAL_SPOOL:-/var/lib/proxy-portal/spool}:/srv/spool:ro
+      - ${PROXY_PORTAL_SPOOL:-/var/lib/proxy-portal/spool}/requests:/srv/spool/requests
+      - ${PROXY_PORTAL_SPOOL:-/var/lib/proxy-portal/spool}/results:/srv/spool/results
       - ${PROXY_PORTAL_DATA:-/var/lib/proxy-portal/data}:/data
     tmpfs:
-      - /srv/spool/requests:size=64k,mode=0700,uid=3089,gid=3089
-      - /srv/spool/results:size=64k,mode=0700,uid=3089,gid=3089
       - /tmp:size=16m,mode=1777
     read_only: true
     cap_drop:

@@ -1,0 +1,21 @@
+{% load i18n portal %}<div class="card table-scroll">
+  <table class="table">
+    <caption class="sr-only">{% translate "Requests" %}</caption>
+    <thead><tr><th scope="col">{% translate "Requested" %}</th><th scope="col">{% translate "By" %}</th><th scope="col">{% translate "Operation" %}</th><th scope="col">{% translate "Account" %}</th><th scope="col">{% translate "State" %}</th><th scope="col" class="wide">{% translate "Stage" %}</th><th scope="col"><span class="sr-only">{% translate "Details" %}</span></th></tr></thead>
+    <tbody>
+    {% for row in requests %}
+    <tr>
+      <td>{{ row.requested_at|date:"Y-m-d H:i:s" }}</td>
+      <td>{{ row.requested_by }}</td>
+      <td>{{ row.op|op_label }}</td>
+      <td class="mono">{{ row.username }}</td>
+      <td>{% include "portal/admin/_state.html" with level=row|request_level %}{% if row.state == 'failed' and row.restored is False %} <span class="chip bad">{% translate "Not restored" %}</span>{% endif %}</td>
+      <td class="mono wide">{{ row.stage|default:"—" }}</td>
+      <td><a href="{% url 'admin_request' row.id %}">{% translate "Details" %}</a></td>
+    </tr>
+    {% empty %}
+    <tr><td colspan="7"><div class="empty">{% translate "No requests" %}</div></td></tr>
+    {% endfor %}
+    </tbody>
+  </table>
+</div>

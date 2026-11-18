@@ -103,9 +103,10 @@
         <li class="event">
           <div class="event-dot{% if incident.open %} open{% endif %}" aria-hidden="true">{% if incident.open %}!{% else %}✓{% endif %}</div>
           <div>
-            <div class="event-head"><b>{{ incident.title }}</b><span class="chip {% if incident.open %}warn{% else %}ok{% endif %}">{{ incident.get_state_display }}</span></div>
+            <div class="event-head"><b>{{ incident.title }}</b><span class="chip {{ incident|incident_chip }}">{{ incident.get_state_display }}</span></div>
             {% if incident.body %}<div class="event-body">{{ incident.body }}</div>{% endif %}
             <div class="event-time">{{ incident.get_component_display }} · {{ incident.started_at|date:"Y-m-d H:i" }}{% if incident.resolved_at %} – {{ incident.resolved_at|date:"Y-m-d H:i" }}{% endif %}</div>
+            {% if incident.updates.all %}<ol class="updates">{% for u in incident.updates.all %}<li><b>{{ u.posted_at|date:"Y-m-d H:i" }} · {{ u.get_state_display }}</b><br>{{ u.body }}</li>{% endfor %}</ol>{% endif %}
           </div>
         </li>
         {% endfor %}

@@ -29,8 +29,9 @@ class PortalMixin:
         cls._prom_server, prom_url = stubs.serve(cls.prometheus)
         cls.tmp = Path(tempfile.mkdtemp())
         cls.status_file = cls.tmp / "status.json"
+        cls.spool = cls.tmp / "spool"
         cls._settings = override_settings(MASTER_URL=master_url, PROMETHEUS_URL=prom_url,
-                                          STATUS_FILE=cls.status_file)
+                                          STATUS_FILE=cls.status_file, SPOOL_DIR=cls.spool)
         cls._settings.enable()
 
     @classmethod
@@ -46,6 +47,9 @@ class PortalMixin:
         self.master.__init__()
         self.prometheus.__init__(stubs.demo_answers())
         self.write_status()
+        shutil.rmtree(self.spool, ignore_errors=True)
+        for name in ("requests", "results", "status"):
+            (self.spool / name).mkdir(parents=True, mode=0o700)
         self.client = https_client()
 
     def write_status(self, change=None, generated_at=None):

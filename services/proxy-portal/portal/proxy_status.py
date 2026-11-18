@@ -17,6 +17,8 @@ from django.conf import settings
 NAME_RE = re.compile(r"[a-z0-9][a-z0-9._-]{0,63}")
 PROXY_NAME_RE = re.compile(r"[a-z0-9][a-z0-9_-]*")
 PROTOCOLS = ("http", "socks")
+# changed with proxy_accounts.py only, never from the portal
+PROTECTED = ("svc-ha", "svc-monitor")
 
 
 @dataclass
@@ -24,6 +26,16 @@ class Account:
     name: str
     enabled: bool
     admin: bool
+
+
+@dataclass
+class AccountRow:
+    """An account as the admins' list shows it: users and service accounts."""
+    name: str
+    kind: str
+    enabled: bool
+    admin: bool
+    protected: bool
 
 
 @dataclass
@@ -39,7 +51,8 @@ class ProxyStatus:
     stale: bool = False
     generated_at: Optional[datetime.datetime] = None
     raw_auth: bool = False
-    accounts: Dict[str, Account] = field(default_factory=dict)
+    accounts: Dict[str, Account] = field(default_factory=dict)  # users only: a person's own account
+    all_accounts: List[AccountRow] = field(default_factory=list)  # users and service accounts, for the admins
     proxies: List[Proxy] = field(default_factory=list)
     entry_ports: Dict[str, Dict[str, Optional[int]]] = field(default_factory=dict)
     # the accounts file differs from the applier's last apply (a change made with proxy_accounts.py): what it
@@ -68,11 +81,16 @@ def parse(data, now=None):
         pass
     now = time.time() if now is None else now
     stale = generated is None or now - generated.timestamp() > settings.STATUS_FILE_MAX_AGE
-    accounts = {}
+    accounts, rows = {}, []
     for entry in data["accounts"]:
         if not isinstance(entry, dict) or not isinstance(entry.get("name"), str):
             continue
         name = entry["name"]
+        if NAME_RE.fullmatch(name):
+            kind = "service" if name.startswith("svc-") else "user"
+            rows.append(AccountRow(name=name, kind=kind, enabled=entry.get("enabled") is True,
+                                   admin=entry.get("admin") is True,
+                                   protected=entry.get("protected") is True or name in PROTECTED))
         if not NAME_RE.fullmatch(name) or entry.get("kind") != "user" or name.startswith("svc-"):
             continue  # service accounts are nobody's own account
         accounts[name] = Account(name=name, enabled=entry.get("enabled") is True, admin=entry.get("admin") is True)
@@ -85,10 +103,10 @@ def parse(data, now=None):
     entry_ports = {name: _ports((entries.get(name) or {}).get("ports") if isinstance(entries.get(name), dict)
                                 else None)
                    for name in ("ha-general", "ha-private")}
+    unapplied = data.get("unapplied_changes")
     return ProxyStatus(available=True, stale=stale, generated_at=generated, raw_auth=data.get("raw_auth") is True,
-                       accounts=accounts, proxies=proxies, entry_ports=entry_ports,
-                       unapplied_changes=data.get("unapplied_changes") if isinstance(data.get("unapplied_changes"),
-                                                                                   bool) else None)
+                       accounts=accounts, all_accounts=sorted(rows, key=lambda r: r.name), proxies=proxies,
+                       entry_ports=entry_ports, unapplied_changes=unapplied if isinstance(unapplied, bool) else None)
 
 
 def load():

@@ -75,3 +75,23 @@ def get(mapping, key):
         return mapping.get(key)
     except AttributeError:
         return None
+
+
+@register.filter
+def op_label(op):
+    from portal.models import AccountRequest
+    return dict(AccountRequest.OPS).get(op, op)
+
+
+@register.filter
+def incident_chip(incident):
+    """A maintenance notice is information, never a passing state."""
+    if incident.state == "maintenance":
+        return "info"
+    return "warn" if incident.open else "ok"
+
+
+@register.filter
+def request_level(row):
+    from portal import lifecycle
+    return lifecycle.level(row)

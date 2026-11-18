@@ -33,10 +33,10 @@ services:
       PROXY_PORTAL_PROMETHEUS_URL: http://stubs:19090
     volumes:
       - ./run/spool:/srv/spool:ro
+      - ./run/spool/requests:/srv/spool/requests
+      - ./run/spool/results:/srv/spool/results
       - data:/data
     tmpfs:
-      - /srv/spool/requests:size=64k,mode=0700,uid=3089,gid=3089
-      - /srv/spool/results:size=64k,mode=0700,uid=3089,gid=3089
       - /tmp:size=16m,mode=1777
     read_only: true
     cap_drop: [ALL]

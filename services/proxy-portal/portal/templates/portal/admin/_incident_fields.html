@@ -1,0 +1,7 @@
+{% load i18n %}<div class="form-grid">
+  <div class="field full"><label for="{{ form.title.id_for_label }}">{% translate "Title" %}</label>{{ form.title }}{% for e in form.title.errors %}<p class="tiny">{{ e }}</p>{% endfor %}</div>
+  <div class="field"><label for="{{ form.component.id_for_label }}">{% translate "Affected component" %}</label>{{ form.component }}</div>
+  <div class="field"><label for="{{ form.state.id_for_label }}">{% translate "State" %}</label>{{ form.state }}</div>
+  <div class="field"><label for="{{ form.started_at.id_for_label }}">{% translate "Started" %}</label>{{ form.started_at }}{% for e in form.started_at.errors %}<p class="tiny">{{ e }}</p>{% endfor %}<p class="tiny">{% translate "Empty: now." %}</p></div>
+  <div class="field full"><label for="{{ form.body.id_for_label }}">{% translate "Text" %}</label>{{ form.body }}<p class="tiny">{% translate "Shown on the public status page as plain text." %}</p></div>
+</div>
