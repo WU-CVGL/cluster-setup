@@ -1,0 +1,151 @@
+{
+    "log": {
+        "loglevel": "warning"
+    },
+    "stats": {},
+    "api": {
+        "tag": "api",
+        "services": [
+            "StatsService"
+        ]
+    },
+    "policy": {
+        "levels": {
+            "0": {
+                "statsUserUplink": true,
+                "statsUserDownlink": true
+            }
+        },
+        "system": {
+            "statsInboundUplink": true,
+            "statsInboundDownlink": true,
+            "statsOutboundUplink": true,
+            "statsOutboundDownlink": true
+        }
+    },
+    "inbounds": [
+        {
+            "listen": "0.0.0.0",
+            "port": 8889,
+            "protocol": "http",
+            "settings": {
+                "allowTransparent": false,
+                "timeout": 300
+            },
+            "tag": "http_IN"
+        },
+        {
+            "listen": "0.0.0.0",
+            "port": 1089,
+            "protocol": "socks",
+            "settings": {
+                "auth": "noauth",
+                "udp": true
+            },
+            "tag": "socks_IN"
+        },
+        {
+            "listen": "0.0.0.0",
+            "port": 10085,
+            "protocol": "dokodemo-door",
+            "settings": {
+                "address": "127.0.0.1"
+            },
+            "tag": "api"
+        }
+    ],
+    "outbounds": [
+        {
+            "protocol": "blackhole",
+            "tag": "blackhole"
+        },
+        {
+            "protocol": "socks",
+            "tag": "pool-usca5-bwh-sla-1tb",
+            "settings": {
+                "servers": [
+                    {
+                        "address": "xray-usca5-bwh-sla-1tb",
+                        "port": 1089
+                    }
+                ]
+            }
+        },
+        {
+            "protocol": "socks",
+            "tag": "pool-usca1-bwh-megaboxpro-2tb",
+            "settings": {
+                "servers": [
+                    {
+                        "address": "xray-usca1-bwh-megaboxpro-2tb",
+                        "port": 1089
+                    }
+                ]
+            }
+        },
+        {
+            "protocol": "socks",
+            "tag": "pool-usca6-bwh-1tb",
+            "settings": {
+                "servers": [
+                    {
+                        "address": "xray-usca6-bwh-1tb",
+                        "port": 1089
+                    }
+                ]
+            }
+        },
+        {
+            "protocol": "socks",
+            "tag": "pool-us-west-racknerd-12tb",
+            "settings": {
+                "servers": [
+                    {
+                        "address": "xray-us-west-racknerd-12tb",
+                        "port": 1089
+                    }
+                ]
+            }
+        }
+    ],
+    "observatory": {
+        "subjectSelector": [
+            "pool-"
+        ],
+        "probeUrl": "https://www.google.com/generate_204",
+        "probeInterval": "15s",
+        "enableConcurrency": true
+    },
+    "routing": {
+        "domainStrategy": "AsIs",
+        "balancers": [
+            {
+                "tag": "ha-general",
+                "selector": [
+                    "pool-"
+                ],
+                "strategy": {
+                    "type": "leastPing"
+                },
+                "fallbackTag": "blackhole"
+            }
+        ],
+        "rules": [
+            {
+                "type": "field",
+                "inboundTag": [
+                    "api"
+                ],
+                "outboundTag": "api"
+            },
+            {
+                "type": "field",
+                "inboundTag": [
+                    "http_IN",
+                    "socks_IN"
+                ],
+                "balancerTag": "ha-general"
+            }
+        ]
+    }
+}

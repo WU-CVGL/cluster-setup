@@ -30,6 +30,11 @@ links:
   icon: monitorDashboard
   desc: Statistics and visualization
 
+- name: Proxy Availability
+  link: https://grafana.cvgl.lab/d/proxy-availability
+  icon: lan
+  desc: Status of the cluster's proxies
+
 - name: frp Dashboard
   link: https://frp.cvgl.lab
   icon: wan

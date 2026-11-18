@@ -1,4 +1,6 @@
 xray/*/config/*.json
+# The HA entry's runtime config, copied from xray-ha/config.example.json
+xray-ha/config/*.json
 nginx/ssl/
 harbor/*
 wandb/vol/

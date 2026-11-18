@@ -6,6 +6,8 @@
   - [Contents](#contents)
   - [Why a proxy](#why-a-proxy)
   - [The proxies on the supplementary services VM](#the-proxies-on-the-supplementary-services-vm)
+  - [The HA entry](#the-ha-entry)
+  - [Proxy availability](#proxy-availability)
   - [Bootstrap: a temporary proxy on one machine](#bootstrap-a-temporary-proxy-on-one-machine)
   - [Verify a proxy](#verify-a-proxy)
   - [Use the proxy](#use-the-proxy)
@@ -69,6 +71,61 @@ services:
 ```
 
 Add a new proxy from a share link (`vmess://`, `vless://`, `trojan://`, `ss://`) with [`create_xray_service.py`](../services/xray/scripts/README.md): it writes the `config.json`, adds both services to `docker-compose.yml` and the exporter to Prometheus. See the [Xray notes](../services/xray/README.md) for the configuration and [XTLS/Xray-examples](https://github.com/XTLS/Xray-examples) for reference configurations.
+
+## The HA entry
+
+`xray-ha` is one more entry on the same VM that does not depend on a single proxy:
+
+| Protocol | Private network | Campus network |
+| :--- | :--- | :--- |
+| HTTP | `http://192.168.233.8:30889` | `http://10.0.1.68:30889` |
+| SOCKS5 | `192.168.233.8:30089` | `10.0.1.68:30089` |
+
+It forwards each new connection over SOCKS5 to one proxy of its pool `ha-general`: `xray-usca5-bwh-sla-1tb`, `xray-usca1-bwh-megaboxpro-2tb`, `xray-usca6-bwh-1tb` and `xray-us-west-racknerd-12tb`. Every 15 seconds Xray fetches `https://www.google.com/generate_204` through each proxy (its observatory). A new connection goes to the proxy with the lowest latency among those whose last fetch succeeded (the `leastPing` balancer). The private proxies are not in the pool.
+
+What it covers and what it does not:
+
+- **A failed proxy**, whether its server, its route abroad or its `xray-<name>` service: new connections go to another proxy once the next fetch through it has failed, so within about one probe interval. Requests that start in between can fail.
+- **No fixed order.** The pool has no primary and backup: the proxy, and with it the exit address, can change from one connection to the next. To pin a proxy, use its own entry (the table above and `docker compose ps`).
+- **Open connections stay on their proxy.** A download through a proxy that fails breaks, and the client has to retry.
+- **Fails closed.** When no proxy of the pool passes, the entry refuses every request, also for destinations in China, instead of going out directly. The entry has no route of its own: private and Chinese destinations go out directly at the proxy, as through the proxy's own entry.
+- **Starts closed.** After `xray-ha` starts, it refuses requests until its first fetches through the proxies are done, a few seconds.
+- **Not the VM.** The entry, its proxies and the monitoring all run on the supplementary services VM, so a failure of the VM or of the management server stops them together.
+
+The configuration is [`services/xray-ha/config.example.json`](../services/xray-ha/config.example.json). The service reads a copy of it at `services/xray-ha/config/config.json`, which is not in git, so that it can later hold credentials:
+
+```sh
+cd ~/ws/cluster-setup/services
+mkdir -p xray-ha/config && cp xray-ha/config.example.json xray-ha/config/config.json
+docker compose up -d xray-ha xray-ha-exporter blackbox-exporter
+docker compose kill -s SIGHUP prometheus   # reload the probe job
+docker compose restart grafana             # load the new dashboard provider
+```
+
+The pool is explicit, and [`create_xray_service.py`](../services/xray/scripts/README.md) does not add new proxies to it. To add a proxy, give it a SOCKS outbound whose tag starts with `pool-`, as the others have, and set the `pool` label of its probe targets to `ha-general` in [`prometheus.yml`](../services/prometheus/prometheus.yml).
+
+Move clients to the HA entry only after the new ports work from where they are used: run `curl -x http://192.168.233.8:30889 https://www.google.com/generate_204 -w '%{http_code}\n'` on a node and the same with `10.0.1.68` on the login node, then the same with `--socks5-hostname` and port `30089`. Then move one kind of client at a time: environment variables, `pip` and `git` first, then the [Docker daemons](#docker-daemon), one drained node at a time, keeping `NO_PROXY` as it is. The proxies keep their own entries, so moving a client back is changing the port back.
+
+## Proxy availability
+
+The **Proxy Availability** dashboard in Grafana (linked from Flare) shows whether requests get through each entry. Every 30 seconds `blackbox-exporter` fetches `https://www.google.com/generate_204` through the HA entry and through every proxy's own HTTP and SOCKS5 ports ([`services/blackbox/blackbox.yml`](../services/blackbox/blackbox.yml), the `proxy-probe` job in [`prometheus.yml`](../services/prometheus/prometheus.yml)). A probe passes on a 204 within 8 seconds, without following redirects, with the proxy resolving the name. The proxies send `www.google.com` abroad (unlike `www.gstatic.com`, which the `geosite:cn` rule sends out directly), and Google cannot be reached directly from the campus network, so a passing probe shows that the proxy's way abroad works. A proxy is always probed through its own entry, never through the HA entry, so a failed proxy shows as failed while the HA entry carries on.
+
+- **Top row:** the HA entry's HTTP and SOCKS5 status; how many pool proxies pass on SOCKS5, the protocol the HA entry uses to reach them, out of how many are configured; the probe duration; the age of the last result; and the probe success rate and coverage over 24 hours.
+- **Proxies:** one row per proxy, with its pool, its HTTP and SOCKS5 status, durations, last result, 24-hour probe success rates and coverage, and the status and traffic from its exporter. The exporter only shows that Xray runs, not that requests get through.
+- **History:** probe results over time (a gap is a time without results), durations, the hourly probe success rate, the results per 5 minutes (10 expected; fewer means the exporter or Prometheus did not run) and the HA entry's traffic through each proxy, from its own counters (with Xray's small probe fetches through every proxy).
+
+A status is **Passing**, **Failing** or **Unknown**. Unknown means no result in the last 90 seconds; it is never the last known status. The probe success rate counts only the probes that ran, so read it together with the coverage. Reading the statuses together:
+
+| HA entry | Pool proxies | Meaning |
+| :--- | :--- | :--- |
+| Passing | 2 or more passing | Working, with a spare proxy |
+| Passing | 1 passing | Working, without a spare |
+| Failing | some passing | Look at `xray-ha` and its ports first |
+| Failing | none passing | Nothing gets out from the VM to the probe URL: all proxies are down, or the probe URL is |
+
+The probes run on the VM. They do not cover the way from a node or the login node to the VM's ports; check that with `curl` as above. Pool proxies that pass are not necessarily independent: several proxies can share an upstream provider.
+
+A new proxy needs its two modules in `blackbox.yml` and its two targets in the `proxy-probe` job (with `pool: none`) by hand; `create_xray_service.py` adds only its exporter.
 
 ## Bootstrap: a temporary proxy on one machine
 

@@ -138,6 +138,72 @@ scrape_configs:
           - "xray-miyaip-jp-01_relay_usca5-bwh-sla-2tb-exporter:9550"
           - "xray-miyaip-uk-01_relay_usca5-bwh-sla-2tb-exporter:9550"
           - "xray-miyaip-uk-01_relay_jpty1-bwh-2tb-exporter:9550"
+        # proxy_role keeps the two layers apart: a request through the HA entry is counted
+        # once by xray-ha and again by the proxy it goes through.
+        labels:
+          proxy_role: raw
+      - targets:
+          - "xray-ha-exporter:9550"
+        labels:
+          proxy_role: entry
+  # End-to-end probes through each proxy entry (services/blackbox/blackbox.yml): a target is a
+  # blackbox module, <entry>_<http|socks>; every probe fetches the same URL. 30 s apart, with a
+  # 10 s scrape timeout over the module's 8 s, since a request abroad can take seconds.
+  # A new xray proxy needs its two modules there and its two targets here (pool: none).
+  - job_name: "proxy-probe"
+    metrics_path: /probe
+    scrape_interval: 30s
+    scrape_timeout: 10s
+    static_configs:
+      - targets:
+          - "ha-general_http"
+          - "ha-general_socks"
+        labels:
+          kind: ha
+          pool: ha-general
+      - targets:
+          - "usca5-bwh-sla-1tb_http"
+          - "usca5-bwh-sla-1tb_socks"
+          - "usca1-bwh-megaboxpro-2tb_http"
+          - "usca1-bwh-megaboxpro-2tb_socks"
+          - "usca6-bwh-1tb_http"
+          - "usca6-bwh-1tb_socks"
+          - "us-west-racknerd-12tb_http"
+          - "us-west-racknerd-12tb_socks"
+        labels:
+          kind: raw
+          pool: ha-general
+      - targets:
+          - "jpty1-bwh-2tb_http"
+          - "jpty1-bwh-2tb_socks"
+          - "miyaip-uk-01_relay_jpty1-bwh-2tb_http"
+          - "miyaip-uk-01_relay_jpty1-bwh-2tb_socks"
+          - "miyaip-uk-01_relay_usca5-bwh-sla-2tb_http"
+          - "miyaip-uk-01_relay_usca5-bwh-sla-2tb_socks"
+          - "miyaip-jp-01_relay_usca5-bwh-sla-2tb_http"
+          - "miyaip-jp-01_relay_usca5-bwh-sla-2tb_socks"
+          - "miyaip-jp-01_relay_jpty1-bwh-2tb_http"
+          - "miyaip-jp-01_relay_jpty1-bwh-2tb_socks"
+        labels:
+          kind: raw
+          pool: none
+    relabel_configs:
+      - source_labels: [__address__]
+        target_label: __param_module
+      - source_labels: [__address__]
+        regex: '(.+)_(http|socks)'
+        target_label: entry
+        replacement: '$1'
+      - source_labels: [__address__]
+        regex: '(.+)_(http|socks)'
+        target_label: protocol
+        replacement: '$2'
+      - source_labels: [__address__]
+        target_label: instance
+      - target_label: __param_target
+        replacement: https://www.google.com/generate_204
+      - target_label: __address__
+        replacement: blackbox-exporter:9115
   - job_name: det-master
     relabel_configs:
       - target_label: det_cluster

@@ -1,0 +1,210 @@
+# End-to-end checks through each proxy entry, scraped by the proxy-probe job of
+# services/prometheus/prometheus.yml (docs/00_Network_Proxy.md#proxy-availability).
+# One module per entry and protocol, named <entry>_<http|socks>; the job passes the probe URL.
+# A raw entry is the xray-<entry> service itself, never the HA entry, so a proxy that fails
+# shows as failed even while the HA entry carries on through another proxy.
+# blackbox_exporter takes proxy_url as written, with no file or environment reference for it, and
+# a SOCKS5 proxy's credentials can only be in that URL. Once the entries require accounts, this
+# file is generated from a committed example with the probe account's credentials from a
+# protected file, and is no longer in git.
+modules:
+  ha-general_http:
+    prober: http
+    timeout: 8s
+    http:
+      proxy_url: http://xray-ha:8889
+      skip_resolve_phase_with_proxy: true
+      follow_redirects: false
+      valid_status_codes:
+      - 204
+      preferred_ip_protocol: ip4
+  ha-general_socks:
+    prober: http
+    timeout: 8s
+    http:
+      proxy_url: socks5://xray-ha:1089
+      skip_resolve_phase_with_proxy: true
+      follow_redirects: false
+      valid_status_codes:
+      - 204
+      preferred_ip_protocol: ip4
+  usca5-bwh-sla-1tb_http:
+    prober: http
+    timeout: 8s
+    http:
+      proxy_url: http://xray-usca5-bwh-sla-1tb:8889
+      skip_resolve_phase_with_proxy: true
+      follow_redirects: false
+      valid_status_codes:
+      - 204
+      preferred_ip_protocol: ip4
+  usca5-bwh-sla-1tb_socks:
+    prober: http
+    timeout: 8s
+    http:
+      proxy_url: socks5://xray-usca5-bwh-sla-1tb:1089
+      skip_resolve_phase_with_proxy: true
+      follow_redirects: false
+      valid_status_codes:
+      - 204
+      preferred_ip_protocol: ip4
+  usca1-bwh-megaboxpro-2tb_http:
+    prober: http
+    timeout: 8s
+    http:
+      proxy_url: http://xray-usca1-bwh-megaboxpro-2tb:8889
+      skip_resolve_phase_with_proxy: true
+      follow_redirects: false
+      valid_status_codes:
+      - 204
+      preferred_ip_protocol: ip4
+  usca1-bwh-megaboxpro-2tb_socks:
+    prober: http
+    timeout: 8s
+    http:
+      proxy_url: socks5://xray-usca1-bwh-megaboxpro-2tb:1089
+      skip_resolve_phase_with_proxy: true
+      follow_redirects: false
+      valid_status_codes:
+      - 204
+      preferred_ip_protocol: ip4
+  usca6-bwh-1tb_http:
+    prober: http
+    timeout: 8s
+    http:
+      proxy_url: http://xray-usca6-bwh-1tb:8889
+      skip_resolve_phase_with_proxy: true
+      follow_redirects: false
+      valid_status_codes:
+      - 204
+      preferred_ip_protocol: ip4
+  usca6-bwh-1tb_socks:
+    prober: http
+    timeout: 8s
+    http:
+      proxy_url: socks5://xray-usca6-bwh-1tb:1089
+      skip_resolve_phase_with_proxy: true
+      follow_redirects: false
+      valid_status_codes:
+      - 204
+      preferred_ip_protocol: ip4
+  us-west-racknerd-12tb_http:
+    prober: http
+    timeout: 8s
+    http:
+      proxy_url: http://xray-us-west-racknerd-12tb:8889
+      skip_resolve_phase_with_proxy: true
+      follow_redirects: false
+      valid_status_codes:
+      - 204
+      preferred_ip_protocol: ip4
+  us-west-racknerd-12tb_socks:
+    prober: http
+    timeout: 8s
+    http:
+      proxy_url: socks5://xray-us-west-racknerd-12tb:1089
+      skip_resolve_phase_with_proxy: true
+      follow_redirects: false
+      valid_status_codes:
+      - 204
+      preferred_ip_protocol: ip4
+  jpty1-bwh-2tb_http:
+    prober: http
+    timeout: 8s
+    http:
+      proxy_url: http://xray-jpty1-bwh-2tb:8889
+      skip_resolve_phase_with_proxy: true
+      follow_redirects: false
+      valid_status_codes:
+      - 204
+      preferred_ip_protocol: ip4
+  jpty1-bwh-2tb_socks:
+    prober: http
+    timeout: 8s
+    http:
+      proxy_url: socks5://xray-jpty1-bwh-2tb:1089
+      skip_resolve_phase_with_proxy: true
+      follow_redirects: false
+      valid_status_codes:
+      - 204
+      preferred_ip_protocol: ip4
+  miyaip-uk-01_relay_jpty1-bwh-2tb_http:
+    prober: http
+    timeout: 8s
+    http:
+      proxy_url: http://xray-miyaip-uk-01_relay_jpty1-bwh-2tb:8889
+      skip_resolve_phase_with_proxy: true
+      follow_redirects: false
+      valid_status_codes:
+      - 204
+      preferred_ip_protocol: ip4
+  miyaip-uk-01_relay_jpty1-bwh-2tb_socks:
+    prober: http
+    timeout: 8s
+    http:
+      proxy_url: socks5://xray-miyaip-uk-01_relay_jpty1-bwh-2tb:1089
+      skip_resolve_phase_with_proxy: true
+      follow_redirects: false
+      valid_status_codes:
+      - 204
+      preferred_ip_protocol: ip4
+  miyaip-uk-01_relay_usca5-bwh-sla-2tb_http:
+    prober: http
+    timeout: 8s
+    http:
+      proxy_url: http://xray-miyaip-uk-01_relay_usca5-bwh-sla-2tb:8889
+      skip_resolve_phase_with_proxy: true
+      follow_redirects: false
+      valid_status_codes:
+      - 204
+      preferred_ip_protocol: ip4
+  miyaip-uk-01_relay_usca5-bwh-sla-2tb_socks:
+    prober: http
+    timeout: 8s
+    http:
+      proxy_url: socks5://xray-miyaip-uk-01_relay_usca5-bwh-sla-2tb:1089
+      skip_resolve_phase_with_proxy: true
+      follow_redirects: false
+      valid_status_codes:
+      - 204
+      preferred_ip_protocol: ip4
+  miyaip-jp-01_relay_usca5-bwh-sla-2tb_http:
+    prober: http
+    timeout: 8s
+    http:
+      proxy_url: http://xray-miyaip-jp-01_relay_usca5-bwh-sla-2tb:8889
+      skip_resolve_phase_with_proxy: true
+      follow_redirects: false
+      valid_status_codes:
+      - 204
+      preferred_ip_protocol: ip4
+  miyaip-jp-01_relay_usca5-bwh-sla-2tb_socks:
+    prober: http
+    timeout: 8s
+    http:
+      proxy_url: socks5://xray-miyaip-jp-01_relay_usca5-bwh-sla-2tb:1089
+      skip_resolve_phase_with_proxy: true
+      follow_redirects: false
+      valid_status_codes:
+      - 204
+      preferred_ip_protocol: ip4
+  miyaip-jp-01_relay_jpty1-bwh-2tb_http:
+    prober: http
+    timeout: 8s
+    http:
+      proxy_url: http://xray-miyaip-jp-01_relay_jpty1-bwh-2tb:8889
+      skip_resolve_phase_with_proxy: true
+      follow_redirects: false
+      valid_status_codes:
+      - 204
+      preferred_ip_protocol: ip4
+  miyaip-jp-01_relay_jpty1-bwh-2tb_socks:
+    prober: http
+    timeout: 8s
+    http:
+      proxy_url: socks5://xray-miyaip-jp-01_relay_jpty1-bwh-2tb:1089
+      skip_resolve_phase_with_proxy: true
+      follow_redirects: false
+      valid_status_codes:
+      - 204
+      preferred_ip_protocol: ip4
