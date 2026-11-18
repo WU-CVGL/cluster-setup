@@ -12,7 +12,7 @@
 <div class="notice bad" role="status"><p>{% translate "The accounts status is unavailable, so no change can be requested." %}</p></div>
 {% else %}
 {% if status.stale %}<div class="notice warn" role="status"><p>{% translate "The accounts status has not been refreshed for a while: the applier may not be running." %}</p></div>{% endif %}
-{% if status.unapplied_changes %}<div class="notice warn" role="status"><p>{% translate "The accounts file holds a change made with proxy_accounts.py since the applier's last apply: it may not be live yet." %}</p></div>{% endif %}
+{% if status.unapplied_changes %}<div class="notice warn" role="status"><p>{% translate "The accounts file holds a change made with proxy_accounts.py since the applier's last apply: it may not be live yet." %}</p></div>{% elif status.unapplied_changes is None %}<div class="notice warn" role="status"><p>{% translate "No apply is recorded since the configs were last rendered with proxy_accounts.py: they may not be live yet." %}</p></div>{% endif %}
 <div class="notice"><p>{{ raw_auth_text }}</p><p>{% translate "Every change restarts the affected entries: established connections through them drop." %}</p></div>
 
 <section class="section" aria-labelledby="list-title">

@@ -645,6 +645,11 @@ msgid ""
 msgstr "账号状态已有一段时间没有更新：执行器可能没有运行。"
 
 msgid ""
+"No apply is recorded since the configs were last rendered with "
+"proxy_accounts.py: they may not be live yet."
+msgstr "自上次用 proxy_accounts.py 生成配置以来，没有记录到应用：配置可能尚未生效。"
+
+msgid ""
 "The accounts file holds a change made with proxy_accounts.py since the "
 "applier's last apply: it may not be live yet."
 msgstr "账号文件中有执行器上次应用之后用 proxy_accounts.py 做的变更：它可能尚未生效。"

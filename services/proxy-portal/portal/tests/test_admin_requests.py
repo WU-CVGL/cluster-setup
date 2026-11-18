@@ -219,6 +219,15 @@ class AccountsListTest(PortalTestCase):
         self.assertNotContains(page, '<option value="svc-docker-cvgl-node01">')  # exists already
         self.assertContains(page, "uses svc-docker-&lt;node&gt;.")
 
+    def test_applied_state_notice(self):
+        unknown = "No apply is recorded since the configs were last rendered with proxy_accounts.py"
+        changed = "holds a change made with proxy_accounts.py since the applier"
+        for value, shown in ((None, unknown), (True, changed), (False, None)):
+            self.write_status(lambda d: d.update(unapplied_changes=value))
+            page = self.client.get("/admin/accounts")
+            for text in (unknown, changed):
+                (self.assertContains if text == shown else self.assertNotContains)(page, text)
+
     def test_docker_daemon_note(self):
         rotate = self.client.get("/admin/accounts/rotate?username=svc-docker-cvgl-node01")
         self.assertContains(rotate, "put the new password in proxy.env on the node")
