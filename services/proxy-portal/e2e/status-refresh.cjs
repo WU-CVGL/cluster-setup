@@ -1,8 +1,9 @@
 // The Status page refreshes itself: a controlled clock (performance.now, offset by the test) and a stubbed
-// /api/status. It polls every 30 s and when the tab becomes visible, advances "N s ago" between polls, and turns
-// results older than 90 s, counted from the last answer, to Unknown when polls fail, and the counts to "—", also
-// when the default proxy was Unknown from the start. With "monitoring-down" (run.sh stops the stubs first), the page
-// loads with monitoring data unavailable and drops that note once a poll answers with monitoring data.
+// /api/status. It polls every 30 s and when the tab becomes visible, drops a poll that gets no answer in 15 s,
+// advances "N s ago" between polls, and turns results older than 90 s, counted from the last answer, to Unknown
+// when polls fail, and the counts to "—", also when the default proxy was Unknown from the start. With
+// "monitoring-down" (run.sh stops the stubs first), the page loads with monitoring data unavailable and drops that
+// note once a poll answers with monitoring data.
 //   node e2e/status-refresh.cjs <base URL> [monitoring-down]   (Playwright for Node in NODE_PATH; CHROME optional)
 const { chromium } = require('playwright');
 
@@ -114,6 +115,21 @@ const { chromium } = require('playwright');
   s = await read();
   check('tab visible again: polled at once, Passing', polls === 4 && s.http === 'Passing' && !s.hero.endsWith('unknown') &&
     /: 1[1-4] s ago$/.test(s.last) && JSON.stringify(s.entries) === JSON.stringify(loaded), [polls, s]);
+
+  // a poll that never gets an answer: dropped after 15 s, so the next poll still comes
+  const hangPage = await context.newPage();
+  hangPage.on('pageerror', e => problems.push(e.message));
+  hangPage.on('console', m => { if (m.type() === 'error') problems.push(m.text()); });
+  let hangPolls = 0;
+  await hangPage.goto(base + '/', { waitUntil: 'networkidle' });
+  await hangPage.route('**/api/status', route => { if (++hangPolls > 1) return route.fulfill({ json: fresh(template) }); });
+  await advance(30, hangPage);
+  s = await advance(20, hangPage);
+  check('a poll with no answer: still one poll after 20 s', hangPolls === 1, [hangPolls, s]);
+  s = await advance(15, hangPage);
+  check('a poll with no answer: dropped, the next poll at 30 s, Passing', hangPolls === 2 && s.http === 'Passing' &&
+    /: 1[1-4] s ago$/.test(s.last), [hangPolls, s]);
+  await hangPage.close();
 
   // both HA entries Unknown from the start, the proxy counts known, every poll failing: the counts age out too
   const unknownPage = await context.newPage();
