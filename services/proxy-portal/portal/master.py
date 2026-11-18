@@ -70,6 +70,11 @@ def _cluster_users(token):
         return None
 
 
+def _too_slow():
+    log.warning("Determined user list at an admin sign-in: not read within %d seconds; the previous list is kept",
+                USERS_SECONDS)
+
+
 @sensitive_variables("token")
 def _read_users(token):
     users, seen = [], set()
@@ -77,16 +82,17 @@ def _read_users(token):
     while True:
         remaining = deadline - time.monotonic()
         if remaining <= 0:
-            log.warning("Determined user list at an admin sign-in: not read within %d seconds; the previous list is "
-                        "kept", USERS_SECONDS)
-            return None
+            return _too_slow()
         try:
+            # the timeout bounds the whole answer (upstream.request_json), however slowly it comes
             answer = request_json(f"{settings.MASTER_URL}/api/v1/users?offset={len(users)}&limit={USERS_PAGE}",
                                   headers={"Authorization": "Bearer " + token},
                                   timeout=min(settings.UPSTREAM_TIMEOUT, remaining))
         except UpstreamError as e:
             log.warning("Determined user list at an admin sign-in: %s; the previous list is kept", e)
             return None
+        if time.monotonic() >= deadline:  # not even the last page counts once the time is up
+            return _too_slow()
         parsed = _parse_users(answer)
         if parsed is None:
             log.warning("Determined user list at an admin sign-in: an unexpected answer; the previous list is kept")

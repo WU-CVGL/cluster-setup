@@ -4,6 +4,7 @@ import itertools
 import json
 import logging
 import os
+import time
 import types
 from unittest import mock
 
@@ -138,6 +139,26 @@ class CaptureTest(PortalTransactionTestCase):
         self.assertEqual(self.listed(), before)
         self.assertTrue(any("not read within 15 seconds" in line for line in self.capture.lines))
         self.assertEqual(self.master.tokens, {})
+
+    def test_a_list_written_slowly_stops_at_the_time_limit(self):
+        """A real server writing one valid page a byte at a time: the sign-in ends at the limit with the old list."""
+        self.sign_in("carol")
+        before = self.listed()
+        body = json.dumps({"users": [{"username": "zed", "active": True, "admin": False}],
+                           "pagination": {"total": 1}}).encode()
+        head = (f"HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nContent-Length: {len(body)}\r\n"
+                "Connection: close\r\n\r\n").encode()
+        self.master.users_answer = ("slow", (head, body, 0.05))  # about 4 s
+        client = https_client()
+        start = time.monotonic()
+        with mock.patch.object(master, "USERS_SECONDS", 1):
+            response = self.sign_in("carol", client=client)
+        seconds = time.monotonic() - start
+        self.assertEqual(response.status_code, 302)
+        self.assertIs(client.session["is_determined_admin"], True)
+        self.assertLess(seconds, 2)
+        self.assertEqual(self.listed(), before)
+        self.assertEqual(self.master.tokens, {})  # logged out after the list read gave up
 
     def test_anything_raised_keeps_the_previous_list(self):
         self.sign_in("carol")

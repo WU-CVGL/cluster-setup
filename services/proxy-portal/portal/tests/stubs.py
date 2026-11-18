@@ -14,6 +14,7 @@ import argparse
 import json
 import secrets
 import threading
+import time
 import urllib.parse
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
@@ -33,7 +34,8 @@ class MasterStub:
         self.tokens = {}        # token: username, for the open master sessions
         self.fail_logout = False
         self.events = []        # ("login" | "logout" | "users", token or username), in order
-        self.users_answer = None  # (status, body) to answer GET /api/v1/users with instead; ("raw", bytes) as is
+        self.users_answer = None  # (status, body) to answer GET /api/v1/users with instead; ("raw", bytes) as is;
+        # ("slow", (head, rest, seconds)): head at once, then rest one byte every seconds
         self.page_size = None     # cap the users per page, to make the portal page through them
         self.active_flag_override = None  # answer 200 with this "active" value (a master that does not refuse)
         self.lock = threading.Lock()
@@ -156,6 +158,19 @@ def serve(stub, port=0, host="127.0.0.1"):
             if status == "raw":  # a broken answer, written as it is, then the connection closes
                 self.wfile.write(data)
                 self.close_connection = True
+                return
+            if status == "slow":  # an answer written slowly, until it is complete or the client hangs up
+                head, rest, seconds = data
+                self.close_connection = True
+                try:
+                    self.wfile.write(head)
+                    self.wfile.flush()
+                    for i in range(len(rest)):
+                        time.sleep(seconds)
+                        self.wfile.write(rest[i:i + 1])
+                        self.wfile.flush()
+                except OSError:
+                    pass
                 return
             raw = json.dumps(data).encode()
             self.send_response(status)
