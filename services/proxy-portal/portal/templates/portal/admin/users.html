@@ -63,7 +63,7 @@
       <tbody>
       {% for a in services %}
       <tr>
-        <th scope="row" class="mono">{{ a.name }}</th>
+        {% with label=a.name|service_account_label %}<th scope="row"{% if not label %} class="mono"{% endif %}>{{ label|default:a.name }}</th>{% endwith %}
         <td>{% if a.enabled %}<span class="chip ok">{% translate "On" %}</span>{% else %}<span class="chip warn">{% if status.raw_auth %}{% translate "Off" %}{% else %}{% translate "Off, except at public proxies" %}{% endif %}</span>{% endif %}</td>
         <td>{% if a.pending %}<a href="{% url 'admin_request' a.pending.id %}">{{ a.pending.op|op_label }} · {{ a.pending.get_state_display }}</a>{% else %}<span class="muted">—</span>{% endif %}</td>
         <td class="actions-cell">{% if a.protected %}<span class="small muted">{% translate "Changed outside the portal only" %}</span>{% else %}<div class="actions">{% for op in a.actions %}<a class="btn sm" href="{% url 'admin_confirm' op %}?username={{ a.name|urlencode }}">{{ op|op_label }}</a>{% endfor %}</div>{% endif %}</td>

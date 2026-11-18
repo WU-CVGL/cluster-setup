@@ -1383,6 +1383,14 @@ msgstr "%(n)d 小时前"
 msgid "%(n)d days ago"
 msgstr "%(n)d 天前"
 
+msgctxt "service account"
+msgid "Auto-switching proxies"
+msgstr "自动切换代理"
+
+msgctxt "service account"
+msgid "Monitoring"
+msgstr "监控"
+
 msgid "Degraded"
 msgstr "部分异常"
 

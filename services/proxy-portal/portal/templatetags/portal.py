@@ -1,6 +1,7 @@
 from django import template
 from django.utils.formats import number_format
 from django.utils.translation import gettext as _
+from django.utils.translation import pgettext
 
 register = template.Library()
 
@@ -93,6 +94,13 @@ def stage_label(stage):
 def restarted_names(restarted):
     from portal import lifecycle
     return lifecycle.restarted_names(restarted)
+
+
+@register.filter
+def service_account_label(name):
+    """What a protected service account is for, in place of its name; None for every other account."""
+    return {"svc-ha": pgettext("service account", "Auto-switching proxies"),
+            "svc-monitor": pgettext("service account", "Monitoring")}.get(name)
 
 
 @register.filter
