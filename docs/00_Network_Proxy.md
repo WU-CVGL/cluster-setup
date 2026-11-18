@@ -106,10 +106,12 @@ cd ~/ws/cluster-setup/services
 python3 xray/scripts/proxy_accounts.py add svc-monitor
 python3 xray/scripts/proxy_accounts.py add svc-ha
 python3 xray/scripts/proxy_accounts.py render   # before the first start, or Docker creates the folders as root
-docker compose up -d xray-ha xray-ha-exporter blackbox-exporter
+docker compose up -d $(docker compose config --services | grep '^xray-' | grep -v exporter) xray-ha-exporter blackbox-exporter
 docker compose kill -s SIGHUP prometheus   # reload the probe job
 docker compose restart grafana             # load the new dashboard providers
 ```
+
+The `up -d` line creates `xray-ha` and recreates every proxy on the pinned image: the [portal](#changes-from-the-portal)'s first apply restarts every proxy and refuses one on another image.
 
 The pool is explicit, and [`create_xray_service.py`](../services/xray/scripts/README.md) does not add new proxies to it. To add a proxy, give it a SOCKS outbound whose tag starts with `pool-`, as the others have, and set the `pool` label of its probe targets to `ha-general` in [`prometheus.yml`](../services/prometheus/prometheus.yml).
 
@@ -231,7 +233,7 @@ The proxy portal does not change accounts itself. It writes a request per change
 - **Requests:** `{"id": "<id>", "op": "add|rotate|enable|disable|remove", "username": "<account>"}` in `requests/<id>.json`, nothing else; `<id>` is 8 to 64 lowercase letters, digits and `-` (a UUID fits), new for every request. `svc-ha` and `svc-monitor` are refused; admins change them only with `proxy_accounts.py` ([Manage accounts](#manage-accounts)). For `add` and `rotate`, the applier generates the password and writes it once to `results/<id>.json` (mode `0400`, owned by the portal's user), which the portal deletes after showing it.
 - **Statuses** in `status/<id>.json`: `applying` while its batch runs, then `applied` (live and verified), `failed` (not applied; the previous files and services are restored, `restored: false` if the rollback did not finish: the [applier README](../services/proxy-portal/applier/README.md#statuses) has the recovery), or `unconfirmed` (live and every refused login gets 407, but the logins that must pass got no 204 in time, e.g. while the proxies are down).
 - **How:** the applier holds the accounts lock and applies the pending requests in batches, a second request for the same account going into the next batch: it renders in memory, tests every changed Xray config with `xray run -test`, checks that every Xray service it restarts runs the pinned image, replaces the files atomically, restarts the services and verifies through the HA entry that `svc-monitor` passes (204), that each request's account behaves as requested, and that every disabled or removed account, replaced password and a wrong password are refused (407). A wrong answer rolls everything back. After a change made with `proxy_accounts.py` and not restarted, the next request restarts and verifies everything it renders, even one that changes nothing.
-- **Image:** a proxy the applier restarts must run the image pinned in `docker-compose.yml`, the one `xray-ha` uses. After a change to the image, recreate the proxies with `docker compose up -d` (a restart keeps the old image); until then the applier refuses at `precheck`.
+- **Image:** a proxy the applier restarts must run the image pinned in `docker-compose.yml`, the one `xray-ha` uses. The first request, and the first after a change made with `proxy_accounts.py`, restart every running proxy, also with raw auth off, so every proxy must run it. After a change to the image, recreate the proxies with `docker compose up -d` (a restart keeps the old image); until then the applier refuses at `precheck`.
 - **Restart impact:** every change restarts `xray-ha`, and with raw auth on every proxy too. Established connections through them drop, and new ones fail for a few seconds. Requests that arrive together share one restart; each further request for the same account adds one.
 
 While raw auth is off, turning a user's access off in the portal stops it only at the HA entry; the proxies' own entries stay open to them.
