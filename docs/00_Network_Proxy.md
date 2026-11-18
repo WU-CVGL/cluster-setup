@@ -158,7 +158,7 @@ The [applier](#changes-from-the-portal) verifies through both entries, so `xray-
 
 ### Classify a new proxy
 
-[`services/xray/public-proxies.txt`](../services/xray/public-proxies.txt) lists the public proxies; every proxy not listed is private. A proxy nobody classified is therefore private, never open to everyone. [`create_xray_service.py`](../services/xray/scripts/README.md) requires `--public` (it adds the proxy to the list) or `--private`. A private proxy requires accounts from its creation.
+[`services/xray/public-proxies.txt`](../services/xray/public-proxies.txt) lists the public proxies; every proxy not listed is private. A proxy nobody classified is therefore private, never public. [`create_xray_service.py`](../services/xray/scripts/README.md) requires `--public` (it adds the proxy to the list) or `--private`. A private proxy requires accounts from its creation.
 
 Before a private proxy takes clients, new or existing, start it with `docker compose up -d` on the image pinned in `docker-compose.yml` and check its own entry, as in [Private entries](#private-entries).
 
@@ -265,7 +265,7 @@ By default the public proxies' own entries (the *raw* entries, hence `raw-auth`)
     docker compose kill -s SIGHUP blackbox-exporter
     ```
 
-    This restarts the open proxies too, which is harmless: their configs do not change. The HA entry and the proxies must agree: the HA entry logging in to a proxy without accounts, or not logging in to a proxy with them, fails, and the HA entry fails closed until both sides have restarted.
+    This also restarts the open proxies, whose configs do not change; their open connections drop. The HA entry and the proxies must agree: the HA entry logging in to a proxy without accounts, or not logging in to a proxy with them, fails, and the HA entry fails closed until both sides have restarted.
 5. On each proxy but the [open ones](#open-proxies), check that a request without an account and one with a wrong or revoked password get `407`, and one with a current account `204`:
 
     ```sh
@@ -273,7 +273,7 @@ By default the public proxies' own entries (the *raw* entries, hence `raw-auth`)
     curl -s -o /dev/null -w '%{http_code}\n' -x http://<user>:<old password>@127.0.0.1:<http_port> https://www.google.com/generate_204
     ```
 
-While accounts are on, restart the proxies together with `xray-ha` after every account change. A proxy made with `create_xray_service.py` requires the accounts from its creation, unless it is listed as open. `raw-auth off` followed by the same steps turns them off.
+While accounts are on, restart the proxies but the open ones together with `xray-ha` after every account change. A proxy made with `create_xray_service.py` requires the accounts from its creation, unless it is listed as open. `raw-auth off` followed by the same steps turns them off.
 
 ### Open proxies
 
@@ -296,7 +296,7 @@ The proxy portal does not change accounts itself. Its [admin console](#the-proxy
 - **Image:** a proxy the applier restarts must run the image pinned in `docker-compose.yml`, the one `xray-ha` uses. The first request, and the first after a change made with `proxy_accounts.py`, restart every running proxy, also with raw auth off, so every proxy must run it. After a change to the image, recreate the proxies with `docker compose up -d` (a restart keeps the old image); until then the applier refuses at `precheck`.
 - **Restart impact:** every change restarts `xray-ha`, a change to an admin account also the private proxies, and with raw auth on every proxy but the [open ones](#open-proxies). Established connections through them drop, and new ones fail for a few seconds. Requests that arrive together share one restart; each further request for the same account adds one.
 
-While raw auth is off, turning a user's access off in the portal stops it only at the HA entries (and the private proxies); the public proxies' own entries stay open to them. With raw auth on, the [open proxies'](#open-proxies) own entries still do.
+While raw auth is off, turning a user's access off in the portal stops it only at the HA entries (and the private proxies); the public proxies' own entries still accept them. With raw auth on, the [open proxies'](#open-proxies) own entries still do.
 
 ## The proxy portal
 
@@ -307,7 +307,7 @@ While raw auth is off, turning a user's access off in the portal stops it only a
 - **Password reset:** a user whose account has proxy access on can reset its password on My access: the portal sends a `rotate` request for that account only, and once it is live shows the new password once, to that user only (admins cannot see it). When the change is live, the old password stops working, so every client that uses it needs the new one. Applying restarts the HA entries (also the private proxies for an admin account, and every proxy but the open ones while raw auth is on), and established connections drop. At most 3 resets per user per hour, and none while a request for the account is still waiting.
 - **My usage:** the user's observed download, upload and total over 24 hours, 7 days and 30 days, counted where they enter the proxies as on the [Proxy Usage](#usage) dashboard, and a trend.
 - **Sign-in:** the portal checks the Determined username and password once with the master, ends the master session right away and keeps neither the password nor the token. At an admin's sign-in, before ending that session, it also reads the list of cluster users (name, active, admin) for the admins' Users page. The portal keeps the Determined admin flag read at sign-in, so a change on the master shows after signing in again. Sessions last 8 hours, and repeated failed sign-ins are refused for 15 minutes.
-- **Admin console:** for users whose Determined admin flag was true at sign-in (read only then; other users get 403). Its Users page lists every cluster user (the list read at the last admin sign-in) with their proxy account as the applier last read the accounts file, and the service accounts apart; it filters users without an account, with proxy access off, with private access, and deactivated in Determined with proxy access still on. It sends the requests of [Changes from the portal](#changes-from-the-portal) after a confirmation page; never for `svc-ha` or `svc-monitor`. Every change restarts the affected entries and drops established connections. For an add or a new password, the requesting admin sees the password once. While raw auth is off, turning an account off leaves a public proxy's own entry open to it. A change log lists every request and its outcome; incidents and their updates appear on the status page as text and never change a probe result. Details: [the portal's README](../services/proxy-portal/README.md#admin-console).
+- **Admin console:** for users whose Determined admin flag was true at sign-in (read only then; other users get 403). Its Users page lists every cluster user (the list read at the last admin sign-in) with their proxy account as the applier last read the accounts file, and the service accounts apart; it filters users without an account, with proxy access off, with private access, and deactivated in Determined with proxy access still on. It sends the requests of [Changes from the portal](#changes-from-the-portal) after a confirmation page; never for `svc-ha` or `svc-monitor`. Every change restarts the affected entries and drops established connections. For an add or a new password, the requesting admin sees the password once. While raw auth is off, turning an account off leaves a public proxy's own entry accepting it. A change log lists every request and its outcome; incidents and their updates appear on the status page as text and never change a probe result. Details: [the portal's README](../services/proxy-portal/README.md#admin-console).
 - **Never:** it takes no PromQL, metric name or target from a client (only fixed queries, server-side), keeps no password, and has no Docker socket and no access to the accounts file: the applier's spool is mounted read-only except `requests/` and `results/`.
 
 Install: build and start the `proxy-portal` Compose service (no published port and on no network a proxy is on: only nginx reaches it, on the Compose network `proxy_portal`; it reaches Prometheus and the master over `proxy_portal_upstream`; data in `/var/lib/proxy-portal/data`, owned by uid 3089), recreate Prometheus (`docker compose up -d prometheus`) so it joins `proxy_portal_upstream`, rebuild and recreate nginx with the `proxy.cvgl.lab` virtual host, and add `proxy.cvgl.lab` to the hosts files: `192.168.233.8` on the nodes and the login node ([reference](../services/system-configurations/etc/hosts)), `10.0.1.68` on campus PCs. The lab certificate's `*.cvgl.lab` covers the name. Details: [the portal's README](../services/proxy-portal/README.md#install-and-upgrade).
