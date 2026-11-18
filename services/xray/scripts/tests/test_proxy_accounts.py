@@ -458,13 +458,14 @@ class RenderTest(_Base):
         relay = self.outbound_users(self.ha())
         self.assertEqual({t: u for t, u in relay.items() if u}, {t: ["svc-ha"] for t in relay if t.startswith("private-")})
 
-    def leave_accounts(self, accounts):
+    def leave_accounts(self, accounts, path=None):
         """A proxy config with a left-over "accounts" list (the older field name) on both inbounds."""
-        config = json.loads(self.raw_text)
+        path = path or self.raw
+        config = json.loads(path.read_text())
         for inbound in config["inbounds"]:
             if inbound["protocol"] in ("http", "socks"):
                 inbound["settings"]["accounts"] = accounts
-        self.raw.write_text(json.dumps(config, indent=4))
+        path.write_text(json.dumps(config, indent=4))
 
     def assert_only_users(self, users):
         raw = json.loads(self.raw.read_text())
@@ -495,6 +496,21 @@ class RenderTest(_Base):
         self.assertEqual(code, 0)
         self.assertIn(self.raw.relative_to(self.base).as_posix(), out.split())
         self.assertEqual(json.loads(self.raw.read_text()), json.loads(self.raw_text))
+
+    def test_leftover_accounts_removed_on_a_private_proxy(self):
+        self.add("alice", "boss", "svc-monitor", "svc-ha")
+        self.assertEqual(run(self.base, "admin", "boss", "on")[0], 0)
+        self.assertEqual(run(self.base, "render")[0], 0)
+        self.leave_accounts([{"user": "alice", "pass": "revoked"}], self.private)
+        code, out, _ = run(self.base, "render")
+        self.assertEqual(code, 0)
+        self.assertIn(self.private.relative_to(self.base).as_posix(), out.split())
+        private = json.loads(self.private.read_text())
+        for inbound in private["inbounds"]:
+            if inbound["protocol"] in ("http", "socks"):
+                self.assertNotIn("accounts", inbound["settings"])
+                self.assertEqual(sorted(u["user"] for u in inbound["settings"]["users"]),
+                                 ["boss", "svc-ha", "svc-monitor"])
 
     def test_raw_config_without_inbounds_fails_before_writing(self):
         self.add("svc-monitor", "svc-ha")

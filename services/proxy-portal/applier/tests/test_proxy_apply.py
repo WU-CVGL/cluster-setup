@@ -700,6 +700,23 @@ class RunningStateTest(_Base):
         self.assertEqual(self.run_applier(), 0)
         self.assertNotIn("applied_seq", self.status("abcdefgh-4"))
 
+    def test_admin_off_on_disk_not_running_restarts_the_private_proxy(self):
+        # "admin boss off; render" with the CLI and no restart: ha-private and the private proxy still take boss
+        self.request("abcdefgh-1", "disable", "bob")
+        self.assertEqual(self.run_applier(), 0)
+        boss = self.passwords()["boss"]
+        self.cli("admin", "boss", "off")
+        self.cli("render")
+        self.assertEqual((self.docker.ha_private_users.get("boss"), self.docker.private_users.get("boss")), (boss, boss))
+        self.request("abcdefgh-2", "admin-off", "boss")
+        self.assertEqual(self.run_applier(), 0)
+        record = self.status("abcdefgh-2")
+        self.assertEqual((record["status"], record["changed"]), ("applied", False))
+        self.assertIn("xray-" + PRIVATE, record["restarted"])
+        self.assertNotIn("boss", self.docker.ha_private_users)
+        self.assertNotIn("boss", self.docker.private_users)
+        self.assertIn(("ha-private", "boss"), self.probe.entry_calls)  # her 407 on ha-private, checked directly
+
     def test_request_target_checked_even_when_the_files_did_not_change(self):
         self.cli_disable_without_restart()
         self.docker.stale = True  # the restart does not take the config: alice still gets through
@@ -754,6 +771,15 @@ class FailureTest(_Base):
         accounts.save()
         pa.render(accounts)
         self.mark_applied()
+
+    def test_private_proxy_container_on_an_older_image_refused(self):
+        self.docker.containers["xray-" + PRIVATE] = OLD_IMAGE_ID  # raw auth off: an admin change restarts it
+        self.request("abcdefgh-1", "admin-on", "alice")
+        self.assertEqual(self.run_applier(), 0)
+        record = self.status("abcdefgh-1")
+        self.assertEqual((record["status"], record["stage"], record["restored"]), ("failed", "precheck", True))
+        self.assertIn(f"xray-{PRIVATE} runs another image", record["error"])
+        self.assertEqual(self.docker.restarts(), [])
 
     def test_proxy_container_on_an_older_image_refused(self):
         self.raw_auth_on()

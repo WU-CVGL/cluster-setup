@@ -154,6 +154,7 @@ The [applier](#changes-from-the-portal) verifies through both entries, so `xray-
 
 [`services/xray/public-proxies.txt`](../services/xray/public-proxies.txt) lists the public proxies; every proxy not listed is private. A proxy nobody classified is therefore private, never open to everyone. [`create_xray_service.py`](../services/xray/scripts/README.md) requires `--public` (it adds the proxy to the list) or `--private`. A private proxy requires accounts from its creation.
 
+Before a private proxy takes clients, start it with `docker compose up -d` on the image pinned in `docker-compose.yml` (older Xray versions ignore the accounts, as in [Accounts on the proxies](#accounts-on-the-proxies), step 1), and check its own entry as in step 5 there: no account, a non-admin account and a revoked password get `407`, an admin account `204`.
 
 - **Public proxy:** listed; for `ha-general` and `ha-private`, a `pool-<proxy>` outbound in [`config.example.json`](../services/xray-ha/config.example.json) and the probe targets with `pool: ha-general`, `access: public`.
 - **Private proxy:** not listed; for `ha-private`, a `private-<proxy>` outbound and the probe targets with `pool: ha-private`, `access: private`. `render` adds `svc-monitor` to its probe modules; the example shows it as `svc-monitor:PASSWORD@`.
