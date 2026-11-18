@@ -9,6 +9,7 @@ for the account is pending, and beyond SELF_RESET_MAX_PER_HOUR requests per user
 import datetime
 import functools
 import json
+import threading
 
 from django.conf import settings
 from django.http import HttpResponseNotAllowed, JsonResponse
@@ -24,6 +25,8 @@ from .models import AccountRequest
 from .views import session_user
 
 WINDOW = datetime.timedelta(hours=1)
+# the checks and the new request in one step: one process serves the portal (Dockerfile), with threads
+_SUBMIT = threading.Lock()
 
 
 def _recent(username):
@@ -132,14 +135,15 @@ def api_reset(request):
         return JsonResponse({"error": "this endpoint takes no parameters: it resets your own account"}, status=400)
     username = session_user(request)
     status = proxy_status.load()
-    refused = refusal(username, status)
-    if refused:
-        return JsonResponse({"error": refused[1], "reason": refused[0]}, status=refused[2])
-    try:
-        accounts.check("rotate", username, status)
-        row = accounts.submit("rotate", username, username, self_service=True)
-    except accounts.Refused as e:
-        return JsonResponse({"error": str(e)}, status=e.status)
+    with _SUBMIT:
+        refused = refusal(username, status)
+        if refused:
+            return JsonResponse({"error": refused[1], "reason": refused[0]}, status=refused[2])
+        try:
+            accounts.check("rotate", username, status)
+            row = accounts.submit("rotate", username, username, self_service=True)
+        except accounts.Refused as e:
+            return JsonResponse({"error": str(e)}, status=e.status)
     return JsonResponse(as_json(row, username), status=202)
 
 

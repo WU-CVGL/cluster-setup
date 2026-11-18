@@ -1,8 +1,9 @@
 import datetime
+import logging
 import time
 
 from django.conf import settings
-from django.db import transaction
+from django.db import DatabaseError, transaction
 from django.http import HttpResponse, HttpResponseNotAllowed, JsonResponse
 from django.shortcuts import redirect, render
 from django.urls import reverse
@@ -17,6 +18,8 @@ from django.views.decorators.http import require_GET, require_POST
 
 from . import access, charts, health, limits, master, usage
 from .models import ClusterUser, Incident
+
+log = logging.getLogger("portal.signin")
 
 SESSION_USER = "username"
 SESSION_ADMIN = "is_determined_admin"
@@ -189,7 +192,10 @@ def signin(request):
         return render(request, "portal/signin.html", context, status=401 if result.result == master.INVALID
                       else 403)
     if result.users is not None:
-        store_users(result.users)
+        try:
+            store_users(result.users)
+        except DatabaseError as e:  # the sign-in goes on with the previous list
+            log.warning("cluster user list not stored: %s", type(e).__name__)
     request.session.flush()
     request.session.cycle_key()
     request.session[SESSION_USER] = result.username

@@ -24,7 +24,7 @@ from django.views.decorators.csrf import csrf_exempt, csrf_protect
 from django.views.decorators.debug import sensitive_variables
 from django.views.decorators.http import require_GET, require_http_methods, require_POST
 
-from . import accounts, lifecycle, proxy_status, spool
+from . import accounts, lifecycle, proxy_status
 from .models import AccountRequest, ClusterUser, Incident, IncidentUpdate
 from .views import SESSION_ADMIN, _signin_redirect, session_user
 
