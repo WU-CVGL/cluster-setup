@@ -200,6 +200,18 @@
                     }
                 ]
             }
+        },
+        {
+            "protocol": "socks",
+            "tag": "private-miyaip-jp-02_relay_jpty1-bwh-2tb",
+            "settings": {
+                "servers": [
+                    {
+                        "address": "xray-miyaip-jp-02_relay_jpty1-bwh-2tb",
+                        "port": 1089
+                    }
+                ]
+            }
         }
     ],
     "observatory": {
