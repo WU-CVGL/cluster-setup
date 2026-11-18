@@ -14,7 +14,8 @@
 <section class="status-hero {{ data.headline.level }}" aria-labelledby="headline" data-live-hero>
   <div>
     <div class="status-title"><span class="emblem" aria-hidden="true">{% if data.headline.level == 'ok' %}✓{% elif data.headline.level == 'unknown' %}?{% else %}!{% endif %}</span><h2 id="headline">{{ data.headline.text }}</h2></div>
-    <p>{% if not data.monitoring_available %}{% translate "Monitoring data is unavailable, so every status is unknown." %}{% else %}{% translate "The default proxy ha-general sends each new connection to a passing public proxy; open connections stay on their proxy." %}{% endif %}</p>
+    <p data-live-monitoring="off"{% if data.monitoring_available %} hidden{% endif %}>{% translate "Monitoring data is unavailable, so every status is unknown." %}</p>
+    <p data-live-monitoring="on"{% if not data.monitoring_available %} hidden{% endif %}>{% translate "The default proxy ha-general sends each new connection to a passing public proxy; open connections stay on their proxy." %}</p>
   </div>
   <div class="status-right">
     <div class="status-number" data-live-count>{% if general.proxies.configured is None %}—{% else %}{{ general.proxies.passing }} / {{ general.proxies.configured }}{% endif %}</div>
@@ -152,6 +153,8 @@ function chip(el,s){var c=document.createElement('span'),dot=document.createElem
   el.replaceChildren(c);}
 function render(){
   var old=(performance.now()-fetched)/1000>stale;
+  if(typeof data.monitoring_available==='boolean')document.querySelectorAll('[data-live-monitoring]').forEach(function(el){
+    el.hidden=(el.getAttribute('data-live-monitoring')==='on')!==data.monitoring_available;});
   document.querySelectorAll('[data-live-state]').forEach(function(el){chip(el,state(el));});
   document.querySelectorAll('[data-live-age]').forEach(function(el){el.textContent=ageText(age(el.getAttribute('data-live-age')));});
   document.querySelectorAll('[data-live-pct]').forEach(function(el){el.textContent=pct(get(el.getAttribute('data-live-pct')),+(el.getAttribute('data-live-digits')||1));});

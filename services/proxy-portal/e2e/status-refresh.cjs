@@ -1,12 +1,13 @@
 // The Status page refreshes itself: a controlled clock (performance.now, offset by the test) and a stubbed
 // /api/status. It polls every 30 s and when the tab becomes visible, advances "N s ago" between polls, and turns
 // results older than 90 s, counted from the last answer, to Unknown when polls fail, and the counts to "—", also
-// when the default proxy was Unknown from the start.
-//   node e2e/status-refresh.cjs <base URL>       (Playwright for Node in NODE_PATH; CHROME optional)
+// when the default proxy was Unknown from the start. With "monitoring-down" (run.sh stops the stubs first), the page
+// loads with monitoring data unavailable and drops that note once a poll answers with monitoring data.
+//   node e2e/status-refresh.cjs <base URL> [monitoring-down]   (Playwright for Node in NODE_PATH; CHROME optional)
 const { chromium } = require('playwright');
 
 (async () => {
-  const [base] = process.argv.slice(2);
+  const [base, scenario] = process.argv.slice(2);
   const args = ['--no-proxy-server'].concat(process.env.RESOLVE ? [`--host-resolver-rules=MAP ${process.env.RESOLVE}`] : []);
   const browser = await chromium.launch({ executablePath: process.env.CHROME || undefined, args });
   const clocked = async (locale, language) => {
@@ -44,6 +45,7 @@ const { chromium } = require('playwright');
     return { http: text(cards[0]), socks: text(cards[1]), last: text(document.querySelector('.hero-head .small.muted')),
       headline: text(document.querySelector('#headline')), hero: document.querySelector('.status-hero').className,
       count: text(document.querySelector('.status-number')), pool: text(cards[2]),
+      notes: Array.from(document.querySelectorAll('.status-hero p')).filter(p => p.offsetParent !== null).map(text),
       entries: Array.from(document.querySelectorAll('.service .desc')).map(el => text(el).split(' · ').pop()),
       duration: text(document.querySelector('.table tbody tr:nth-child(2) td.mono.wide')) };
   });
@@ -56,6 +58,34 @@ const { chromium } = require('playwright');
     if (problems.length) { console.error('problems:\n' + problems.join('\n')); process.exit(1); }
     console.log('status refresh: ok');
   };
+  const fresh = (d, monitoring) => {  // an answer from /api/status, fresh: both entries passing, results 11 s old
+    const data = JSON.parse(JSON.stringify(d));
+    for (const entry of Object.values(data.entries)) for (const p of ['http', 'socks']) {
+      Object.assign(entry.protocols[p], { state: 'passing', last_check_age_seconds: 11 });
+    }
+    for (const proxy of data.proxies) if (proxy.last_check_age_seconds !== null) proxy.last_check_age_seconds = 11;
+    data.last_check_age_seconds = 11;
+    if (monitoring) Object.assign(data, monitoring);
+    return data;
+  };
+
+  if (scenario === 'monitoring-down') {
+    // the page as the portal renders it without Prometheus; then a poll answers with monitoring data
+    let answers = 0;
+    await page.goto(base + '/', { waitUntil: 'networkidle' });
+    const down = await page.evaluate(() => fetch('/api/status').then(r => r.json()));
+    const up = fresh(down, { monitoring_available: true, headline: { level: 'ok', text: 'Default proxy available' } });
+    up.entries['ha-general'].proxies = { passing: 4, configured: 4 };
+    await page.route('**/api/status', route => { answers++; return route.fulfill({ json: up }); });
+    let s = await read();
+    check('loaded without monitoring data: the note, Unknown', down.monitoring_available === false &&
+      s.notes.length === 1 && s.notes[0].startsWith('Monitoring data is unavailable') && s.http === 'Unknown', [down.monitoring_available, s]);
+    s = await advance(30);
+    check('a poll with monitoring data: the note gone, Passing', answers === 1 && s.notes.length === 1 &&
+      !s.notes[0].startsWith('Monitoring data is unavailable') && s.http === 'Passing' && s.count === '4 / 4', [answers, s]);
+    await browser.close();
+    return report();
+  }
 
   await page.goto(base + '/', { waitUntil: 'networkidle' });
   template = await page.evaluate(() => fetch('/api/status').then(r => r.json()));  // the real answer's shape

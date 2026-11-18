@@ -108,8 +108,11 @@ class StatusTest(PortalTestCase):
         html = response.content.decode()
         live = json.loads(re.search(r'<script id="status-live" type="application/json">(.*?)</script>', html).group(1))
         api = self.client.get("/api/status").json()
-        for key in ("headline", "entries", "proxies", "stale_after_seconds"):
+        for key in ("monitoring_available", "headline", "entries", "proxies", "stale_after_seconds"):
             self.assertEqual(live[key], api[key], key)
+        # both texts on the page, for the script to switch: the note on missing monitoring data hidden
+        self.assertIn('<p data-live-monitoring="off" hidden>Monitoring data is unavailable', html)
+        self.assertIn('<p data-live-monitoring="on">The default proxy ha-general', html)
         texts = json.loads(re.search(r'<script id="status-texts" type="application/json">(.*?)</script>', html).group(1))
         self.assertEqual((texts["passing"], texts["s_ago"]), ("Passing", "%(n)d s ago"))
         nonce = response["Content-Security-Policy"].split("'nonce-")[1].split("'")[0]
@@ -179,7 +182,9 @@ class StatusTest(PortalTestCase):
         # the proxies still come from the applier's status, as unknown
         self.assertEqual(len(data["proxies"]), 9)
         page = self.client.get("/")
-        self.assertContains(page, "Monitoring data is unavailable")
+        self.assertContains(page, '<p data-live-monitoring="off">Monitoring data is unavailable')
+        self.assertContains(page, '<p data-live-monitoring="on" hidden>')
+        self.assertIn('"monitoring_available": false', page.content.decode())
         self.assertNotContains(page, 'class="chip passing"')
         # no check age is not "never": the probes may have run, the portal cannot tell
         self.assertNotContains(page, ">never<")

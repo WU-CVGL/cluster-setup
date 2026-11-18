@@ -58,8 +58,8 @@ def _status_context():
 
 def _live(data):
     """What the status page's script refreshes, in /api/status's form: it polls that and ages the results."""
-    return {key: data[key] for key in ("headline", "last_check_age_seconds", "stale_after_seconds", "entries",
-                                       "proxies")}
+    return {key: data[key] for key in ("monitoring_available", "headline", "last_check_age_seconds",
+                                       "stale_after_seconds", "entries", "proxies")}
 
 
 def _live_texts():
