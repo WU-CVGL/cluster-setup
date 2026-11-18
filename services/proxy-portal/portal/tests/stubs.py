@@ -4,7 +4,8 @@ compose run (e2e/). Neither talks to anything else.
 
     python -m portal.tests.stubs --master-port 18080 --prometheus-port 19090   # the demo scenario
 
-The master stub knows a few users (password "pw-<name>") and records every login and logout. The Prometheus stub
+The master stub knows a few users (password "pw-<name>") and records every login, logout and user list, in order;
+it lists the users only for an open session of an admin. The Prometheus stub
 answers only the portal's fixed queries (portal/queries.py), refuses every other expression with 400 and records
 each query it gets.
 """
@@ -31,6 +32,9 @@ class MasterStub:
         self.logouts = []       # tokens
         self.tokens = {}        # token: username, for the open master sessions
         self.fail_logout = False
+        self.events = []        # ("login" | "logout" | "users", token or username), in order
+        self.users_answer = None  # (status, body) to answer GET /api/v1/users with instead
+        self.page_size = None     # cap the users per page, to make the portal page through them
         self.active_flag_override = None  # answer 200 with this "active" value (a master that does not refuse)
         self.lock = threading.Lock()
 
@@ -49,6 +53,7 @@ class MasterStub:
             token = "v2.public." + secrets.token_urlsafe(24)
             with self.lock:
                 self.tokens[token] = username
+                self.events.append(("login", username))
             return 200, {"token": token, "user": {"id": 7, "username": username, "admin": user[1],
                                                   "active": active, "displayName": username.title(),
                                                   "remote": False}}
@@ -56,14 +61,36 @@ class MasterStub:
             token = (headers.get("Authorization") or "").removeprefix("Bearer ")
             with self.lock:
                 self.logouts.append(token)
+                self.events.append(("logout", token))
                 if self.fail_logout:
                     return 500, {"code": 13, "message": "internal"}
                 if self.tokens.pop(token, None) is None:
                     return 401, {"code": 16, "message": "invalid token"}
             return 200, {}
+        if method == "GET" and path == "/api/v1/users":
+            token = (headers.get("Authorization") or "").removeprefix("Bearer ")
+            with self.lock:
+                self.events.append(("users", token))
+                username = self.tokens.get(token)
+            if username is None:
+                return 401, {"code": 16, "message": "invalid token"}
+            if not self.users[username][1]:
+                return 403, {"code": 7, "message": "admins only"}
+            if self.users_answer is not None:
+                return self.users_answer
+            query = urllib.parse.parse_qs(urllib.parse.urlsplit(headers["_url"]).query)
+            offset, limit = int(query.get("offset", ["0"])[0]), int(query.get("limit", ["0"])[0])
+            limit = min(limit or 10 ** 6, self.page_size or 10 ** 6)
+            names = sorted(self.users)
+            rows = [{"id": i + 1, "username": n, "admin": self.users[n][1], "active": self.users[n][2],
+                     "displayName": n.title(), "remote": False, "agentUserGroup": None}
+                    for i, n in enumerate(names)][offset:offset + limit]
+            return 200, {"users": rows, "pagination": {"offset": offset, "limit": limit, "startIndex": offset,
+                                                       "endIndex": offset + len(rows), "total": len(names)}}
         if method == "GET" and path == "/stub/stats":
             with self.lock:
                 return 200, {"logins": len(self.logins), "logouts": len(self.logouts),
+                             "user_lists": sum(1 for e in self.events if e[0] == "users"),
                              "open_sessions": len(self.tokens)}
         return 404, {"code": 5, "message": "not found"}
 
@@ -262,6 +289,8 @@ def main():
     parser.add_argument("--prometheus-port", type=int, default=19090)
     args = parser.parse_args()
     master = MasterStub()
+    # cluster users without a proxy account, one of them with a name no proxy account can have
+    master.users.update({"frank": ("pw-frank", False, True), "Hana.W": ("pw-hana", False, True)})
     prometheus = PrometheusStub(demo_answers())
     _, master_url = serve(master, args.master_port, args.host)
     _, prom_url = serve(prometheus, args.prometheus_port, args.host)

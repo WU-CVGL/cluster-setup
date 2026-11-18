@@ -1,7 +1,7 @@
 from django.urls import path, register_converter
 from django.views.i18n import set_language
 
-from . import admin_views, views
+from . import admin_views, self_reset, views
 
 
 class RequestId:
@@ -26,8 +26,12 @@ urlpatterns = [
     path("api/status", views.api_status, name="api_status"),
     path("api/me/access", views.api_me_access, name="api_me_access"),
     path("api/me/usage", views.api_me_usage, name="api_me_usage"),
+    path("api/me/reset", self_reset.api_reset, name="api_me_reset"),
+    path("api/me/reset/<rid:request_id>", self_reset.api_reset_state, name="api_me_reset_state"),
+    path("api/me/reset/<rid:request_id>/password", self_reset.api_reset_password, name="api_me_reset_password"),
     path("healthz", views.healthz, name="healthz"),
     # the admin console: every view checks the Determined admin flag of the session (admin_views.admin_only)
+    path("admin/users", admin_views.users_page, name="admin_users"),
     path("admin/accounts", admin_views.accounts_page, name="admin_accounts"),
     path("admin/accounts/<str:op>", admin_views.confirm_page, name="admin_confirm"),
     path("admin/requests/<rid:request_id>", admin_views.request_page, name="admin_request"),
@@ -36,6 +40,7 @@ urlpatterns = [
     path("admin/incidents", admin_views.incidents_page, name="admin_incidents"),
     path("admin/incidents/<int:pk>", admin_views.incident_page, name="admin_incident"),
     path("admin/incidents/<int:pk>/updates", admin_views.incident_update, name="admin_incident_update"),
+    path("api/admin/users", admin_views.api_users, name="api_admin_users"),
     path("api/admin/accounts", admin_views.api_accounts, name="api_admin_accounts"),
     path("api/admin/requests", admin_views.api_requests, name="api_admin_requests"),
     path("api/admin/requests/<rid:request_id>", admin_views.api_request, name="api_admin_request"),

@@ -111,6 +111,9 @@ select.input{padding:9px 10px}textarea.input{min-height:96px;resize:vertical;lin
 .card-head+.notice{margin-top:12px}.notice.section-gap{margin-bottom:14px}.kv{display:grid;grid-template-columns:max-content 1fr;gap:8px 18px;margin:16px 0 0;font-size:13px}.kv dt{color:var(--muted)}.kv dd{margin:0;overflow-wrap:anywhere}
 .secret-box{background:#142830;color:#e8fff8;border-radius:12px;padding:16px 18px;margin-top:14px;display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap}.secret-box code{font-size:17px;overflow-wrap:anywhere}
 .secret-box button{color:#d0e9e1;border:1px solid #3d575b;background:#223e44;border-radius:7px;padding:5px 11px;font-size:12px}
+dialog.modal{border:0;border-radius:var(--radius);padding:0;width:calc(100% - 32px);max-width:540px;max-height:calc(100% - 32px);overflow:auto;color:var(--ink);background:var(--surface);box-shadow:0 24px 70px rgba(10,30,40,.28)}
+dialog.modal::backdrop{background:rgba(20,34,49,.5)}.modal-body{padding:22px 24px}.modal-body h2{margin-bottom:14px}.modal-body .card-head{align-items:center;margin-bottom:10px}.modal-body .notice+.notice{margin-top:12px}.modal-body .reset-error{margin:12px 0 0}
+.section-gap-top{margin-top:14px}.reset-reason{margin-top:12px}
 .updates{list-style:none;margin:8px 0 0;padding:0 0 0 12px;border-left:2px solid var(--border)}.updates li{font-size:12px;color:var(--muted);margin-top:6px;white-space:pre-line}.updates b{color:var(--ink);font-weight:650}
 @media(max-width:1050px){.summary-grid{grid-template-columns:repeat(2,1fr)}.nav a{padding:0 11px}}
 @media(max-width:770px){.shell{padding:0 16px}.header-inner{flex-wrap:wrap;gap:8px;padding-top:10px}.brand{margin-right:auto}.nav{order:3;width:100%;height:44px}.nav a{flex:1;justify-content:center;padding:0 6px;font-size:13px}.header-right{margin-left:0}
@@ -129,7 +132,7 @@ main.shell{padding-top:24px}.hero-head{display:block}h1{font-size:26px}.status-h
       <a href="{% url 'status' %}"{% if nav == 'status' %} aria-current="page"{% endif %}>{% translate "Status" %}</a>
       <a href="{% url 'access' %}"{% if nav == 'access' %} aria-current="page"{% endif %}>{% translate "My access" %}</a>
       <a href="{% url 'usage' %}"{% if nav == 'usage' %} aria-current="page"{% endif %}>{% translate "My usage" %}</a>
-      {% if is_determined_admin %}<a href="{% url 'admin_accounts' %}"{% if nav == 'admin' %} aria-current="page"{% endif %}>{% translate "Admin" %}</a>{% endif %}
+      {% if is_determined_admin %}<a href="{% url 'admin_users' %}"{% if nav == 'admin' %} aria-current="page"{% endif %}>{% translate "Admin" %}</a>{% endif %}
     </nav>
     <div class="header-right">
       <form class="lang" action="{% url 'set_language' %}" method="post" aria-label="{% translate 'Language' %}">{% csrf_token %}

@@ -39,6 +39,10 @@ msgstr "没有账号 %(name)s。"
 msgid "A service account cannot be an admin account."
 msgstr "服务账号不能成为管理员账号。"
 
+msgid ""
+"The request could not be written to the applier's spool. Nothing changed."
+msgstr "无法把请求写入执行器 (applier) 的队列目录。没有任何变更。"
+
 msgid "the HA entries (xray-ha) and every proxy"
 msgstr "HA 入口 (xray-ha) 和所有代理"
 
@@ -104,10 +108,6 @@ msgid ""
 "private proxies. A public proxy's own entry needs no account, so it still "
 "works for that user."
 msgstr "公共代理入口认证 (raw auth) 已关闭：关闭代理访问只会让 ha-general、ha-private 和私有代理拒绝该账号。公共代理自己的入口不需要账号，该用户仍可使用。"
-
-msgid ""
-"The request could not be written to the applier's spool. Nothing changed."
-msgstr "无法把请求写入执行器 (applier) 的队列目录。没有任何变更。"
 
 msgid "Type the account name to confirm."
 msgstr "请输入账号名确认。"
@@ -361,6 +361,28 @@ msgctxt "request state"
 msgid "Unconfirmed"
 msgstr "未确认"
 
+msgid "Account information is unavailable right now. Try again later."
+msgstr "账号信息暂时无法获取，请稍后再试。"
+
+msgid "There is no proxy account named after your Determined username."
+msgstr "没有以你的 Determined 用户名命名的代理账号。"
+
+msgid ""
+"Password reset is unavailable while proxy access is off for your account. "
+"Ask an admin to turn it on."
+msgstr "你的账号已关闭代理访问，无法重置密码。请联系管理员开启。"
+
+msgid ""
+"A change to your account is still waiting or being applied. Try again once "
+"it is done."
+msgstr "你的账号还有一项变更在等待或正在应用，完成后再试。"
+
+#, python-format
+msgid "You can reset your password %(n)d time per hour. Try again later."
+msgid_plural ""
+"You can reset your password %(n)d times per hour. Try again later."
+msgstr[0] "每小时最多可以重置 %(n)d 次密码，请稍后再试。"
+
 msgid "My access"
 msgstr "我的接入"
 
@@ -370,10 +392,8 @@ msgstr "我的代理接入"
 msgid ""
 "Your proxy account, named after your Determined username, as the proxy "
 "accounts file records it, and the entries it may use. Requests still waiting "
-"are not shown. Passwords are never shown here."
-msgstr ""
-"你的代理账号（以你的 Determined 用户名命名）在代理账号文件中的记录，以及它可"
-"以使用的入口。尚在等待中的请求不在此显示。这里从不显示密码。"
+"are not shown. A password is shown only once, right after you reset it."
+msgstr "你的代理账号（以 Determined 用户名命名，以代理账号文件的记录为准）及其可用入口。尚在等待的请求不会显示。密码只在你重置后显示一次。"
 
 msgid ""
 "Account information is unavailable right now. Try again later; the proxies "
@@ -462,8 +482,28 @@ msgid ""
 "Determined admin role."
 msgstr "代理管理员标记由管理员按代理账号设置，与 Determined 的管理员角色无关。"
 
-msgid "Need an account or a new password? Ask an admin."
-msgstr "需要账号或新密码？请联系管理员。"
+msgid "Need an account? Ask an admin."
+msgstr "需要账号？请联系管理员。"
+
+msgid "Proxy password"
+msgstr "代理密码"
+
+msgid ""
+"Forgot it, or it leaked? Reset it: your account gets a new random password, "
+"shown to you once."
+msgstr "忘记了或泄露了？重置即可：你的账号会得到一个新的随机密码，只向你显示一次。"
+
+msgid "Reset proxy password"
+msgstr "重置代理密码"
+
+msgid "Your new password is ready: open the reset to see it once."
+msgstr "新密码已就绪：打开重置窗口查看，仅显示一次。"
+
+msgid "A password reset is in progress: open the reset to follow it."
+msgstr "密码重置正在进行：打开重置窗口查看进度。"
+
+msgid "Resetting the password needs JavaScript."
+msgstr "重置密码需要启用 JavaScript。"
 
 msgid "Entries"
 msgstr "入口"
@@ -538,10 +578,8 @@ msgstr "网络"
 msgid ""
 "Keep the password to yourself: set it in your own shell profile or task "
 "environment, never in images, notebooks, shared task templates or "
-"repositories. If it leaks, ask an admin for a new one."
-msgstr ""
-"请自行保管密码：只写在自己的 shell 配置或任务环境中，不要写进镜像、notebook、"
-"共享的任务模板或代码仓库。如有泄露，请联系管理员更换。"
+"repositories. If it leaks, reset it above."
+msgstr "密码请自己保管：只写在你自己的 shell 配置或任务环境变量里，不要写进镜像、notebook、共享任务模板或代码仓库。如果泄露，请在上方重置。"
 
 msgid "Private network (the nodes)"
 msgstr "内网（节点）"
@@ -573,14 +611,44 @@ msgstr "有代理账号后，这里会显示客户端设置。"
 msgid "Client settings appear here while proxy access is on."
 msgstr "代理访问开启时，这里会显示客户端设置。"
 
+#, python-format
+msgid ""
+"Gives your proxy account %(name)s a new random password, shown to you once, "
+"here, when it is live. The old password stops working: update every client "
+"that uses it."
+msgstr "为你的代理账号 %(name)s 生成新的随机密码，生效后在此处向你显示一次。旧密码随即失效：请更新所有使用它的客户端。"
+
+msgid "Reset the password"
+msgstr "重置密码"
+
+msgid "Cancel"
+msgstr "取消"
+
+msgid "State"
+msgstr "状态"
+
+msgid "Show the password once"
+msgstr "显示一次密码"
+
+msgid "Close"
+msgstr "关闭"
+
+msgid "Shown once: this password will not be shown again."
+msgstr "仅显示一次：此密码不会再次显示。"
+
+msgid ""
+"The portal does not keep it. Copy it now and update every client that uses "
+"it."
+msgstr "门户不会保存它。请立即复制，并更新所有使用它的客户端。"
+
+msgid "Done"
+msgstr "完成"
+
 msgid "Title"
 msgstr "标题"
 
 msgid "Affected component"
 msgstr "受影响的组件"
-
-msgid "State"
-msgstr "状态"
 
 msgid "Started"
 msgstr "开始时间"
@@ -597,8 +665,8 @@ msgstr "以纯文本显示在公开的状态页面上。"
 msgid "Admin"
 msgstr "管理"
 
-msgid "Accounts"
-msgstr "账号"
+msgid "Users"
+msgstr "用户"
 
 msgid "Change log"
 msgstr "变更记录"
@@ -630,107 +698,8 @@ msgstr "未恢复"
 msgid "No requests"
 msgstr "没有请求"
 
-msgid "Proxy accounts"
-msgstr "代理账号"
-
-msgid ""
-"The accounts as the applier last read the accounts file. Each change is a "
-"request that the applier on the VM applies and verifies; this list changes "
-"once it has."
-msgstr "执行器最近一次读取账号文件时的账号列表。每项变更都是一个请求，由虚拟机上的执行器应用并验证；完成后此列表才会变化。"
-
-msgid ""
-"The accounts status has not been refreshed for a while: the applier may not "
-"be running."
-msgstr "账号状态已有一段时间没有更新：执行器可能没有运行。"
-
-msgid ""
-"No apply is recorded since the configs were last rendered with "
-"proxy_accounts.py: they may not be live yet."
-msgstr "自上次用 proxy_accounts.py 生成配置以来，没有记录到应用：配置可能尚未生效。"
-
-msgid ""
-"The accounts file holds a change made with proxy_accounts.py since the "
-"applier's last apply: it may not be live yet."
-msgstr "账号文件中有执行器上次应用之后用 proxy_accounts.py 做的变更：它可能尚未生效。"
-
-msgid ""
-"Every change restarts the affected entries: established connections through "
-"them drop."
-msgstr "每项变更都会重启受影响的入口：经过它们的已建立连接会断开。"
-
-#, python-format
-msgid "%(n)s account"
-msgid_plural "%(n)s accounts"
-msgstr[0] "%(n)s 个账号"
-
-#, python-format
-msgid "matching “%(q)s”"
-msgstr "匹配“%(q)s”"
-
-msgid "Search"
-msgstr "搜索"
-
-msgid "Kind"
-msgstr "类型"
-
-msgid "Proxy access"
-msgstr "代理访问"
-
-msgid "Admin account"
-msgstr "管理员账号"
-
-msgid "Pending request"
-msgstr "待处理请求"
-
-msgid "Actions"
-msgstr "操作"
-
-msgid "Service"
-msgstr "服务"
-
-msgid "User"
-msgstr "用户"
-
-msgid "On"
-msgstr "开启"
-
-msgid "Off"
-msgstr "关闭"
-
-msgid "Off at the HA entries"
-msgstr "已关闭（仅 HA 入口）"
-
-msgid "Changed with proxy_accounts.py only"
-msgstr "只能用 proxy_accounts.py 修改"
-
-msgid "No account matches."
-msgstr "没有匹配的账号。"
-
-msgid "Add an account"
-msgstr "添加账号"
-
-msgid ""
-"A person's account is named exactly as their Determined username; a node's "
-"Docker daemon uses svc-docker-<node>."
-msgstr "个人账号与其 Determined 用户名完全相同；节点的 Docker 守护进程使用 svc-docker-<node>。"
-
-msgid "Account name"
-msgstr "账号名"
-
-msgid ""
-"Lowercase letters, digits, '.', '_' and '-', starting with a letter or "
-"digit, at most 64 characters."
-msgstr "小写字母、数字、'.'、'_' 和 '-'，以字母或数字开头，最多 64 个字符。"
-
-msgid "Continue"
-msgstr "继续"
-
-msgid "Recent requests"
-msgstr "最近的请求"
-
-msgid "Back to the accounts"
-msgstr "返回账号列表"
+msgid "Back to the users"
+msgstr "返回用户列表"
 
 msgid ""
 "This is a node's Docker daemon: once the change is live, put the new "
@@ -749,9 +718,6 @@ msgstr "输入 %(name)s 以确认"
 
 msgid "Send the request"
 msgstr "提交请求"
-
-msgid "Cancel"
-msgstr "取消"
 
 msgid "Admins only"
 msgstr "仅限管理员"
@@ -828,9 +794,6 @@ msgstr "新密码"
 msgid "Request"
 msgstr "请求"
 
-msgid "Shown once: this password will not be shown again."
-msgstr "仅显示一次：此密码不会再次显示。"
-
 #, python-format
 msgid ""
 "The portal does not keep it. Copy it now and give it to the user of %(name)s "
@@ -864,8 +827,157 @@ msgstr "已重启"
 msgid "This page updates by itself."
 msgstr "此页面会自动更新。"
 
-msgid "Show the password once"
-msgstr "显示一次密码"
+msgid "Users and proxy accounts"
+msgstr "用户与代理账号"
+
+msgid ""
+"Every cluster user with their proxy account, as the applier last read the "
+"accounts file. Each change is a request that the applier on the VM applies "
+"and verifies; this list changes once it has."
+msgstr "所有集群用户及其代理账号，以执行器 (applier) 最近一次读取的账号文件为准。每项变更都是一个请求，由 VM 上的执行器应用并验证；完成后此列表才会变化。"
+
+msgid ""
+"The accounts status has not been refreshed for a while: the applier may not "
+"be running."
+msgstr "账号状态已有一段时间没有更新：执行器可能没有运行。"
+
+msgid ""
+"The accounts file holds a change made with proxy_accounts.py since the "
+"applier's last apply: it may not be live yet."
+msgstr "账号文件中有执行器上次应用之后用 proxy_accounts.py 做的变更：它可能尚未生效。"
+
+msgid ""
+"No apply is recorded since the configs were last rendered with "
+"proxy_accounts.py: they may not be live yet."
+msgstr "自上次用 proxy_accounts.py 生成配置以来，没有记录到应用：配置可能尚未生效。"
+
+msgid ""
+"Every change restarts the affected entries: established connections through "
+"them drop."
+msgstr "每项变更都会重启受影响的入口：经过它们的已建立连接会断开。"
+
+#, python-format
+msgid "User list as of %(time)s, refreshed at each admin sign-in"
+msgstr "用户列表截至 %(time)s，每次管理员登录时刷新"
+
+msgid ""
+"No user list yet: it is read from Determined at each admin sign-in. Sign out "
+"and in again to read it."
+msgstr "尚无用户列表：每次管理员登录时从 Determined 读取。退出后重新登录即可读取。"
+
+#, python-format
+msgid "%(n)s user"
+msgid_plural "%(n)s users"
+msgstr[0] "%(n)s 个用户"
+
+#, python-format
+msgid "matching “%(q)s”"
+msgstr "匹配“%(q)s”"
+
+msgid "Search"
+msgstr "搜索"
+
+msgid "Filters"
+msgstr "筛选"
+
+msgid "All"
+msgstr "全部"
+
+msgid "No proxy account"
+msgstr "无代理账号"
+
+msgid "Private access"
+msgstr "私有访问"
+
+msgid "Inactive in Determined, proxy access on"
+msgstr "Determined 中已停用但代理访问开启"
+
+msgid "User"
+msgstr "用户"
+
+msgid "Determined"
+msgstr "Determined"
+
+msgid "Proxy account"
+msgstr "代理账号"
+
+msgid "Pending request"
+msgstr "待处理请求"
+
+msgid "Actions"
+msgstr "操作"
+
+msgid "Not in the user list"
+msgstr "不在用户列表中"
+
+msgid "Active"
+msgstr "启用"
+
+msgid "Inactive"
+msgstr "已停用"
+
+msgid "Unknown"
+msgstr "未知"
+
+msgid "No account"
+msgstr "无账号"
+
+msgid "On"
+msgstr "开启"
+
+msgid "Off"
+msgstr "关闭"
+
+msgid "Off at the HA entries"
+msgstr "已关闭（仅 HA 入口）"
+
+msgid "Admin account"
+msgstr "管理员账号"
+
+msgid "Changed with proxy_accounts.py only"
+msgstr "只能用 proxy_accounts.py 修改"
+
+msgid "Not a valid proxy account name"
+msgstr "不是有效的代理账号名"
+
+msgid "No user matches."
+msgstr "没有匹配的用户。"
+
+msgid "Service accounts"
+msgstr "服务账号"
+
+msgid ""
+"The accounts of the HA entry, the monitoring and the nodes' Docker daemons: "
+"never a person's account, never an admin account."
+msgstr "HA 入口、监控和各节点 Docker 守护进程使用的账号：不属于任何个人，也不能成为管理员账号。"
+
+msgid "Proxy access"
+msgstr "代理访问"
+
+msgid "No account matches."
+msgstr "没有匹配的账号。"
+
+msgid "Add an account"
+msgstr "添加账号"
+
+msgid ""
+"A person's account is named exactly as their Determined username; a node's "
+"Docker daemon uses svc-docker-<node>."
+msgstr "个人账号与其 Determined 用户名完全相同；节点的 Docker 守护进程使用 svc-docker-<node>。"
+
+msgid "Account name"
+msgstr "账号名"
+
+msgid ""
+"Lowercase letters, digits, '.', '_' and '-', starting with a letter or "
+"digit, at most 64 characters."
+msgstr "小写字母、数字、'.'、'_' 和 '-'，以字母或数字开头，最多 64 个字符。"
+
+msgid "Continue"
+msgstr "继续"
+
+msgid "Recent requests"
+msgstr "最近的请求"
 
 msgid "CVGL Proxy"
 msgstr "CVGL 代理"
@@ -945,9 +1057,6 @@ msgstr "正常"
 
 msgid "Failing"
 msgstr "故障"
-
-msgid "Unknown"
-msgstr "未知"
 
 msgid "Service health"
 msgstr "服务健康"
@@ -1220,6 +1329,12 @@ msgstr "%(n)d 小时前"
 #, python-format
 msgid "%(n)d days ago"
 msgstr "%(n)d 天前"
+
+msgid "The reset could not be started."
+msgstr "无法开始重置。"
+
+msgid "The portal could not be reached. Try again."
+msgstr "无法连接门户，请重试。"
 
 msgid "Enter your Determined username and password."
 msgstr "请输入 Determined 用户名和密码。"

@@ -5,7 +5,7 @@
   <div>
     <div class="eyebrow">{% translate "My access" %}</div>
     <h1>{% translate "My proxy access" %}</h1>
-    <p class="sub">{% translate "Your proxy account, named after your Determined username, as the proxy accounts file records it, and the entries it may use. Requests still waiting are not shown. Passwords are never shown here." %}</p>
+    <p class="sub">{% translate "Your proxy account, named after your Determined username, as the proxy accounts file records it, and the entries it may use. Requests still waiting are not shown. A password is shown only once, right after you reset it." %}</p>
   </div>
 </div>
 
@@ -38,8 +38,20 @@
     {% if view.account is None or view.account.enabled %}{% if not view.raw_auth %}<p>{% translate "Raw auth (accounts on the public proxies' own entries) is off: a public proxy's own entry accepts anyone, without an account, so turning an account off stops only the HA entries and the private proxies for it." %}</p>{% else %}<p>{% translate "Raw auth (accounts on the public proxies' own entries) is on: every entry requires an enabled account." %}</p>{% endif %}{% endif %}
     <p>{% translate "Proxy access off is not a change to your cluster account: your Determined login, jobs and files are not affected." %}</p>
     <p>{% translate "The proxy admin flag is set per proxy account by the admins; it is not the Determined admin role." %}</p>
-    <p>{% translate "Need an account or a new password? Ask an admin." %}</p>
+    {% if view.account is None %}<p>{% translate "Need an account? Ask an admin." %}</p>{% endif %}
   </div>
+  {% if reset.shown %}
+  <div class="card card-pad section-gap-top">
+    <div class="card-head">
+      <div><h3>{% translate "Proxy password" %}</h3>
+        <p class="small muted">{% translate "Forgot it, or it leaked? Reset it: your account gets a new random password, shown to you once." %}</p></div>
+      <button class="btn primary" type="button" id="reset-open" hidden{% if not reset.available and not reset.current %} disabled{% endif %}>{% translate "Reset proxy password" %}</button>
+    </div>
+    {% if reset.current %}<p class="small" id="reset-current">{% if reset.current.password == 'ready' %}{% translate "Your new password is ready: open the reset to see it once." %}{% else %}{% translate "A password reset is in progress: open the reset to follow it." %}{% endif %}</p>{% endif %}
+    {% if reset.reason %}<div class="notice warn reset-reason" role="status"><p>{{ reset.reason }}</p></div>{% endif %}
+    <noscript><p class="small muted">{% translate "Resetting the password needs JavaScript." %}</p></noscript>
+  </div>
+  {% endif %}
 </section>
 
 <section class="section" aria-labelledby="entries-title">
@@ -81,7 +93,7 @@
   </div>
   <div class="card card-pad">
     {% if view.templates %}
-    <div class="notice"><p>{% translate "Keep the password to yourself: set it in your own shell profile or task environment, never in images, notebooks, shared task templates or repositories. If it leaks, ask an admin for a new one." %}</p></div>
+    <div class="notice"><p>{% translate "Keep the password to yourself: set it in your own shell profile or task environment, never in images, notebooks, shared task templates or repositories. If it leaks, reset it above." %}</p></div>
     {% for network, items in view.templates.networks.items %}
     <div data-panel="network" data-value="{{ network }}">
       <h3 class="section">{% if network == 'private' %}{% translate "Private network (the nodes)" %}{% else %}{% translate "Campus network (the login node)" %}{% endif %}</h3>
@@ -101,5 +113,89 @@
     {% endif %}
   </div>
 </section>
+{% if reset.shown %}
+<dialog class="modal" id="reset-dialog" aria-labelledby="reset-title" aria-describedby="reset-effect" data-create="{% url 'api_me_reset' %}" data-current="{{ reset.current.id|default:'' }}">
+  <div class="modal-body">{% csrf_token %}
+    <h2 id="reset-title">{% translate "Reset proxy password" %}</h2>
+    <div data-step="confirm">
+      <div class="notice warn">
+        <p id="reset-effect">{% blocktranslate with name=view.username %}Gives your proxy account {{ name }} a new random password, shown to you once, here, when it is live. The old password stops working: update every client that uses it.{% endblocktranslate %}</p>
+        <p>{{ reset.restart }}</p>
+      </div>
+      <p class="reset-error notice bad" role="alert" hidden></p>
+      <div class="form-actions">
+        <button class="btn danger" type="button" data-action="confirm">{% translate "Reset the password" %}</button>
+        <button class="btn" type="button" data-action="close" data-autofocus>{% translate "Cancel" %}</button>
+      </div>
+    </div>
+    <div data-step="progress" hidden>
+      <div class="card-head"><span class="small muted">{% translate "State" %}</span><span class="chip info" data-field="state"></span></div>
+      <div class="notice" role="status" aria-live="polite"><p data-field="text"></p><p data-field="password_text"></p></div>
+      <p class="reset-error notice bad" role="alert" hidden></p>
+      <div class="form-actions">
+        <button class="btn primary" type="button" data-action="reveal" hidden>{% translate "Show the password once" %}</button>
+        <button class="btn" type="button" data-action="close" data-autofocus>{% translate "Close" %}</button>
+      </div>
+    </div>
+    <div data-step="password" hidden>
+      <div class="notice warn" role="alert"><p><b>{% translate "Shown once: this password will not be shown again." %}</b> {% translate "The portal does not keep it. Copy it now and update every client that uses it." %}</p></div>
+      <div class="secret-box"><code id="reset-password"></code><button type="button" data-copy="reset-password" data-done="{% translate 'Copied' %}" data-autofocus>{% translate "Copy" %}</button></div>
+      <div class="form-actions"><button class="btn" type="button" data-action="close">{% translate "Done" %}</button></div>
+    </div>
+  </div>
+</dialog>
+{% endif %}
 {% endif %}
 {% endblock %}
+{% block scripts %}{% if reset.shown %}{{ reset_texts|json_script:"reset-texts" }}
+<script nonce="{{ csp_nonce }}">
+(function(){'use strict';
+var dlg=document.getElementById('reset-dialog'),opener=document.getElementById('reset-open');
+if(!dlg||!opener||typeof dlg.showModal!=='function')return;
+var T=JSON.parse(document.getElementById('reset-texts').textContent);
+var csrf=dlg.querySelector('input[name=csrfmiddlewaretoken]').value,create=dlg.getAttribute('data-create');
+var current=dlg.getAttribute('data-current')||null,timer=null,tries=0,secret=document.getElementById('reset-password');
+function q(sel){return dlg.querySelector(sel);}
+function steps(){return dlg.querySelectorAll('[data-step]');}
+function focusables(){return Array.prototype.filter.call(dlg.querySelectorAll('button,a[href],input:not([type=hidden])'),
+  function(el){return !el.disabled&&!el.closest('[hidden]');});}
+function focusStep(){var step=q('[data-step]:not([hidden])');if(!step)return;
+  var el=step.querySelector('[data-action=reveal]:not([hidden])')||step.querySelector('[data-autofocus]')||focusables()[0];if(el)el.focus();}
+function show(name){steps().forEach(function(s){s.hidden=s.getAttribute('data-step')!==name;});
+  dlg.querySelectorAll('.reset-error').forEach(function(e){e.hidden=true;});if(dlg.open)focusStep();}
+function error(text){var e=q('[data-step]:not([hidden]) .reset-error');if(e){e.textContent=text;e.hidden=false;}}
+function stop(){if(timer){clearTimeout(timer);timer=null;}}
+function call(method,url){return fetch(url,{method:method,credentials:'same-origin',
+    headers:{'Accept':'application/json','X-CSRFToken':csrf}})
+  .then(function(r){return r.json().then(function(d){return {status:r.status,data:d};},function(){return {status:r.status,data:{}};});});}
+function render(d){var chip=q('[data-field=state]');chip.textContent=d.state_label;
+  chip.className='chip '+(d.level==='ok'?'ok':d.level==='warn'?'warn':d.level==='bad'?'bad':'info');
+  var box=chip.closest('[data-step]').querySelector('.notice[role=status]');
+  box.className='notice'+(d.level==='bad'?' bad':d.level==='warn'?' warn':d.level==='ok'?' ok':'');
+  q('[data-field=text]').textContent=d.text;q('[data-field=password_text]').textContent=d.password_text||'';
+  var reveal=q('[data-action=reveal]'),wasHidden=reveal.hidden;reveal.hidden=d.password!=='ready';
+  if(wasHidden&&!reveal.hidden&&dlg.open)reveal.focus();
+  if(!d.final||d.password==='waiting'){stop();if(dlg.open&&tries<450){timer=setTimeout(poll,2000);}}
+  else{stop();if(d.password!=='ready')current=null;}}
+function poll(){tries++;call('GET',create+'/'+current).then(function(res){
+    if(res.status===200)render(res.data);else{error(res.data.error||T.failed);}},
+  function(){error(T.network);if(dlg.open&&tries<450)timer=setTimeout(poll,5000);});}
+opener.hidden=false;
+opener.addEventListener('click',function(){tries=0;show(current?'progress':'confirm');dlg.showModal();focusStep();if(current)poll();});
+dlg.addEventListener('keydown',function(e){if(e.key!=='Tab')return;var f=focusables();if(!f.length)return;
+  var first=f[0],last=f[f.length-1];
+  if(e.shiftKey&&(document.activeElement===first||!dlg.contains(document.activeElement))){e.preventDefault();last.focus();}
+  else if(!e.shiftKey&&(document.activeElement===last||!dlg.contains(document.activeElement))){e.preventDefault();first.focus();}});
+dlg.addEventListener('close',function(){stop();secret.textContent='';opener.focus();});
+dlg.addEventListener('click',function(e){var b=e.target.closest('[data-action]');if(!b)return;var action=b.getAttribute('data-action');
+  if(action==='close'){dlg.close();}
+  else if(action==='confirm'){b.disabled=true;call('POST',create).then(function(res){b.disabled=false;
+      if(res.status===202){current=res.data.id;opener.disabled=false;show('progress');render(res.data);}
+      else{error(res.data.error||T.failed);}},function(){b.disabled=false;error(T.network);});}
+  else if(action==='reveal'){b.disabled=true;call('POST',create+'/'+current+'/password').then(function(res){b.disabled=false;
+      if(res.status===200&&res.data.value){secret.textContent=res.data.value;current=null;
+        var note=document.getElementById('reset-current');if(note)note.hidden=true;show('password');}
+      else{render(res.data.state?res.data:{state_label:'',level:'bad',text:res.data.error||T.failed,final:true});}},
+    function(){b.disabled=false;error(T.network);});}});
+})();
+</script>{% endif %}{% endblock %}
