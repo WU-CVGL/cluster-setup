@@ -15,7 +15,7 @@
   <div>
     <div class="status-title"><span class="emblem" aria-hidden="true">{% if data.headline.level == 'ok' %}✓{% elif data.headline.level == 'unknown' %}?{% else %}!{% endif %}</span><h2 id="headline">{{ data.headline.text }}</h2></div>
     <p data-live-monitoring="off"{% if data.monitoring_available %} hidden{% endif %}>{% translate "Monitoring data is unavailable, so every status is unknown." %}</p>
-    <p data-live-monitoring="on"{% if not data.monitoring_available %} hidden{% endif %}>{% translate "ha-general sends each new connection to a passing public proxy; open connections stay on their proxy." %}</p>
+    <p data-live-monitoring="on"{% if not data.monitoring_available %} hidden{% endif %}>{% translate "The default proxy ha-general sends each new connection to a passing public proxy; open connections stay on their proxy." %}</p>
   </div>
   <div class="status-right">
     <div class="status-number" data-live-count>{% if general.proxies.configured is None %}—{% else %}{{ general.proxies.passing }} / {{ general.proxies.configured }}{% endif %}</div>
@@ -101,7 +101,7 @@
 {% endblock %}
 {% block scripts %}{{ live|json_script:"status-live" }}{{ live_texts|json_script:"status-texts" }}
 <script nonce="{{ csp_nonce }}">
-// Polls /api/status every 30 s and when the tab becomes visible, dropping a poll with no answer after 15 s, and
+// Polls /api/status/live every 30 s and when the tab becomes visible, dropping a poll with no answer after 15 s, and
 // ages what it shows every second: a result older than 90 s, counted from the last answer that came, is Unknown,
 // with no duration; the proxy counts are "—" once that answer is older than 90 s, or once the entry's results are.
 (function(){'use strict';
@@ -148,7 +148,7 @@ function render(){
   document.querySelectorAll('[data-live-count]').forEach(function(el){
     el.textContent=none?'\u2014':proxies.passing+' / '+proxies.configured;});}
 function poll(){if(busy)return;busy=true;var started=performance.now();polled=started;pending=new AbortController();
-  fetch('/api/status',{credentials:'same-origin',cache:'no-store',headers:{'Accept':'application/json'},signal:pending.signal})
+  fetch('/api/status/live',{credentials:'same-origin',cache:'no-store',headers:{'Accept':'application/json'},signal:pending.signal})
     .then(function(r){if(!r.ok)throw new Error(String(r.status));return r.json();})
     .then(function(d){data=d;stale=d.stale_after_seconds;fetched=started;},function(){})
     .then(function(){busy=false;pending=null;render();});}
@@ -157,23 +157,30 @@ setInterval(function(){var now=performance.now();if(pending&&now-polled>=TIMEOUT
 document.addEventListener('visibilitychange',function(){if(document.visibilityState==='visible')poll();});
 })();
 // The status bars: one tab stop per bar list, the arrow keys, Home and End move between its bars; a bar's label shows
-// as a tooltip on hover and on focus, and Esc hides it.
+// as a tooltip on hover and on focus, and Esc hides it. A focused bar's tooltip follows it when the page or its list
+// scrolls, out of sight while the bar is; a hovered one goes.
 (function(){'use strict';
 var tip=document.createElement('div');tip.className='bar-tip';tip.hidden=true;tip.setAttribute('aria-hidden','true');
-document.body.appendChild(tip);var shown=null;
-function show(bar){shown=bar;tip.textContent=bar.getAttribute('aria-label');tip.hidden=false;
-  var r=bar.getBoundingClientRect(),w=tip.offsetWidth,h=tip.offsetHeight,vw=document.documentElement.clientWidth;
-  var left=Math.max(8,Math.min(vw-w-8,r.left+r.width/2-w/2)),top=r.top-h-8;if(top<8)top=r.bottom+8;
+document.body.appendChild(tip);var shown=null,header=document.querySelector('header');
+function top0(){return header?Math.max(0,header.getBoundingClientRect().bottom):0;}
+function show(bar){shown=bar;tip.textContent=bar.getAttribute('aria-label');
+  var r=bar.getBoundingClientRect(),vh=document.documentElement.clientHeight,min=top0();
+  if(r.bottom<=min||r.top>=vh){tip.hidden=true;return;}
+  tip.hidden=false;
+  var w=tip.offsetWidth,h=tip.offsetHeight,vw=document.documentElement.clientWidth;
+  var left=Math.max(8,Math.min(vw-w-8,r.left+r.width/2-w/2)),top=r.top-h-8;if(top<min+8)top=r.bottom+8;
   tip.style.left=left+'px';tip.style.top=top+'px';}
 function hide(){shown=null;tip.hidden=true;}
 function bar(e){return e.target instanceof Element?e.target.closest('.bar'):null;}
+function scrolled(){if(!shown)return;if(shown===document.activeElement)show(shown);else hide();}
 document.addEventListener('pointerover',function(e){var b=bar(e);if(b)show(b);else if(shown&&shown!==document.activeElement)hide();});
 document.addEventListener('focusin',function(e){var b=bar(e);if(b)show(b);else hide();});
 document.addEventListener('focusout',function(e){if(bar(e))hide();});
-window.addEventListener('scroll',hide,{passive:true});
-document.querySelectorAll('.bars').forEach(function(list){list.addEventListener('scroll',hide,{passive:true});
+document.addEventListener('keydown',function(e){if(e.key==='Escape'&&shown)hide();});
+window.addEventListener('scroll',scrolled,{passive:true});
+window.addEventListener('resize',scrolled,{passive:true});
+document.querySelectorAll('.bars').forEach(function(list){list.addEventListener('scroll',scrolled,{passive:true});
   list.addEventListener('keydown',function(e){var b=bar(e);if(!b)return;
-    if(e.key==='Escape'){hide();return;}
     var items=Array.prototype.slice.call(list.children),i=items.indexOf(b),j=i;
     if(e.key==='ArrowLeft')j=Math.max(0,i-1);else if(e.key==='ArrowRight')j=Math.min(items.length-1,i+1);
     else if(e.key==='Home')j=0;else if(e.key==='End')j=items.length-1;else return;

@@ -251,8 +251,8 @@ def bars_view(window, now, names):
     return dict(found, rows={name: found["rows"].get(name, empty) for name in names})
 
 
-def build(now=None):
-    """The whole public status, as /api/status returns it (without the incidents)."""
+def build(now=None, bars=True):
+    """The whole public status, as /api/status returns it (without the incidents); without the bars if not bars."""
     now = time.time() if now is None else now
     data = cached_collect(now)
     status = proxy_status.load()
@@ -264,7 +264,7 @@ def build(now=None):
                            general["proxies"]["passing"], general["proxies"]["configured"])
     ages = [p["last_check_age_seconds"] for p in general["protocols"].values()
             if p["last_check_age_seconds"] is not None]
-    return {
+    result = {
         "generated_at": now,
         "monitoring_available": data["ok"],
         "headline": {"level": level, "text": text},
@@ -272,5 +272,7 @@ def build(now=None):
         "stale_after_seconds": settings.STALE_SECONDS,
         "entries": entries,
         "proxies": proxies,
-        "bars": {window: bars_view(window, now, names) for window in queries.BAR_WINDOWS},
     }
+    if bars:
+        result["bars"] = {window: bars_view(window, now, names) for window in queries.BAR_WINDOWS}
+    return result

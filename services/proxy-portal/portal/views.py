@@ -88,7 +88,7 @@ def _status_context():
 
 
 def _live(data):
-    """What the status page's script refreshes, in /api/status's form: it polls that and ages the results."""
+    """What the status page's script refreshes, as /api/status/live returns it: it polls that and ages the results."""
     return {key: data[key] for key in ("monitoring_available", "headline", "last_check_age_seconds",
                                        "stale_after_seconds", "entries", "proxies")}
 
@@ -116,6 +116,12 @@ def api_status(request):
     data = health.build()
     data["incidents"] = [incident.as_json() for incident in incidents()]
     return JsonResponse(data)
+
+
+@require_GET
+def api_status_live(request):
+    """What the Status page polls: /api/status without the bars and the incidents, which update on reload."""
+    return JsonResponse(_live(health.build(bars=False)))
 
 
 def _refuse_parameters(request):

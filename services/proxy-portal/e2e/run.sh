@@ -36,6 +36,7 @@ echo "http redirect: $(r -o /dev/null -w '%{http_code} %{redirect_url}' http://p
 echo "status:        $(r -o /dev/null -w '%{http_code}' https://proxy.cvgl.lab/)"
 echo "me anonymous:  $(r -o /dev/null -w '%{http_code}' https://proxy.cvgl.lab/api/me/access)"
 r -D - -o /dev/null https://proxy.cvgl.lab/ | grep -iE '^(content-security-policy|x-frame-options|x-content-type-options|referrer-policy):' | cut -c1-90
+echo "answer sizes:  /api/status $(r -o /dev/null -w '%{size_download}' https://proxy.cvgl.lab/api/status) B, polled /api/status/live $(r -o /dev/null -w '%{size_download}' https://proxy.cvgl.lab/api/status/live) B"
 echo "headline:      $(r https://proxy.cvgl.lab/api/status | python3 -c 'import json,sys; print(json.load(sys.stdin)["headline"]["text"])')"
 
 # incidents in the database: one resolved, one open
