@@ -291,14 +291,28 @@ class LifecycleTest(PortalTestCase):
             self.assertEqual(data["final"], state in ("applied", "failed", "unconfirmed"))
             page = self.client.get(f"/admin/requests/{request_id}")
             self.assertContains(page, text.replace("'", "&#x27;"))
-            if not data["final"]:
-                self.assertContains(page, "data-poll=")
+            if not data["final"] or (state == "failed" and record.get("restored") is False):
+                self.assertContains(page, "data-poll=")  # an unfinished rollback is followed too
             else:
                 self.assertNotContains(page, "data-poll=")
         test_failure = AccountRequest.objects.get(state="failed", stage="test")
         self.assertNotIn("The entries restarted", lifecycle.describe(test_failure))
         failed = AccountRequest.objects.filter(state="failed", stage="test").get()
         self.assertEqual((failed.error, failed.restored), ("xray-ha/config/config.json: bad", True))
+
+    def test_unfinished_rollback_is_read_again_until_its_outcome_is_known(self):
+        request_id = self.request("disable", "alice")
+        self.status(request_id, status="failed", stage="verify", error="no 407", restored=False)
+        self.assertIn("the rollback did not finish", self.get(request_id)["text"])
+        # the applier's next run restores the files and the entries: the same status file, restored now
+        self.status(request_id, status="failed", stage="interrupted", error="the apply was interrupted",
+                    restored=True, updated_at="2026-01-01T00:05:00Z")
+        data = self.get(request_id)
+        self.assertEqual((data["restored"], data["stage"]), (True, "interrupted"))
+        self.assertIn("the previous state is back", data["text"])
+        # known now: the row is final and the file no longer read
+        self.status(request_id, status="failed", stage="verify", restored=False, updated_at="2026-01-01T00:09:00Z")
+        self.assertEqual(self.get(request_id)["restored"], True)
 
     def test_pending_too_long(self):
         request_id = self.request()

@@ -7,7 +7,7 @@
 </div></div>
 {% include "portal/admin/_nav.html" %}
 
-<section class="card card-pad" aria-labelledby="state-title" id="request-state" {% if not row.final or password == 'waiting' %}data-poll="{% url 'api_admin_request' row.id %}"{% endif %} data-state="{{ row.state }}" data-password="{{ password|default_if_none:"" }}">
+<section class="card card-pad" aria-labelledby="state-title" id="request-state" {% if not row.final or password == 'waiting' or row.state == 'failed' and row.restored is not True %}data-poll="{% url 'api_admin_request' row.id %}"{% endif %} data-state="{{ row.state }}" data-restored="{{ row.restored|yesno:'true,false,' }}" data-password="{{ password|default_if_none:"" }}">
   <div class="card-head"><h2 id="state-title">{% translate "State" %}</h2>{% include "portal/admin/_state.html" with level=level %}</div>
   <div class="notice{% if level == 'bad' %} bad{% elif level == 'warn' %} warn{% elif level == 'ok' %} ok{% endif %}" role="status"><p>{{ text }}</p>{% if raw_auth and row.state != 'failed' %}<p>{{ raw_auth }}</p>{% endif %}</div>
   <dl class="kv">
@@ -39,10 +39,12 @@
 <script nonce="{{ csp_nonce }}">
 (function(){'use strict';
 var el=document.querySelector('[data-poll]');if(!el)return;
-var url=el.getAttribute('data-poll'),state=el.getAttribute('data-state'),pw=el.getAttribute('data-password'),tries=0;
+var url=el.getAttribute('data-poll'),state=el.getAttribute('data-state'),pw=el.getAttribute('data-password'),
+  restored=el.getAttribute('data-restored'),tries=0;
 function tick(){tries++;fetch(url,{credentials:'same-origin',headers:{'Accept':'application/json'}})
   .then(function(r){return r.ok?r.json():null;})
-  .then(function(d){if(d&&(d.state!==state||String(d.password===null?'':d.password)!==pw)){location.reload();return;}
+  .then(function(d){if(d&&(d.state!==state||String(d.password===null?'':d.password)!==pw||
+      (d.restored===null?'':String(d.restored))!==restored)){location.reload();return;}
     if(tries<900)setTimeout(tick,2000);},function(){if(tries<900)setTimeout(tick,5000);});}
 setTimeout(tick,2000);})();
 </script>

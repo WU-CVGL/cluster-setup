@@ -92,7 +92,7 @@ Read from the applier's `status/<id>.json` ([statuses](applier/README.md#statuse
 | Pending | written, not taken yet; nothing has changed, so the old access still works. After 6 minutes the page says the applier may not be running |
 | Applying | being applied; the entries restart. A revoke is not confirmed yet: the old access may still work |
 | Applied | live and verified; "nothing to change" when the account was already in that state (the entries still restart when the same apply changed something else) |
-| Failed | not applied, with the stage and error. The previous state is back (after a failure at `swap`, `restart`, `verify` or `commit` the rollback restarted the entries, so established connections dropped), or, when the rollback did not finish, the entries may be down or mixed: check `journalctl -u proxy-apply` on the VM |
+| Failed | not applied, with the stage and error. The previous state is back (after a failure at `swap`, `restart`, `verify` or `commit` the rollback restarted the entries, so established connections dropped), or, when the rollback did not finish, the entries may be down or mixed: check `journalctl -u proxy-apply` on the VM. The portal keeps reading such a request's status, and the page updates itself, until the applier reports the rollback's outcome |
 | Unconfirmed | live, and every login that must be refused is refused, but the logins that must pass got no answer in time (proxies or the check target down) |
 
 **My access** shows the applied state only, never a pending request. The change log lists every request with its outcome, filterable by account, admin, operation and state.

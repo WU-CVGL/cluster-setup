@@ -32,10 +32,21 @@ def _parse_time(value):
         return None
 
 
+def settled(row, now):
+    """
+    Whether the row's outcome can no longer change: a final state, except a failure whose rollback had not
+    finished (the applier's next run may still restore it) and, for an hour, a one-time password that a later
+    request of the same run can supersede.
+    """
+    if not row.final or (row.state == "failed" and row.restored is not True):
+        return False
+    return not (row.gives_password and now - row.requested_at < RESULT_RECHECK)
+
+
 def refresh(row, now=None):
     """Copy the status file's outcome into the row (saved when it changed). Returns the row."""
     now = now or timezone.now()
-    if row.final and not (row.gives_password and now - row.requested_at < RESULT_RECHECK):
+    if settled(row, now):
         return row
     data = spool.read_status(row.id)
     if data is None:
