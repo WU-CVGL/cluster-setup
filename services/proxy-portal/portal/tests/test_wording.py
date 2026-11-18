@@ -8,8 +8,7 @@ from portal.models import AccountRequest
 
 from .base import PortalTestCase
 
-# account names (svc-ha, svc-monitor) are data on the Users page, like the proxies' names
-EN = re.compile(r"[Dd]efault proxy|\bpool\b|\bentry\b|\bentries\b|\bHA\b|[Rr]aw auth|applier|spool|\brender|"
+EN = re.compile(r"svc-ha|svc-monitor|[Dd]efault proxy|\bpool\b|\bentry\b|\bentries\b|\bHA\b|[Rr]aw auth|applier|spool|\brender|"
                 r"precheck|status\.json|accounts file|supplementary|Prometheus|[Ff]ailover|\bVM\b|xray-ha|"
                 r"proxy_accounts\.py|high-availability|admin-only")
 ZH = re.compile(r"默认代理|入口|执行器|代理池|池内|故障切换|虚拟机|账号文件|队列目录|高可用|仅管理员账号")
@@ -72,6 +71,11 @@ class WordingTest(PortalTestCase):
         for op, name in (("add", "frank"), ("disable", "alice"), ("admin-on", "alice"), ("admin-off", "carol"),
                          ("rotate", "svc-docker-cvgl-node01"), ("disable", "svc-docker-cvgl-node01")):
             self.check(f"/admin/accounts/{op}?username={name}", **headers)
+        # the protected service accounts by what they are for; a node's Docker daemon account by its name
+        users = self.check("/admin/users", **headers)
+        for text in (("Auto-switching proxies", "Monitoring", "svc-docker-cvgl-node01") if not headers else
+                     ("自动切换代理", "监控", "svc-docker-cvgl-node01")):
+            self.assertIn(text, users)
 
     def test_english(self):
         self.pages()
