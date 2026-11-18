@@ -110,10 +110,12 @@ cd ~/ws/cluster-setup/services
 python3 xray/scripts/proxy_accounts.py add svc-monitor
 python3 xray/scripts/proxy_accounts.py add svc-ha
 python3 xray/scripts/proxy_accounts.py render   # before the first start, or Docker creates the folders as root
-docker compose up -d xray-ha xray-ha-exporter blackbox-exporter
+docker compose up -d $(docker compose config --services | grep '^xray-' | grep -v exporter) xray-ha-exporter blackbox-exporter
 docker compose kill -s SIGHUP prometheus   # reload the probe job
 docker compose restart grafana             # load the new dashboard providers
 ```
+
+The `up -d` line creates `xray-ha` and recreates every proxy on the pinned image: `render` has written the accounts into the private proxies' configs ([Private entries](#private-entries)).
 
 The pool is explicit, and [`create_xray_service.py`](../services/xray/scripts/README.md) does not add new proxies to it. To add a public proxy to the pool, follow [Classify a new proxy](#classify-a-new-proxy); `render` refuses a `pool-` outbound to a proxy not listed in `public-proxies.txt`.
 
@@ -135,6 +137,7 @@ The ports are on `192.168.233.8` and `10.0.1.68`, as for `ha-general`. The priva
 - **`ha-private`** runs in the same `xray-ha` service as `ha-general`, on its own two ports, and balances over every proxy in the same way (`leastPing`, the same observatory, failing closed when no proxy passes). `ha-general` has its own pool and users, and `render` checks that it can reach no private proxy.
 - **Private proxies** always require an account, whatever raw auth says. Besides the admin accounts, they accept `svc-ha` (the HA entry's connections) and `svc-monitor` (the probes).
 - **A disabled admin account** is refused everywhere accounts are required, like any disabled account. While raw auth is off, the public proxies' own entries still accept them.
+- **Every private proxy runs the pinned image.** A proxy not listed in `public-proxies.txt` is private from its first `render`, which writes the admin accounts into its config, existing proxies included. Recreate each one with `docker compose up -d xray-<name>` on the image pinned in `docker-compose.yml`, not with `docker compose restart`: a restart keeps the container's old image, and older Xray versions ignore the accounts ([Accounts on the proxies](#accounts-on-the-proxies), step 1). Then check its own entry as in step 5 there: no account, a non-admin account and a revoked password get `407`, an admin account `204`. The restart pipelines below are for proxies that already run that image.
 
 ### Admin accounts
 
@@ -155,7 +158,7 @@ The [applier](#changes-from-the-portal) verifies through both entries, so `xray-
 
 [`services/xray/public-proxies.txt`](../services/xray/public-proxies.txt) lists the public proxies; every proxy not listed is private. A proxy nobody classified is therefore private, never open to everyone. [`create_xray_service.py`](../services/xray/scripts/README.md) requires `--public` (it adds the proxy to the list) or `--private`. A private proxy requires accounts from its creation.
 
-Before a private proxy takes clients, start it with `docker compose up -d` on the image pinned in `docker-compose.yml` (older Xray versions ignore the accounts, as in [Accounts on the proxies](#accounts-on-the-proxies), step 1), and check its own entry as in step 5 there: no account, a non-admin account and a revoked password get `407`, an admin account `204`.
+Before a private proxy takes clients, new or existing, start it with `docker compose up -d` on the image pinned in `docker-compose.yml` and check its own entry, as in [Private entries](#private-entries).
 
 - **Public proxy:** listed; for `ha-general` and `ha-private`, a `pool-<proxy>` outbound in [`config.example.json`](../services/xray-ha/config.example.json) and the probe targets with `pool: ha-general`, `access: public`.
 - **Private proxy:** not listed; for `ha-private`, a `private-<proxy>` outbound and the probe targets with `pool: ha-private`, `access: private`. `render` adds `svc-monitor` to its probe modules; the example shows it as `svc-monitor:PASSWORD@`.

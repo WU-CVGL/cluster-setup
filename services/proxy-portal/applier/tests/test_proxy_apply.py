@@ -718,6 +718,90 @@ class RunningStateTest(_Base):
         self.assertNotIn("boss", self.docker.private_users)
         self.assertIn(("ha-private", "boss"), self.probe.entry_calls)  # her 407 on ha-private, checked directly
 
+    def test_noop_with_a_record_that_does_not_match_ha_private_is_applied_in_full(self):
+        """applied.json matches the files after "admin boss off; render", but ha-private still takes boss."""
+        self.request("abcdefgh-1", "disable", "bob")
+        self.assertEqual(self.run_applier(), 0)
+        self.cli("admin", "boss", "off")
+        self.cli("render")
+        self.mark_applied()  # as if the record had survived the change
+        self.request("abcdefgh-2", "admin-off", "boss")
+        self.assertEqual(self.run_applier(), 0)
+        record = self.status("abcdefgh-2")
+        self.assertEqual((record["status"], record["changed"]), ("applied", False))
+        self.assertIn("xray-" + PRIVATE, record["restarted"])
+        self.assertNotIn("boss", self.docker.ha_private_users)
+        self.assertNotIn("boss", self.docker.private_users)
+
+    def test_cli_render_after_a_restart_by_hand_is_not_taken_as_applied(self):
+        """Portal disable; CLI enable, render, restart; CLI disable, render, no restart; portal disable again."""
+        self.request("abcdefgh-1", "disable", "alice")
+        self.assertEqual(self.run_applier(), 0)
+        self.assertNotIn("alice", self.docker.ha_users)
+        alice = self.passwords()["alice"]
+        self.cli("enable", "alice")
+        self.cli("render")
+        self.docker.load()  # docker compose restart xray-ha, by hand
+        self.assertEqual(self.docker.ha_users.get("alice"), alice)
+        self.cli("disable", "alice")
+        self.cli("render")  # the restart is missed: the entry still takes alice
+        self.assertFalse((self.base / pa.APPLIED_FILE).exists())
+        self.assertIsNone(pa.status(pa.Accounts(self.base))["unapplied_changes"])
+        restarts = len(self.docker.restarts())
+        self.request("abcdefgh-2", "disable", "alice")
+        self.assertEqual(self.run_applier(), 0)
+        record = self.status("abcdefgh-2")
+        self.assertEqual((record["status"], record["changed"]), ("applied", False))
+        self.assertIn("xray-ha", record["restarted"])
+        self.assertEqual(len(self.docker.restarts()), restarts + 1)
+        self.assertNotIn("alice", self.docker.ha_users)
+        self.assertIn(("alice", alice), self.probe.logins)
+
+    def test_cli_raw_auth_render_after_a_restart_by_hand_restarts_the_proxies(self):
+        """The same with raw auth: on and applied, off and restarted by hand, on again without the restart."""
+        self.cli("raw-auth", "on")
+        self.cli("render")
+        self.request("abcdefgh-1", "disable", "alice")
+        self.assertEqual(self.run_applier(), 0)
+        self.assertEqual(self.status("abcdefgh-1")["status"], "applied")
+        self.cli("raw-auth", "off")
+        self.cli("render")
+        self.docker.load()  # docker compose restart xray-ha and the proxies, by hand
+        self.cli("raw-auth", "on")
+        self.cli("render")  # the restart is missed: the proxies run without accounts
+        self.assertFalse((self.base / pa.APPLIED_FILE).exists())
+        self.request("abcdefgh-2", "disable", "alice")
+        self.assertEqual(self.run_applier(), 0)
+        record = self.status("abcdefgh-2")
+        self.assertEqual(record["status"], "applied")
+        self.assertEqual(sorted(record["restarted"]),
+                         sorted(["xray-ha", "xray-" + PROXY, "xray-" + PRIVATE, "blackbox-exporter"]))
+
+    def test_noop_with_a_record_that_does_not_match_the_entry_is_applied_in_full(self):
+        """applied.json matches the files, but the entry runs another state: the target check catches it."""
+        alice = self.cli_disable_without_restart()
+        self.mark_applied()  # as if the record had survived the change
+        self.assertEqual(self.run_applier(), 0)
+        record = self.status("abcdefgh-2")
+        self.assertEqual((record["status"], record["changed"]), ("applied", False))
+        self.assertIn("xray-ha", record["restarted"])
+        self.assertNotIn("alice", self.docker.ha_users)
+        self.assertGreaterEqual(self.probe.logins.count(("alice", alice)), 2)  # before the restart and after
+
+    def test_noop_checks_its_account_and_restarts_nothing(self):
+        alice = self.passwords()["alice"]
+        self.request("abcdefgh-1", "enable", "alice")
+        self.assertEqual(self.run_applier(), 0)
+        self.assertEqual((self.status("abcdefgh-1")["status"], self.status("abcdefgh-1")["restarted"]), ("applied", []))
+        self.assertEqual(self.docker.restarts(), [])
+        self.assertIn(("alice", alice), self.probe.logins)
+        self.probe.mode = "noproxies"  # no 204 in time: unconfirmed, still nothing restarted
+        self.request("abcdefgh-2", "enable", "alice")
+        self.assertEqual(self.run_applier(), 0)
+        record = self.status("abcdefgh-2")
+        self.assertEqual((record["status"], record["stage"], record["restarted"]), ("unconfirmed", "verify", []))
+        self.assertEqual(self.docker.restarts(), [])
+
     def test_request_target_checked_even_when_the_files_did_not_change(self):
         self.cli_disable_without_restart()
         self.docker.stale = True  # the restart does not take the config: alice still gets through
@@ -908,7 +992,8 @@ class FailureTest(_Base):
         self.assertFalse((self.base / ap.BACKUP_DIR).exists())
         self.assertEqual(self.docker.restarts(), [["xray-ha"]])  # no rollback restart
         view = json.loads((self.spool.root / "status.json").read_text())
-        self.assertIs(view["unapplied_changes"], False)
+        self.assertIsNone(view["unapplied_changes"])  # not recorded: the next batch restarts and verifies all
+        self.assertFalse((self.base / pa.APPLIED_FILE).exists())
 
     def test_killed_before_the_results_loses_only_the_result(self):
         self.request("abcdefgh-1", "add", "carol")

@@ -60,7 +60,7 @@ from XrayConfigHandler import XrayConfigHandler  # noqa: E402
 SERVICES_DIR = Path(__file__).resolve().parents[2]
 ACCOUNTS_FILE = Path("proxy-accounts/accounts.json")
 LOCK_FILE = Path("proxy-accounts/.lock")
-APPLIED_FILE = Path("proxy-accounts/applied.json")  # written by the portal's applier after an apply
+APPLIED_FILE = Path("proxy-accounts/applied.json")  # written by the portal's applier after an apply, removed by render
 ACCOUNTS_VERSION = 3
 HA_EXAMPLE = Path("xray-ha/config.example.json")
 HA_CONFIG = Path("xray-ha/config/config.json")
@@ -600,10 +600,25 @@ def render_sha256(base_dir: Path, files: List[Tuple[Path, str]]) -> str:
     return sha256_text("".join(lines))
 
 
+def forget_applied(base_dir: Path) -> None:
+    """Remove applied.json: what runs is no longer known to match a recorded apply."""
+    try:
+        (Path(base_dir) / APPLIED_FILE).unlink()
+    except FileNotFoundError:
+        pass
+
+
 def render(accounts: Accounts) -> List[Path]:
-    """Render every config first, then write them; returns the files written."""
+    """
+    Render every config first, then write them; returns the files written. Before it writes any file it removes
+    applied.json: the files then differ from what the applier last applied, and a restart by hand is not recorded,
+    so the next apply restarts and verifies every service.
+    """
+    outputs = render_outputs(accounts)
+    if outputs:
+        forget_applied(accounts.base_dir)
     written = []
-    for path, text in render_outputs(accounts):
+    for path, text in outputs:
         write_private(path, text)
         written.append(path)
     return written
@@ -697,7 +712,8 @@ def read_command(accounts: Accounts, args: argparse.Namespace) -> int:
             print(f"proxy {proxy['name']:<40} {access:<12} {ports}".rstrip())
         applied = view["applied"] or {}
         print(f"accounts file sha256: {view['accounts_sha256']}")
-        print(f"last applied sha256:  {applied.get('accounts_sha256')} {applied.get('applied_at') or ''}".rstrip())
+        last = f"{applied.get('accounts_sha256') or 'unknown'} {applied.get('applied_at') or ''}".rstrip()
+        print(f"last applied sha256:  {last}")
     return 0
 
 
