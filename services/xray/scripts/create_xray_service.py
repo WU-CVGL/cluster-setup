@@ -32,7 +32,7 @@ except ImportError:  # 没有 PyYAML 时使用基于正则的简单解析
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 from XrayConfigHandler import DEFAULT_API_PORT, DEFAULT_HTTP_PORT, DEFAULT_SOCKS_PORT, XrayConfigHandler
-from proxy_accounts import PUBLIC_PROXIES_FILE, Accounts, public_proxies
+from proxy_accounts import PUBLIC_PROXIES_FILE, Accounts, accounts_lock, public_proxies
 
 
 # 容器内固定端口 (现有 compose 服务和 exporter 都依赖这些值)
@@ -40,6 +40,9 @@ CONTAINER_HTTP_PORT = DEFAULT_HTTP_PORT     # 8889
 CONTAINER_SOCKS_PORT = DEFAULT_SOCKS_PORT   # 1089
 API_PORT = DEFAULT_API_PORT                 # 10085
 EXPORTER_PORT = 9550
+# 与 xray-ha 相同的版本和 digest：proxy_accounts.py 写入的入站账号 (HTTP "users") 需要这个版本，
+# 应用配置前用这个镜像检查 (proxy-portal/applier)。旧版本 (如 1.8.24) 不读 HTTP "users"，入站不认证
+XRAY_IMAGE = 'teddysun/xray:26.11.9@sha256:b3e117b834878d1e12f91e7b16270db104c2f0e5f0effbc0ece9088c473b5393'
 
 # 在 docker-compose.yml 的 ports: 中看不到、但占用主机端口的服务 (见模块说明)
 RESERVED_HOST_PORTS = {
@@ -286,7 +289,7 @@ class XrayServiceCreator:
         # 容器内固定端口：1089 (SOCKS5), 8889 (HTTP)
         xray_service_lines = [
             f'  {xray_service_name}:\n',
-            '    image: teddysun/xray:latest\n',
+            f'    image: {XRAY_IMAGE}\n',
             '    restart: unless-stopped\n',
             '    environment:\n',
             '      TZ: Asia/Shanghai\n',
@@ -516,6 +519,8 @@ class XrayServiceCreator:
 
         先校验参数、生成并检查全部文件的新内容，全部通过后才写入；
         写入过程中出错时恢复已写入的文件。
+        从读取账号到写完配置和其他文件都持有 proxy-accounts/.lock (与 proxy_accounts.py 和 portal 的 applier
+        相同)：同时进行的 disable、remove 或 render 要么在读取账号之前完成，要么等新代理写完后再 render 它。
 
         Args:
             share_url: Xray 分享 URL
@@ -527,6 +532,12 @@ class XrayServiceCreator:
         """
         if not isinstance(private, bool):
             raise ValueError("必须明确指定代理类型: --public 或 --private")
+        with accounts_lock(self.base_dir):
+            self._create_service(share_url, service_name, http_port, socks_port, private)
+
+    def _create_service(self, share_url: str, service_name: str, http_port: int, socks_port: int,
+                        private: bool) -> None:
+        """create_service 的内容，在 proxy-accounts/.lock 中执行"""
         print(f"正在创建 xray 服务: {service_name} ({'私有，只有管理员账号可用' if private else '公共'})")
         print(f"HTTP 端口: {http_port}, SOCKS5 端口: {socks_port}")
 

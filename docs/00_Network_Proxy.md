@@ -54,7 +54,7 @@ Each service looks like this (the full file is [`services/docker-compose.yml`](.
 ```yaml
 services:
   xray-usca5-bwh-sla-1tb:
-    image: teddysun/xray:latest
+    image: teddysun/xray:26.11.9@sha256:b3e117b834878d1e12f91e7b16270db104c2f0e5f0effbc0ece9088c473b5393
     restart: unless-stopped
     environment:
       TZ: Asia/Shanghai
@@ -155,6 +155,8 @@ The [applier](#changes-from-the-portal) verifies through both entries, so `xray-
 
 [`services/xray/public-proxies.txt`](../services/xray/public-proxies.txt) lists the public proxies; every proxy not listed is private. A proxy nobody classified is therefore private, never open to everyone. [`create_xray_service.py`](../services/xray/scripts/README.md) requires `--public` (it adds the proxy to the list) or `--private`. A private proxy requires accounts from its creation.
 
+Before a private proxy takes clients, start it with `docker compose up -d` on the image pinned in `docker-compose.yml` (older Xray versions ignore the accounts, as in [Accounts on the proxies](#accounts-on-the-proxies), step 1), and check its own entry as in step 5 there: no account, a non-admin account and a revoked password get `407`, an admin account `204`.
+
 - **Public proxy:** listed; for `ha-general` and `ha-private`, a `pool-<proxy>` outbound in [`config.example.json`](../services/xray-ha/config.example.json) and the probe targets with `pool: ha-general`, `access: public`.
 - **Private proxy:** not listed; for `ha-private`, a `private-<proxy>` outbound and the probe targets with `pool: ha-private`, `access: private`. `render` adds `svc-monitor` to its probe modules; the example shows it as `svc-monitor:PASSWORD@`.
 
@@ -241,8 +243,9 @@ The totals are Prometheus `increase()` over the selected range, extrapolated to 
 
 By default the public proxies' own entries (the *raw* entries, hence `raw-auth`) require no account; the private proxies always do. Turn accounts on there only once every client of a proxy sends one, because a client without one is refused:
 
-1. Move the clients to the HA entry with their accounts, and the Docker daemons to their `svc-docker-<node>` accounts, one drained node at a time. A client that keeps using a proxy directly can add its account to the proxy's URL beforehand: a proxy without accounts ignores it.
-2. Turn it on and render:
+1. Make sure every proxy runs the image pinned in `docker-compose.yml`, the same version and digest as `xray-ha`. The accounts are written as the inbounds' `users`, which older Xray versions (such as 1.8.24) ignore on HTTP, so such a proxy would accept anyone. A container keeps the image it was created from: after a change to the image, recreate the proxies with `docker compose up -d`, since `docker compose restart` does not. To check one, `docker inspect --format '{{.Image}}' $(docker compose ps -q xray-<name>)` must print the same image ID as `docker image inspect --format '{{.Id}}'` on the pinned image.
+2. Move the clients to the HA entry with their accounts, and the Docker daemons to their `svc-docker-<node>` accounts, one drained node at a time. A client that keeps using a proxy directly can add its account to the proxy's URL beforehand: a proxy without accounts ignores it.
+3. Turn it on and render:
 
     ```sh
     python3 xray/scripts/proxy_accounts.py raw-auth on
@@ -250,7 +253,7 @@ By default the public proxies' own entries (the *raw* entries, hence `raw-auth`)
     ```
 
     `render` then requires every account on the HTTP and SOCKS5 entries of every public proxy, and has the HA entry log in to them as `svc-ha` and the probes as `svc-monitor`, as it always does for the private proxies.
-3. Restart the proxies and `xray-ha` together, and reload the probes:
+4. Restart the proxies and `xray-ha` together, and reload the probes:
 
     ```sh
     docker compose restart xray-ha $(docker compose config --services | grep '^xray-' | grep -v -e exporter -e '^xray-ha$')
@@ -258,6 +261,12 @@ By default the public proxies' own entries (the *raw* entries, hence `raw-auth`)
     ```
 
     The HA entry and the proxies must agree: the HA entry logging in to a proxy without accounts, or not logging in to a proxy with them, fails, and the HA entry fails closed until both sides have restarted.
+5. On each proxy, check that a request without an account and one with a wrong or revoked password get `407`, and one with a current account `204`:
+
+    ```sh
+    curl -s -o /dev/null -w '%{http_code}\n' -x http://127.0.0.1:<http_port> https://www.google.com/generate_204
+    curl -s -o /dev/null -w '%{http_code}\n' -x http://<user>:<old password>@127.0.0.1:<http_port> https://www.google.com/generate_204
+    ```
 
 While accounts are on, restart the proxies together with `xray-ha` after every account change. A proxy made with `create_xray_service.py` requires the accounts from its creation. `raw-auth off` followed by the same steps turns them off.
 
@@ -269,7 +278,8 @@ The proxy portal does not change accounts itself. It writes a request per change
 - **Spool and permissions:** `/var/lib/proxy-portal/spool`. The portal's user owns `requests/` and `results/` (`0700`); root owns `status/` and `status.json`. A request is accepted only as a regular file owned by the portal's user, at most 4096 bytes. Write each request under a name not ending in `.json`, then rename it to `<id>.json`; every `*.json` entry is read once and removed, valid or not.
 - **Requests:** `{"id": "<id>", "op": "add|rotate|enable|disable|remove|admin-on|admin-off", "username": "<account>"}` in `requests/<id>.json`, nothing else; `<id>` is 8 to 64 lowercase letters, digits and `-` (a UUID fits), new for every request. `svc-ha` and `svc-monitor` are refused; admins change them only with `proxy_accounts.py` ([Manage accounts](#manage-accounts)). `admin-on` for a service account fails. For `add` and `rotate`, the applier generates the password and writes it once to `results/<id>.json` (mode `0400`, owned by the portal's user), which the portal deletes after showing it.
 - **Statuses** in `status/<id>.json`: `applying` while its batch runs, then `applied` (live and verified), `failed` (not applied; the previous files and services are restored, `restored: false` if the rollback did not finish: the [applier README](../services/proxy-portal/applier/README.md#statuses) has the recovery), or `unconfirmed` (live and every refused login gets 407, but the logins that must pass got no 204 in time, e.g. while the proxies are down).
-- **How:** the applier holds the accounts lock and applies the pending requests in batches, a second request for the same account going into the next batch: it renders in memory, tests every changed Xray config with `xray run -test`, replaces the files atomically, restarts the services and verifies through `ha-general` and `ha-private` that `svc-monitor` and every newly accepted login pass (204), and that every disabled or removed account, replaced password, admin turned off, a non-admin on `ha-private` and a wrong password are refused (407). A wrong answer rolls everything back.
+- **How:** the applier holds the accounts lock and applies the pending requests in batches, a second request for the same account going into the next batch: it renders in memory, tests every changed Xray config with `xray run -test`, checks that every Xray service it restarts runs the pinned image, replaces the files atomically, restarts the services and verifies through `ha-general` and `ha-private` that `svc-monitor` and every newly accepted login pass (204), that each request's account behaves as requested, and that every disabled or removed account, replaced password, admin turned off, a non-admin on `ha-private` and a wrong password are refused (407). A wrong answer rolls everything back. After a change made with `proxy_accounts.py` and not restarted, the next request restarts and verifies everything it renders, even one that changes nothing.
+- **Image:** a proxy the applier restarts must run the image pinned in `docker-compose.yml`, the one `xray-ha` uses. After a change to the image, recreate the proxies with `docker compose up -d` (a restart keeps the old image); until then the applier refuses at `precheck`.
 - **Restart impact:** every change restarts `xray-ha`, a change to an admin account also the private proxies, and with raw auth on every proxy. Established connections through them drop, and new ones fail for a few seconds. Requests that arrive together share one restart; each further request for the same account adds one.
 
 While raw auth is off, turning a user's access off in the portal stops it only at the HA entries (and the private proxies); the public proxies' own entries stay open to them.

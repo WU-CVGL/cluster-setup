@@ -624,6 +624,9 @@ class XrayConfigHandler:
         Xray counts each user's traffic as user>>>NAME>>>traffic>>>uplink/downlink.
         Removing restores the key order, so a config built without users is byte-identical
         after a set and a clear.
+        "accounts", the older name of the same list, is always removed: Xray prefers it when
+        both are present, so a left-over "accounts": [] turns HTTP authentication off and a
+        left-over login keeps working while the new list is ignored.
         """
         if users is not None and not users:
             raise ValueError("an empty user list would leave the inbounds open")
@@ -637,6 +640,7 @@ class XrayConfigHandler:
             settings = inbound.setdefault("settings", {})
             if protocol == "socks":
                 settings["auth"] = "noauth" if entries is None else "password"
+            settings.pop("accounts", None)
             if entries is None:
                 settings.pop("users", None)
             else:
