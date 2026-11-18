@@ -48,6 +48,7 @@ On the supplementary services VM, with the [applier](applier/README.md#install) 
 
     ```sh
     cd ~/ws/cluster-setup/services
+    docker pull "$(sed -n 's/^FROM \([^ ]*\).*/\1/p' proxy-portal/Dockerfile | head -1)"
     docker compose build proxy-portal
     docker compose up -d prometheus     # joins proxy_portal_upstream
     docker compose up -d proxy-portal
@@ -56,10 +57,9 @@ On the supplementary services VM, with the [applier](applier/README.md#install) 
 
     The image is built from a digest-pinned Python base with hash-pinned requirements, and runs as uid and gid 3089, the owner the applier requires of the spool's requests. On start it applies its database migrations.
 
-    Before the build, pull the pinned base with `docker pull`: the build looks it up without the Docker daemon's proxy and fails while Docker Hub is unreachable, whereas `docker pull` uses that proxy. When downloads from PyPI are unreliable, pass a proxy to the build; any public proxy works, for example:
+    The `docker pull` line fetches the pinned base first: the build looks it up without the Docker daemon's proxy and fails while Docker Hub is unreachable, whereas `docker pull` uses that proxy. When downloads from PyPI are unreliable, pass a proxy to the build; any public proxy works, for example:
 
     ```sh
-    docker pull "$(sed -n 's/^FROM \([^ ]*\).*/\1/p' proxy-portal/Dockerfile | head -1)"
     docker compose build \
       --build-arg HTTP_PROXY=http://192.168.233.8:58889 --build-arg HTTPS_PROXY=http://192.168.233.8:58889 \
       --build-arg NO_PROXY=localhost,127.0.0.1 proxy-portal
