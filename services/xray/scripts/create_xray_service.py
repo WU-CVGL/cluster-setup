@@ -32,7 +32,7 @@ except ImportError:  # 没有 PyYAML 时使用基于正则的简单解析
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 from XrayConfigHandler import DEFAULT_API_PORT, DEFAULT_HTTP_PORT, DEFAULT_SOCKS_PORT, XrayConfigHandler
-from proxy_accounts import Accounts
+from proxy_accounts import Accounts, accounts_lock
 
 
 # 容器内固定端口 (现有 compose 服务和 exporter 都依赖这些值)
@@ -507,6 +507,8 @@ class XrayServiceCreator:
 
         先校验参数、生成并检查全部三个文件的新内容，全部通过后才写入；
         写入过程中出错时恢复已写入的文件。
+        从读取账号到写完配置和其他文件都持有 proxy-accounts/.lock (与 proxy_accounts.py 和 portal 的 applier
+        相同)：同时进行的 disable、remove 或 render 要么在读取账号之前完成，要么等新代理写完后再 render 它。
 
         Args:
             share_url: Xray 分享 URL
@@ -514,6 +516,11 @@ class XrayServiceCreator:
             http_port: HTTP 代理端口
             socks_port: SOCKS5 代理端口
         """
+        with accounts_lock(self.base_dir):
+            self._create_service(share_url, service_name, http_port, socks_port)
+
+    def _create_service(self, share_url: str, service_name: str, http_port: int, socks_port: int) -> None:
+        """create_service 的内容，在 proxy-accounts/.lock 中执行"""
         print(f"正在创建 xray 服务: {service_name}")
         print(f"HTTP 端口: {http_port}, SOCKS5 端口: {socks_port}")
 

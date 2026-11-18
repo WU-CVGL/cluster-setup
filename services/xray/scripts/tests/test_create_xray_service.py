@@ -18,6 +18,7 @@ import stat
 import subprocess
 import sys
 import tempfile
+import threading
 import unittest
 from pathlib import Path
 from unittest import mock
@@ -483,6 +484,52 @@ class RepoFilesYamlTest(_TempServicesMixin, unittest.TestCase):
 
 class RepoFilesRegexTest(RepoFilesYamlTest):
     use_yaml = False
+
+
+class AccountsLockTest(_TempServicesMixin, unittest.TestCase):
+    """新代理从读取账号到写入配置都持有 proxy-accounts/.lock：同时进行的 disable + render 不会留下旧账号"""
+
+    def test_concurrent_disable_does_not_leave_the_user_on_the_new_proxy(self):
+        import proxy_accounts as pa
+        for rel in (pa.HA_EXAMPLE, pa.BLACKBOX_EXAMPLE):
+            (self.base / rel).parent.mkdir(parents=True, exist_ok=True)
+            shutil.copy(REPO_SERVICES_DIR / rel, self.base / rel)
+        accounts = pa.Accounts(self.base)
+        accounts.raw_auth = True
+        for name in ('alice', 'bob', 'svc-ha', 'svc-monitor'):
+            accounts.accounts[name] = pa.new_password()
+        accounts.save()
+
+        def disable_and_render():
+            # What "proxy_accounts.py disable alice" and then "render" do, without their output
+            with pa.accounts_lock(self.base):
+                accounts = pa.Accounts(self.base)
+                accounts.set_enabled('alice', False)
+                accounts.save()
+            with pa.accounts_lock(self.base):
+                codes.append(len(pa.render(pa.Accounts(self.base))))
+            done.set()
+
+        codes, done, during = [], threading.Event(), []
+        other = threading.Thread(target=disable_and_render)
+        parse = XrayConfigHandler.parse_share_url
+
+        def parse_while_another_disables(url):
+            # The accounts were read; another admin disables alice and renders now
+            other.start()
+            during.append(done.wait(1.0))
+            return parse(url)
+
+        with mock.patch.object(cxs.XrayConfigHandler, 'parse_share_url', side_effect=parse_while_another_disables):
+            self.create('csr-locked', 56889, 56089)
+        other.join(10)
+        self.assertEqual(len(codes), 1)
+        config = json.loads(read(self.base / 'xray' / 'csr-locked' / 'config' / 'config.json'))
+        for inbound in config['inbounds'][:2]:
+            users = [u['user'] for u in inbound['settings']['users']]
+            self.assertNotIn('alice', users)
+            self.assertIn('bob', users)
+        self.assertEqual(during, [False])  # the disable waited for the new proxy
 
 
 class XrayImageTest(unittest.TestCase):

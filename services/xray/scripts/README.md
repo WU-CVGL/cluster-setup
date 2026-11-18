@@ -200,6 +200,8 @@ python3 xray/scripts/proxy_accounts.py render
   （[docs/00](../../../docs/00_Network_Proxy.md#accounts-on-the-proxies)）
 
 `raw-auth on` 时，`create_xray_service.py` 新建的代理在创建时就要求所有账号（配置文件权限 `0600`）；账号文件中没有账号时拒绝创建。
+`create_xray_service.py` 从读取账号到写完新代理的文件都持有 `proxy-accounts/.lock`，同时进行的账号修改和 `render`
+等它写完，之后的 `render` 也覆盖新代理。
 
 ## 测试
 
