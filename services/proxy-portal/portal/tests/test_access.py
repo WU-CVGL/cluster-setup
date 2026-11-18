@@ -117,18 +117,18 @@ class AccessTest(PortalTestCase):
         self.assertTrue(all(e["usable"] for e in alice["entries"]))
         self.assertEqual([e["id"] for e in alice["entries"] if not e["requires_account"]], OPEN)
         page = self.client.get("/access")
-        self.assertContains(page, "every entry requires an enabled account, except the own entries of "
-                                  "us-west-racknerd-12tb, usca1-bwh-megaboxpro-2tb, which need none.")
+        self.assertContains(page, "Every proxy requires an enabled account, except us-west-racknerd-12tb, "
+                                  "usca1-bwh-megaboxpro-2tb at their own addresses, which need none.")
         self.assertEqual(page.content.decode().count("No account needed"), 2)
         self.client.post("/signout")
         bob = self.get("bob")
         # the open proxies still take bob: they never need an account
         self.assertEqual([e["id"] for e in bob["entries"] if e["usable"]], OPEN)
         page = self.client.get("/access")
-        self.assertContains(page, "Every entry refuses it, except the own entries of us-west-racknerd-12tb, "
-                                  "usca1-bwh-megaboxpro-2tb, which need no account.")
+        self.assertContains(page, "Every proxy refuses it, except us-west-racknerd-12tb, "
+                                  "usca1-bwh-megaboxpro-2tb at their own addresses, which need no account.")
         zh = self.client.get("/access", HTTP_ACCEPT_LANGUAGE="zh-CN")
-        self.assertContains(zh, "除 us-west-racknerd-12tb, usca1-bwh-megaboxpro-2tb 自己的入口外")
+        self.assertContains(zh, "除 us-west-racknerd-12tb, usca1-bwh-megaboxpro-2tb 自己的地址外，所有代理都拒绝它")
         self.assertContains(zh, "无需账号")
 
     def test_raw_auth_on_without_open_proxies(self):
@@ -149,8 +149,8 @@ class AccessTest(PortalTestCase):
         self.master.users["frank"] = ("pw-frank", False, True)
         view = self.get("frank")
         self.assertEqual([e["id"] for e in view["entries"] if e["usable"]], OPEN)
-        self.assertContains(self.client.get("/access"), "Without an account you can use the own entries of "
-                                                        "us-west-racknerd-12tb, usca1-bwh-megaboxpro-2tb: they never "
+        self.assertContains(self.client.get("/access"), "Without an account you can use us-west-racknerd-12tb, "
+                                                        "usca1-bwh-megaboxpro-2tb at their own addresses: they never "
                                                         "need one.")
 
     def test_open_only_for_a_public_proxy(self):

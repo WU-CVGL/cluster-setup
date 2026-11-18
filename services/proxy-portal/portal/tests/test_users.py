@@ -326,25 +326,25 @@ class UsersPageTest(PortalTestCase):
 
     def test_open_proxies_with_raw_auth_off(self):
         page = self.client.get("/admin/users")
-        self.assertContains(page, "No account needed at the own entries of us-west-racknerd-12tb, "
-                                  "usca1-bwh-megaboxpro-2tb, also once raw auth is on.")
+        self.assertContains(page, "us-west-racknerd-12tb, usca1-bwh-megaboxpro-2tb never need an account at their "
+                                  "own addresses.")
         zh = self.client.get("/admin/users", HTTP_ACCEPT_LANGUAGE="zh-CN")
-        self.assertContains(zh, "us-west-racknerd-12tb, usca1-bwh-megaboxpro-2tb 自己的入口无需账号，开启后也是如此")
+        self.assertContains(zh, "us-west-racknerd-12tb, usca1-bwh-megaboxpro-2tb 自己的地址始终无需账号。")
 
         def none_open(data):
             for proxy in data["proxies"]:
                 proxy["open"] = False
         self.write_status(none_open)
-        self.assertNotContains(self.client.get("/admin/users"), "No account needed at")
+        self.assertNotContains(self.client.get("/admin/users"), "never need an account at their own addresses")
 
     def test_open_proxies_with_raw_auth_on(self):
         self.write_status(lambda d: d.update(raw_auth=True))
         page = self.client.get("/admin/users")
-        self.assertContains(page, "Raw auth is on: every entry refuses an account whose proxy access is off, except "
-                                  "the own entries of us-west-racknerd-12tb, usca1-bwh-megaboxpro-2tb. No account "
-                                  "needed there: they accept anyone.")
+        self.assertContains(page, "own addresses require an account, except those of us-west-racknerd-12tb, "
+                                  "usca1-bwh-megaboxpro-2tb, which need none: an account whose proxy access is off is "
+                                  "refused everywhere else.")
         zh = self.client.get("/admin/users", HTTP_ACCEPT_LANGUAGE="zh-CN")
-        self.assertContains(zh, "us-west-racknerd-12tb, usca1-bwh-megaboxpro-2tb 自己的入口无需账号")
+        self.assertContains(zh, "us-west-racknerd-12tb, usca1-bwh-megaboxpro-2tb 的地址除外（无需账号）")
 
     def test_chinese(self):
         page = self.client.get("/admin/users", HTTP_ACCEPT_LANGUAGE="zh-CN")
