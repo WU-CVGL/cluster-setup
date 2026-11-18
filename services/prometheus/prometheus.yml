@@ -146,7 +146,7 @@ scrape_configs:
           - "xray-ha-exporter:9550"
         labels:
           proxy_role: entry
-  # End-to-end probes through each proxy entry (services/blackbox/blackbox.yml): a target is a
+  # End-to-end probes through each proxy entry (services/blackbox/blackbox.example.yml): a target is a
   # blackbox module, <entry>_<http|socks>; every probe fetches the same URL. 30 s apart, with a
   # 10 s scrape timeout over the module's 8 s, since a request abroad can take seconds.
   # A new xray proxy needs its two modules there and its two targets here (pool: none).

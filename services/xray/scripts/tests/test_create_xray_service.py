@@ -10,9 +10,11 @@ fixtures/prometheus_sample.yml 是 services/prometheus/prometheus.yml (PR #3 之
 
 import contextlib
 import io
+import json
 import os
 import re
 import shutil
+import stat
 import subprocess
 import sys
 import tempfile
@@ -31,6 +33,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 import create_xray_service as cxs  # noqa: E402
 from create_xray_service import XrayServiceCreator, compose_services, host_port_owners, published_host_ports  # noqa: E402
+from XrayConfigHandler import XrayConfigHandler  # noqa: E402
 from corpus import CREATE_SERVICE_TEMPLATE, FIXTURES_DIR, SCRIPTS_DIR, case_url  # noqa: E402
 
 REPO_SERVICES_DIR = SCRIPTS_DIR.parent.parent  # services/
@@ -271,13 +274,13 @@ class CreateServiceYamlTest(_TempServicesMixin, unittest.TestCase):
         real_write = XrayServiceCreator._write_text
         state = {'failed': False}
 
-        def fake_write(path, text):
+        def fake_write(path, text, **kwargs):
             if Path(path) == failing_path and not state['failed']:
                 state['failed'] = True
                 # 模拟写到一半失败: 文件已被截断
-                real_write(path, text[:10])
+                real_write(path, text[:10], **kwargs)
                 raise OSError('模拟写入失败')
-            real_write(path, text)
+            real_write(path, text, **kwargs)
 
         return mock.patch.object(XrayServiceCreator, '_write_text', staticmethod(fake_write))
 
@@ -302,6 +305,36 @@ class CreateServiceYamlTest(_TempServicesMixin, unittest.TestCase):
             with self.assertRaises(OSError):
                 self.create('csr-rollback', 56889, 56089)
         self.assertEqual(self.snapshot(), before)
+
+    def write_accounts(self, raw_auth, accounts):
+        path = self.base / 'proxy-accounts' / 'accounts.json'
+        path.parent.mkdir(exist_ok=True)
+        path.write_text(json.dumps({'raw_auth': raw_auth, 'accounts': accounts}))
+
+    def test_raw_auth_off_keeps_template(self):
+        self.write_accounts(False, {'alice': 'pw-a'})
+        self.create('csr-noauth', 56889, 56089)
+        self.assertEqual(read(self.base / 'xray' / 'csr-noauth' / 'config' / 'config.json'),
+                         read(FIXTURES_DIR / CREATE_SERVICE_TEMPLATE))
+
+    def test_raw_auth_on_requires_accounts(self):
+        self.write_accounts(True, {'alice': 'pw-a', 'svc-ha': 'pw-h'})
+        output = self.create('csr-auth', 56889, 56089)
+        path = self.base / 'xray' / 'csr-auth' / 'config' / 'config.json'
+        self.assertEqual(stat.S_IMODE(os.stat(path).st_mode), 0o600)
+        config = json.loads(read(path))
+        users = [{'user': 'alice', 'pass': 'pw-a'}, {'user': 'svc-ha', 'pass': 'pw-h'}]
+        for inbound in config['inbounds'][:2]:
+            self.assertEqual(inbound['settings']['users'], users)
+        self.assertEqual(config['inbounds'][1]['settings']['auth'], 'password')
+        # Apart from the users, the template
+        XrayConfigHandler.set_inbound_users(config, None)
+        self.assertEqual(json.dumps(config, indent=4, ensure_ascii=False), read(FIXTURES_DIR / CREATE_SERVICE_TEMPLATE))
+        self.assertNotIn('pw-a', output)
+
+    def test_raw_auth_on_without_accounts_rejected(self):
+        self.write_accounts(True, {})
+        self.assertRejected('csr-auth', 56889, 56089, '没有账号')
 
     def test_restore_keeps_prometheus_inode(self):
         inode = self.prometheus_file.stat().st_ino
@@ -374,7 +407,7 @@ class CreateServiceYamlTest(_TempServicesMixin, unittest.TestCase):
             '      - "80:80"\n'
             '\n'
             '  xray-a:\n'
-            '    image: teddysun/xray:latest\n'
+            '    image: teddysun/xray:26.11.9@sha256:b3e117b834878d1e12f91e7b16270db104c2f0e5f0effbc0ece9088c473b5393\n'
             '    ports:\n'
             '      - 30089:1089\n'
             '      - 38889:8889\n'
@@ -452,10 +485,33 @@ class RepoFilesRegexTest(RepoFilesYamlTest):
     use_yaml = False
 
 
+class XrayImageTest(unittest.TestCase):
+    """每个代理与 xray-ha 使用同一个固定版本和 digest 的镜像，生成器也是 (应用配置前用 xray-ha 的镜像检查)"""
+
+    def test_generator_and_repo_proxies_use_the_ha_image(self):
+        self.assertRegex(cxs.XRAY_IMAGE, r'^teddysun/xray:[0-9.]+@sha256:[0-9a-f]{64}$')
+        compose = read(REPO_SERVICES_DIR / 'docker-compose.yml')
+        images = {}
+        current = None
+        for line in compose.splitlines():
+            match = re.match(r'^  ([A-Za-z0-9._-]+):\s*$', line)
+            if match:
+                current = match.group(1)
+            match = re.match(r'^    image:\s*(\S+)\s*$', line)
+            if match and current:
+                images[current] = match.group(1)
+        self.assertEqual(images['xray-ha'], cxs.XRAY_IMAGE)
+        proxies = {name: image for name, image in images.items()
+                   if name.startswith('xray-') and not name.endswith('-exporter')}
+        self.assertGreater(len(proxies), 1)
+        self.assertEqual({name: cxs.XRAY_IMAGE for name in proxies}, proxies)
+        self.assertNotIn('teddysun/xray:latest', compose)
+
+
 class DefaultBaseDirTest(unittest.TestCase):
     """
     不带 --base-dir、以相对路径运行脚本时，也要找到脚本所在的 services/ 目录。
-    Python 3.8 (supp VM) 下 __main__ 的 __file__ 是命令行上输入的相对路径 (3.9 起为绝对路径)，
+    Python 3.8 (附属服务 VM) 下 __main__ 的 __file__ 是命令行上输入的相对路径 (3.9 起为绝对路径)，
     所以只有在 Python 3.8 下运行这个测试才能发现问题。
     """
 
@@ -468,7 +524,7 @@ class DefaultBaseDirTest(unittest.TestCase):
         scripts = base / 'xray' / 'scripts'
         scripts.mkdir(parents=True)
         (base / 'prometheus').mkdir()
-        for name in ('create_xray_service.py', 'XrayConfigHandler.py'):
+        for name in ('create_xray_service.py', 'XrayConfigHandler.py', 'proxy_accounts.py'):
             shutil.copyfile(str(SCRIPTS_DIR / name), str(scripts / name))
         shutil.copyfile(str(FIXTURES_DIR / 'compose_sample.yml'), str(base / 'docker-compose.yml'))
         shutil.copyfile(str(FIXTURES_DIR / 'prometheus_sample.yml'), str(base / 'prometheus' / 'prometheus.yml'))

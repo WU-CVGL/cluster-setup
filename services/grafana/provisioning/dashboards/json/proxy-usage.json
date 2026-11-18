@@ -1,0 +1,719 @@
+{
+  "uid": "proxy-usage",
+  "title": "Proxy Usage",
+  "description": "Traffic per user, service account and proxy (docs/00_Network_Proxy.md#usage).",
+  "tags": [
+    "proxy"
+  ],
+  "timezone": "browser",
+  "schemaVersion": 39,
+  "version": 1,
+  "editable": true,
+  "graphTooltip": 1,
+  "refresh": "1m",
+  "time": {
+    "from": "now-24h",
+    "to": "now"
+  },
+  "annotations": {
+    "list": []
+  },
+  "links": [],
+  "templating": {
+    "list": [
+      {
+        "name": "prometheus_source",
+        "label": "Prometheus source",
+        "type": "datasource",
+        "query": "prometheus",
+        "regex": "",
+        "refresh": 1,
+        "multi": false,
+        "includeAll": false,
+        "current": {},
+        "options": [],
+        "hide": 0,
+        "skipUrlSync": false
+      }
+    ]
+  },
+  "panels": [
+    {
+      "type": "row",
+      "title": "HA entry",
+      "id": 1,
+      "collapsed": false,
+      "gridPos": {
+        "h": 1,
+        "w": 24,
+        "x": 0,
+        "y": 0
+      },
+      "panels": []
+    },
+    {
+      "type": "timeseries",
+      "title": "HA entry throughput",
+      "id": 2,
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${prometheus_source}"
+      },
+      "description": "All traffic of xray-ha's HTTP and SOCKS5 inbounds.",
+      "gridPos": {
+        "h": 8,
+        "w": 24,
+        "x": 0,
+        "y": 1
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${prometheus_source}"
+          },
+          "expr": "sum (rate(v2ray_traffic_downlink_bytes_total{job=\"v2ray\",proxy_role=\"entry\",dimension=\"inbound\",target!=\"api\"}[$__rate_interval])) * 8",
+          "legendFormat": "download",
+          "refId": "A"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${prometheus_source}"
+          },
+          "expr": "sum (rate(v2ray_traffic_uplink_bytes_total{job=\"v2ray\",proxy_role=\"entry\",dimension=\"inbound\",target!=\"api\"}[$__rate_interval])) * 8",
+          "legendFormat": "upload",
+          "refId": "B"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "bps",
+          "min": 0,
+          "custom": {
+            "fillOpacity": 10
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "showLegend": true,
+          "displayMode": "table",
+          "placement": "right",
+          "calcs": [
+            "mean",
+            "max"
+          ]
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      }
+    },
+    {
+      "type": "row",
+      "title": "Users",
+      "id": 3,
+      "collapsed": false,
+      "gridPos": {
+        "h": 1,
+        "w": 24,
+        "x": 0,
+        "y": 9
+      },
+      "panels": []
+    },
+    {
+      "type": "timeseries",
+      "title": "Users",
+      "id": 4,
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${prometheus_source}"
+      },
+      "description": "Each user where the user enters the proxies: the HA entry, and a proxy's own entry when it requires accounts. Traffic the HA entry relays to a proxy is counted once, at the HA entry.",
+      "gridPos": {
+        "h": 10,
+        "w": 24,
+        "x": 0,
+        "y": 10
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${prometheus_source}"
+          },
+          "expr": "sum by (target) (rate(v2ray_traffic_downlink_bytes_total{job=\"v2ray\",dimension=\"user\",target!~\"svc-.*\"}[$__rate_interval])) * 8",
+          "legendFormat": "{{target}} download",
+          "refId": "A"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${prometheus_source}"
+          },
+          "expr": "sum by (target) (rate(v2ray_traffic_uplink_bytes_total{job=\"v2ray\",dimension=\"user\",target!~\"svc-.*\"}[$__rate_interval])) * 8",
+          "legendFormat": "{{target}} upload",
+          "refId": "B"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "bps",
+          "min": 0,
+          "custom": {
+            "fillOpacity": 10
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "showLegend": true,
+          "displayMode": "table",
+          "placement": "right",
+          "calcs": [
+            "mean",
+            "max"
+          ]
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      }
+    },
+    {
+      "type": "table",
+      "title": "User totals",
+      "id": 5,
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${prometheus_source}"
+      },
+      "description": "Bytes over the selected time range, from the samples Prometheus holds (increase). Traffic between the last scrape and an Xray restart is not counted. An account's traffic before its first scrape in the range is not counted.",
+      "gridPos": {
+        "h": 9,
+        "w": 24,
+        "x": 0,
+        "y": 20
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${prometheus_source}"
+          },
+          "expr": "sum by (target) (increase(v2ray_traffic_downlink_bytes_total{job=\"v2ray\",dimension=\"user\",target!~\"svc-.*\"}[$__range]))",
+          "legendFormat": "",
+          "refId": "A",
+          "instant": true,
+          "range": false,
+          "format": "table"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${prometheus_source}"
+          },
+          "expr": "sum by (target) (increase(v2ray_traffic_uplink_bytes_total{job=\"v2ray\",dimension=\"user\",target!~\"svc-.*\"}[$__range]))",
+          "legendFormat": "",
+          "refId": "B",
+          "instant": true,
+          "range": false,
+          "format": "table"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${prometheus_source}"
+          },
+          "expr": "sum by (target) (increase(v2ray_traffic_downlink_bytes_total{job=\"v2ray\",dimension=\"user\",target!~\"svc-.*\"}[$__range])) + sum by (target) (increase(v2ray_traffic_uplink_bytes_total{job=\"v2ray\",dimension=\"user\",target!~\"svc-.*\"}[$__range]))",
+          "legendFormat": "",
+          "refId": "C",
+          "instant": true,
+          "range": false,
+          "format": "table"
+        }
+      ],
+      "transformations": [
+        {
+          "id": "joinByField",
+          "options": {
+            "byField": "target",
+            "mode": "outer"
+          }
+        },
+        {
+          "id": "organize",
+          "options": {
+            "excludeByName": {
+              "Time": true,
+              "Time 1": true,
+              "Time 2": true,
+              "Time 3": true
+            },
+            "renameByName": {
+              "target": "User",
+              "Value #A": "Download",
+              "Value #B": "Upload",
+              "Value #C": "Total"
+            },
+            "indexByName": {
+              "target": 0,
+              "Value #A": 1,
+              "Value #B": 2,
+              "Value #C": 3
+            }
+          }
+        },
+        {
+          "id": "sortBy",
+          "options": {
+            "sort": [
+              {
+                "field": "Total",
+                "desc": true
+              }
+            ]
+          }
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "bytes",
+          "decimals": 1,
+          "custom": {
+            "align": "auto"
+          }
+        },
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "User"
+            },
+            "properties": [
+              {
+                "id": "unit",
+                "value": "string"
+              }
+            ]
+          }
+        ]
+      },
+      "options": {
+        "showHeader": true,
+        "cellHeight": "sm",
+        "footer": {
+          "show": false
+        }
+      }
+    },
+    {
+      "type": "row",
+      "title": "Service accounts",
+      "id": 6,
+      "collapsed": false,
+      "gridPos": {
+        "h": 1,
+        "w": 24,
+        "x": 0,
+        "y": 29
+      },
+      "panels": []
+    },
+    {
+      "type": "timeseries",
+      "title": "Service accounts",
+      "id": 7,
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${prometheus_source}"
+      },
+      "description": "svc-ha is the HA entry's relay to the proxies, counted on the proxies.",
+      "gridPos": {
+        "h": 9,
+        "w": 14,
+        "x": 0,
+        "y": 30
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${prometheus_source}"
+          },
+          "expr": "sum by (target) (rate(v2ray_traffic_downlink_bytes_total{job=\"v2ray\",dimension=\"user\",target=~\"svc-.*\"}[$__rate_interval])) * 8",
+          "legendFormat": "{{target}} download",
+          "refId": "A"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${prometheus_source}"
+          },
+          "expr": "sum by (target) (rate(v2ray_traffic_uplink_bytes_total{job=\"v2ray\",dimension=\"user\",target=~\"svc-.*\"}[$__rate_interval])) * 8",
+          "legendFormat": "{{target}} upload",
+          "refId": "B"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "bps",
+          "min": 0,
+          "custom": {
+            "fillOpacity": 10
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "showLegend": true,
+          "displayMode": "table",
+          "placement": "right",
+          "calcs": [
+            "mean",
+            "max"
+          ]
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      }
+    },
+    {
+      "type": "table",
+      "title": "Service account totals",
+      "id": 8,
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${prometheus_source}"
+      },
+      "description": "Bytes over the selected time range, from the samples Prometheus holds (increase). Traffic between the last scrape and an Xray restart is not counted. An account's traffic before its first scrape in the range is not counted.",
+      "gridPos": {
+        "h": 9,
+        "w": 10,
+        "x": 14,
+        "y": 30
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${prometheus_source}"
+          },
+          "expr": "sum by (target) (increase(v2ray_traffic_downlink_bytes_total{job=\"v2ray\",dimension=\"user\",target=~\"svc-.*\"}[$__range]))",
+          "legendFormat": "",
+          "refId": "A",
+          "instant": true,
+          "range": false,
+          "format": "table"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${prometheus_source}"
+          },
+          "expr": "sum by (target) (increase(v2ray_traffic_uplink_bytes_total{job=\"v2ray\",dimension=\"user\",target=~\"svc-.*\"}[$__range]))",
+          "legendFormat": "",
+          "refId": "B",
+          "instant": true,
+          "range": false,
+          "format": "table"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${prometheus_source}"
+          },
+          "expr": "sum by (target) (increase(v2ray_traffic_downlink_bytes_total{job=\"v2ray\",dimension=\"user\",target=~\"svc-.*\"}[$__range])) + sum by (target) (increase(v2ray_traffic_uplink_bytes_total{job=\"v2ray\",dimension=\"user\",target=~\"svc-.*\"}[$__range]))",
+          "legendFormat": "",
+          "refId": "C",
+          "instant": true,
+          "range": false,
+          "format": "table"
+        }
+      ],
+      "transformations": [
+        {
+          "id": "joinByField",
+          "options": {
+            "byField": "target",
+            "mode": "outer"
+          }
+        },
+        {
+          "id": "organize",
+          "options": {
+            "excludeByName": {
+              "Time": true,
+              "Time 1": true,
+              "Time 2": true,
+              "Time 3": true
+            },
+            "renameByName": {
+              "target": "Account",
+              "Value #A": "Download",
+              "Value #B": "Upload",
+              "Value #C": "Total"
+            },
+            "indexByName": {
+              "target": 0,
+              "Value #A": 1,
+              "Value #B": 2,
+              "Value #C": 3
+            }
+          }
+        },
+        {
+          "id": "sortBy",
+          "options": {
+            "sort": [
+              {
+                "field": "Total",
+                "desc": true
+              }
+            ]
+          }
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "bytes",
+          "decimals": 1,
+          "custom": {
+            "align": "auto"
+          }
+        },
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Account"
+            },
+            "properties": [
+              {
+                "id": "unit",
+                "value": "string"
+              }
+            ]
+          }
+        ]
+      },
+      "options": {
+        "showHeader": true,
+        "cellHeight": "sm",
+        "footer": {
+          "show": false
+        }
+      }
+    },
+    {
+      "type": "row",
+      "title": "Proxies",
+      "id": 9,
+      "collapsed": false,
+      "gridPos": {
+        "h": 1,
+        "w": 24,
+        "x": 0,
+        "y": 39
+      },
+      "panels": []
+    },
+    {
+      "type": "timeseries",
+      "title": "Proxies",
+      "id": 10,
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${prometheus_source}"
+      },
+      "description": "Each proxy's traffic to its upstream server, whichever entry it came through.",
+      "gridPos": {
+        "h": 9,
+        "w": 14,
+        "x": 0,
+        "y": 40
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${prometheus_source}"
+          },
+          "expr": "sum by (proxy) (label_replace(rate(v2ray_traffic_downlink_bytes_total{job=\"v2ray\",proxy_role=\"raw\",dimension=\"outbound\",target!~\"DIRECT|BLACKHOLE|api\"}[$__rate_interval]), \"proxy\", \"$1\", \"instance\", \"xray-(.+)-exporter:9550\")) * 8",
+          "legendFormat": "{{proxy}} download",
+          "refId": "A"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${prometheus_source}"
+          },
+          "expr": "sum by (proxy) (label_replace(rate(v2ray_traffic_uplink_bytes_total{job=\"v2ray\",proxy_role=\"raw\",dimension=\"outbound\",target!~\"DIRECT|BLACKHOLE|api\"}[$__rate_interval]), \"proxy\", \"$1\", \"instance\", \"xray-(.+)-exporter:9550\")) * 8",
+          "legendFormat": "{{proxy}} upload",
+          "refId": "B"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "bps",
+          "min": 0,
+          "custom": {
+            "fillOpacity": 10
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "showLegend": true,
+          "displayMode": "table",
+          "placement": "right",
+          "calcs": [
+            "mean",
+            "max"
+          ]
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      }
+    },
+    {
+      "type": "table",
+      "title": "Proxy totals",
+      "id": 11,
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${prometheus_source}"
+      },
+      "description": "Bytes over the selected time range, from the samples Prometheus holds (increase). Traffic between the last scrape and an Xray restart is not counted. An account's traffic before its first scrape in the range is not counted.",
+      "gridPos": {
+        "h": 9,
+        "w": 10,
+        "x": 14,
+        "y": 40
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${prometheus_source}"
+          },
+          "expr": "sum by (proxy) (label_replace(increase(v2ray_traffic_downlink_bytes_total{job=\"v2ray\",proxy_role=\"raw\",dimension=\"outbound\",target!~\"DIRECT|BLACKHOLE|api\"}[$__range]), \"proxy\", \"$1\", \"instance\", \"xray-(.+)-exporter:9550\"))",
+          "legendFormat": "",
+          "refId": "A",
+          "instant": true,
+          "range": false,
+          "format": "table"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${prometheus_source}"
+          },
+          "expr": "sum by (proxy) (label_replace(increase(v2ray_traffic_uplink_bytes_total{job=\"v2ray\",proxy_role=\"raw\",dimension=\"outbound\",target!~\"DIRECT|BLACKHOLE|api\"}[$__range]), \"proxy\", \"$1\", \"instance\", \"xray-(.+)-exporter:9550\"))",
+          "legendFormat": "",
+          "refId": "B",
+          "instant": true,
+          "range": false,
+          "format": "table"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${prometheus_source}"
+          },
+          "expr": "sum by (proxy) (label_replace(increase(v2ray_traffic_downlink_bytes_total{job=\"v2ray\",proxy_role=\"raw\",dimension=\"outbound\",target!~\"DIRECT|BLACKHOLE|api\"}[$__range]), \"proxy\", \"$1\", \"instance\", \"xray-(.+)-exporter:9550\")) + sum by (proxy) (label_replace(increase(v2ray_traffic_uplink_bytes_total{job=\"v2ray\",proxy_role=\"raw\",dimension=\"outbound\",target!~\"DIRECT|BLACKHOLE|api\"}[$__range]), \"proxy\", \"$1\", \"instance\", \"xray-(.+)-exporter:9550\"))",
+          "legendFormat": "",
+          "refId": "C",
+          "instant": true,
+          "range": false,
+          "format": "table"
+        }
+      ],
+      "transformations": [
+        {
+          "id": "joinByField",
+          "options": {
+            "byField": "proxy",
+            "mode": "outer"
+          }
+        },
+        {
+          "id": "organize",
+          "options": {
+            "excludeByName": {
+              "Time": true,
+              "Time 1": true,
+              "Time 2": true,
+              "Time 3": true
+            },
+            "renameByName": {
+              "proxy": "Proxy",
+              "Value #A": "Download",
+              "Value #B": "Upload",
+              "Value #C": "Total"
+            },
+            "indexByName": {
+              "proxy": 0,
+              "Value #A": 1,
+              "Value #B": 2,
+              "Value #C": 3
+            }
+          }
+        },
+        {
+          "id": "sortBy",
+          "options": {
+            "sort": [
+              {
+                "field": "Total",
+                "desc": true
+              }
+            ]
+          }
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "bytes",
+          "decimals": 1,
+          "custom": {
+            "align": "auto"
+          }
+        },
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Proxy"
+            },
+            "properties": [
+              {
+                "id": "unit",
+                "value": "string"
+              }
+            ]
+          }
+        ]
+      },
+      "options": {
+        "showHeader": true,
+        "cellHeight": "sm",
+        "footer": {
+          "show": false
+        }
+      }
+    }
+  ]
+}

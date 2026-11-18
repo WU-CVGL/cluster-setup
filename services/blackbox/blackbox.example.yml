@@ -3,16 +3,15 @@
 # One module per entry and protocol, named <entry>_<http|socks>; the job passes the probe URL.
 # A raw entry is the xray-<entry> service itself, never the HA entry, so a proxy that fails
 # shows as failed even while the HA entry carries on through another proxy.
-# blackbox_exporter takes proxy_url as written, with no file or environment reference for it, and
-# a SOCKS5 proxy's credentials can only be in that URL. Once the entries require accounts, this
-# file is generated from a committed example with the probe account's credentials from a
-# protected file, and is no longer in git.
+# blackbox_exporter reads blackbox/config/blackbox.yml, which xray/scripts/proxy_accounts.py renders
+# from this file: it puts the svc-monitor account into every proxy_url through xray-ha, and into
+# the proxies' ones when they require accounts. svc-monitor:PASSWORD below is a placeholder.
 modules:
   ha-general_http:
     prober: http
     timeout: 8s
     http:
-      proxy_url: http://xray-ha:8889
+      proxy_url: http://svc-monitor:PASSWORD@xray-ha:8889
       skip_resolve_phase_with_proxy: true
       follow_redirects: false
       valid_status_codes:
@@ -22,7 +21,7 @@ modules:
     prober: http
     timeout: 8s
     http:
-      proxy_url: socks5://xray-ha:1089
+      proxy_url: socks5://svc-monitor:PASSWORD@xray-ha:1089
       skip_resolve_phase_with_proxy: true
       follow_redirects: false
       valid_status_codes:

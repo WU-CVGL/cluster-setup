@@ -5,16 +5,17 @@ Xray 服务创建器
 自动创建 xray 服务配置，更新 docker-compose.yml 和 prometheus.yml
 
 端口检查只能看到 docker-compose.yml 中各服务发布到主机的端口 (ports:)。
-下列服务占用 supp VM 的主机端口，但在 docker-compose.yml 的 ports: 中看不到，
+下列服务占用 附属服务 VM 的主机端口，但在 docker-compose.yml 的 ports: 中看不到，
 因此登记在 RESERVED_HOST_PORTS 中 (端口变化时请同步更新):
   - frps (network_mode: host): bind_port / quic_bind_port 7000、dashboard_port 7500 (见 frp/frps.ini)
   - rustdesk hbbs/hbbr (network_mode: host): 21115-21119 (rustdesk 默认端口)
   - Harbor (独立的 docker compose，不在本文件中): 50000 (见 harbor/harbor.yml 的 http.port)
   - node-exporter (services/node-exporter/docker-compose.yaml，独立的 docker compose): 9100
 frp 用户隧道的 remote_port 由用户自行选择，脚本无法得知；
-必要时在 supp VM 上用 `ss -ltn | grep :<port>` 再确认一次。
+必要时在附属服务 VM 上用 `ss -ltn | grep :<port>` 再确认一次。
 """
 
+import os
 import sys
 import json
 import re
@@ -23,7 +24,7 @@ from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
 
 try:
-    import yaml  # PyYAML (supp VM 上为 5.3.1)
+    import yaml  # PyYAML (附属服务 VM 上为 5.3.1)
 except ImportError:  # 没有 PyYAML 时使用基于正则的简单解析
     yaml = None
 
@@ -31,6 +32,7 @@ except ImportError:  # 没有 PyYAML 时使用基于正则的简单解析
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 from XrayConfigHandler import DEFAULT_API_PORT, DEFAULT_HTTP_PORT, DEFAULT_SOCKS_PORT, XrayConfigHandler
+from proxy_accounts import Accounts
 
 
 # 容器内固定端口 (现有 compose 服务和 exporter 都依赖这些值)
@@ -38,6 +40,9 @@ CONTAINER_HTTP_PORT = DEFAULT_HTTP_PORT     # 8889
 CONTAINER_SOCKS_PORT = DEFAULT_SOCKS_PORT   # 1089
 API_PORT = DEFAULT_API_PORT                 # 10085
 EXPORTER_PORT = 9550
+# 与 xray-ha 相同的版本和 digest：proxy_accounts.py 写入的入站账号 (HTTP "users") 需要这个版本，
+# 应用配置前用这个镜像检查 (proxy-portal/applier)。旧版本 (如 1.8.24) 不读 HTTP "users"，入站不认证
+XRAY_IMAGE = 'teddysun/xray:26.11.9@sha256:b3e117b834878d1e12f91e7b16270db104c2f0e5f0effbc0ece9088c473b5393'
 
 # 在 docker-compose.yml 的 ports: 中看不到、但占用主机端口的服务 (见模块说明)
 RESERVED_HOST_PORTS = {
@@ -186,7 +191,7 @@ class XrayServiceCreator:
         """
         if base_dir is None:
             # 默认: services/xray/scripts -> services/
-            # 先 resolve()：Python 3.8 (supp VM) 下 __file__ 是相对路径 (如 create_xray_service.py)，
+            # 先 resolve()：Python 3.8 (附属服务 VM) 下 __file__ 是相对路径 (如 create_xray_service.py)，
             # 否则在 scripts/ 或 xray/ 下运行时会找不到 docker-compose.yml
             self.base_dir = Path(__file__).resolve().parent.parent.parent
         else:
@@ -210,12 +215,26 @@ class XrayServiceCreator:
         owner = host_port_owners(services).get(port)
         return owner is None, owner
 
+    def raw_inbound_users(self) -> Optional[List[Tuple[str, str]]]:
+        """
+        proxy-accounts/accounts.json 中 raw_auth 为 true 时返回所有账号 (代理入站要求的账号，
+        与 proxy_accounts.py render 写入的相同)，否则返回 None (入站不要求认证)
+        """
+        accounts = Accounts(self.base_dir)
+        if not accounts.raw_auth:
+            return None
+        users = accounts.pairs()
+        if not users:
+            raise ValueError(f"raw-auth 已开启，但 {accounts.path} 中没有账号")
+        return users
+
     def generate_xray_config(
         self,
         outbound: Dict[str, Any],
         http_port: int,
         socks_port: int,
-        service_name: str
+        service_name: str,
+        inbound_users: Optional[List[Tuple[str, str]]] = None
     ) -> Dict[str, Any]:
         """
         生成完整的 Xray 配置文件 (使用 XrayConfigHandler.build_xray_config 这一份模板)
@@ -225,6 +244,7 @@ class XrayServiceCreator:
             http_port: HTTP 代理端口（主机端口，未使用）
             socks_port: SOCKS5 代理端口（主机端口，未使用）
             service_name: 服务名称（未使用）
+            inbound_users: HTTP/SOCKS5 入站要求的 (账号, 密码)；None 时不要求认证
 
         注意：容器内固定使用 1089 (SOCKS5) 和 8889 (HTTP)
         """
@@ -237,6 +257,7 @@ class XrayServiceCreator:
             error_log="/var/log/xray/error.log",
             include_stats_api=True,
             api_port=API_PORT,
+            inbound_users=inbound_users,
         )
 
     def render_docker_compose(
@@ -258,7 +279,7 @@ class XrayServiceCreator:
         # 容器内固定端口：1089 (SOCKS5), 8889 (HTTP)
         xray_service_lines = [
             f'  {xray_service_name}:\n',
-            '    image: teddysun/xray:latest\n',
+            f'    image: {XRAY_IMAGE}\n',
             '    restart: unless-stopped\n',
             '    environment:\n',
             '      TZ: Asia/Shanghai\n',
@@ -462,9 +483,16 @@ class XrayServiceCreator:
             return f.read()
 
     @staticmethod
-    def _write_text(path: Path, text: str) -> None:
+    def _write_text(path: Path, text: str, private: bool = False) -> None:
         # 原地写入 (不改变 inode)：prometheus.yml 可能被单独 bind mount 到其他容器
-        with open(path, 'w', encoding='utf-8') as f:
+        # private: 含密码的文件，权限 0600
+        if private:
+            fd = os.open(str(path), os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
+            os.fchmod(fd, 0o600)
+            f = os.fdopen(fd, 'w', encoding='utf-8')
+        else:
+            f = open(path, 'w', encoding='utf-8')
+        with f:
             f.write(text)
 
     def create_service(
@@ -520,6 +548,11 @@ class XrayServiceCreator:
 
         print("✓ 端口检查通过")
 
+        # raw-auth 开启时，新代理的入站要求所有代理账号 (见 proxy_accounts.py)
+        inbound_users = self.raw_inbound_users()
+        if inbound_users is not None:
+            print(f"✓ raw-auth 已开启: 入站要求 {len(inbound_users)} 个代理账号")
+
         # 解析分享 URL
         print("正在解析分享 URL...")
         parsed_config = XrayConfigHandler.parse_share_url(share_url)
@@ -530,7 +563,7 @@ class XrayServiceCreator:
 
         # 生成完整配置
         print("正在生成 Xray 配置...")
-        xray_config = self.generate_xray_config(outbound, http_port, socks_port, service_name)
+        xray_config = self.generate_xray_config(outbound, http_port, socks_port, service_name, inbound_users)
         config_text = json.dumps(xray_config, indent=4, ensure_ascii=False)
 
         # 生成并检查 docker-compose.yml 和 prometheus.yml 的新内容
@@ -557,7 +590,7 @@ class XrayServiceCreator:
             # 先登记再写入: 写到一半失败 (文件已被截断) 时也能恢复
             # 保存配置文件
             config_written = True
-            self._write_text(config_file, config_text)
+            self._write_text(config_file, config_text, private=inbound_users is not None)
             print(f"✓ 已创建配置文件: {config_file}")
 
             # 更新 docker-compose.yml
@@ -588,8 +621,10 @@ class XrayServiceCreator:
         print(f"  1. 检查配置文件: {config_file}")
         print(f"  2. 启动服务: docker compose up -d xray-{service_name} xray-{service_name}-exporter")
         print("  3. 重新加载 Prometheus 配置: docker compose kill -s SIGHUP prometheus")
-        print(f"  4. 验证代理: curl -x http://localhost:{http_port} -I https://www.google.com")
-        print(f"            curl --socks5-hostname localhost:{socks_port} -I https://www.google.com")
+        login = "<user>:<password>@" if inbound_users is not None else ""
+        print(f"  4. 验证代理: curl -x http://{login}localhost:{http_port} -I https://www.google.com")
+        socks = f"-x socks5h://{login}localhost:{socks_port}" if login else f"--socks5-hostname localhost:{socks_port}"
+        print(f"            curl {socks} -I https://www.google.com")
 
 
 def main():

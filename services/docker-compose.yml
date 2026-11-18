@@ -125,7 +125,7 @@ services:
       retries: 3
 
   xray-us-west-racknerd-12tb:
-    image: teddysun/xray:latest
+    image: teddysun/xray:26.11.9@sha256:b3e117b834878d1e12f91e7b16270db104c2f0e5f0effbc0ece9088c473b5393
     restart: unless-stopped
     environment:
       TZ: Asia/Shanghai
@@ -152,7 +152,7 @@ services:
       - 9550
 
   xray-usca5-bwh-sla-1tb:
-    image: teddysun/xray:latest
+    image: teddysun/xray:26.11.9@sha256:b3e117b834878d1e12f91e7b16270db104c2f0e5f0effbc0ece9088c473b5393
     restart: unless-stopped
     environment:
       TZ: Asia/Shanghai
@@ -180,7 +180,7 @@ services:
 
 
   xray-usca1-bwh-megaboxpro-2tb:
-    image: teddysun/xray:latest
+    image: teddysun/xray:26.11.9@sha256:b3e117b834878d1e12f91e7b16270db104c2f0e5f0effbc0ece9088c473b5393
     restart: unless-stopped
     environment:
       TZ: Asia/Shanghai
@@ -208,7 +208,7 @@ services:
 
 
   xray-usca6-bwh-1tb:
-    image: teddysun/xray:latest
+    image: teddysun/xray:26.11.9@sha256:b3e117b834878d1e12f91e7b16270db104c2f0e5f0effbc0ece9088c473b5393
     restart: unless-stopped
     environment:
       TZ: Asia/Shanghai
@@ -235,7 +235,7 @@ services:
       - 9550
 
   xray-jpty1-bwh-2tb:
-    image: teddysun/xray:latest
+    image: teddysun/xray:26.11.9@sha256:b3e117b834878d1e12f91e7b16270db104c2f0e5f0effbc0ece9088c473b5393
     restart: unless-stopped
     environment:
       TZ: Asia/Shanghai
@@ -262,7 +262,7 @@ services:
       - 9550
 
   xray-miyaip-uk-01_relay_jpty1-bwh-2tb:
-    image: teddysun/xray:latest
+    image: teddysun/xray:26.11.9@sha256:b3e117b834878d1e12f91e7b16270db104c2f0e5f0effbc0ece9088c473b5393
     restart: unless-stopped
     environment:
       TZ: Asia/Shanghai
@@ -289,7 +289,7 @@ services:
       - 9550
 
   xray-miyaip-uk-01_relay_usca5-bwh-sla-2tb:
-    image: teddysun/xray:latest
+    image: teddysun/xray:26.11.9@sha256:b3e117b834878d1e12f91e7b16270db104c2f0e5f0effbc0ece9088c473b5393
     restart: unless-stopped
     environment:
       TZ: Asia/Shanghai
@@ -316,7 +316,7 @@ services:
       - 9550
 
   xray-miyaip-jp-01_relay_usca5-bwh-sla-2tb:
-    image: teddysun/xray:latest
+    image: teddysun/xray:26.11.9@sha256:b3e117b834878d1e12f91e7b16270db104c2f0e5f0effbc0ece9088c473b5393
     restart: unless-stopped
     environment:
       TZ: Asia/Shanghai
@@ -343,7 +343,7 @@ services:
       - 9550
 
   xray-miyaip-jp-01_relay_jpty1-bwh-2tb:
-    image: teddysun/xray:latest
+    image: teddysun/xray:26.11.9@sha256:b3e117b834878d1e12f91e7b16270db104c2f0e5f0effbc0ece9088c473b5393
     restart: unless-stopped
     environment:
       TZ: Asia/Shanghai
@@ -369,7 +369,7 @@ services:
     expose:
       - 9550
 
-  # End-to-end probes through the HA entry and every xray proxy (blackbox/blackbox.yml), scraped
+  # End-to-end probes through the HA entry and every xray proxy (blackbox/blackbox.example.yml), scraped
   # by the proxy-probe job; the Proxy Availability dashboard shows them.
   blackbox-exporter:
     image: prom/blackbox-exporter:v0.29.1@sha256:ea1c7aa3ef3f307cd03e85f34abb604478ccb90b567fc690da0cd9776da76b13
@@ -378,13 +378,17 @@ services:
       - grafana_monitor
     command:
       - '--config.file=/etc/blackbox_exporter/blackbox.yml'
+    # blackbox/config/blackbox.yml holds the probe account: rendered by xray/scripts/proxy_accounts.py
+    # from blackbox/blackbox.example.yml, not in git. The folder is mounted, so a re-rendered file
+    # (replaced, not rewritten) is seen after a SIGHUP.
     volumes:
-      - ./blackbox/blackbox.yml:/etc/blackbox_exporter/blackbox.yml:ro
+      - ./blackbox/config:/etc/blackbox_exporter:ro
     expose:
       - 9115
 
   # The HA proxy entry (docs/00_Network_Proxy.md#the-ha-entry): HTTP on 30889, SOCKS5 on 30089.
-  # Its config is xray-ha/config/config.json, not in git: a copy of xray-ha/config.example.json.
+  # Its config is xray-ha/config/config.json, not in git: xray-ha/config.example.json with the proxy
+  # accounts, rendered by xray/scripts/proxy_accounts.py. Both ports require an account.
   # It forwards each new connection to one of the ha-general proxies of that config, the
   # one with the lowest probe latency among those that pass Xray's own probe, and fails closed
   # when none does. It has no route of its own to the internet or to China: each proxy's xray
