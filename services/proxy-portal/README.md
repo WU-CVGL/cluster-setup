@@ -40,7 +40,7 @@ On the supplementary services VM, with the [applier](applier/README.md#install) 
     sudo install -d -o 3089 -g 3089 -m 700 /var/lib/proxy-portal/data
     ```
 
-2. Build and start it. It publishes no port: nginx reaches it as `proxy-portal:8000` on the Compose network `proxy_portal`, which only nginx and the portal join, so no client can bypass nginx and set the headers the portal trusts.
+2. Build and start it. It publishes no port: nginx reaches it as `proxy-portal:8000` on the Compose network `proxy_portal`, which only nginx and the portal join. It reaches Prometheus and the master over `proxy_portal_upstream`, which only it and Prometheus join. It is on no network a proxy is on: the proxies send private addresses out directly, so a portal on `grafana_monitor` could be reached through a proxy. So no client can bypass nginx, its limits and the headers the portal trusts. Prometheus joins `proxy_portal_upstream` when it is recreated: `docker compose up -d prometheus`.
 
     ```sh
     cd ~/ws/cluster-setup/services
@@ -83,7 +83,7 @@ Environment variables of the container (the defaults suit the VM):
 | Variable | Default | |
 | :--- | :--- | :--- |
 | `PROXY_PORTAL_MASTER_URL` | `http://192.168.233.6:8080` | the Determined master; in compose from `services/.env` |
-| `PROXY_PORTAL_PROMETHEUS_URL` | `http://prometheus:9090` | on the monitoring network |
+| `PROXY_PORTAL_PROMETHEUS_URL` | `http://prometheus:9090` | on the `proxy_portal_upstream` network |
 | `PROXY_PORTAL_STATUS_FILE` | `/srv/spool/status.json` | the applier's status; older than `PROXY_PORTAL_STATUS_FILE_MAX_AGE` (900 s) it is marked out of date |
 | `PROXY_PORTAL_HOST` | `proxy.cvgl.lab` | the only host name it answers |
 | `PROXY_PORTAL_PRIVATE_ADDRESS`, `PROXY_PORTAL_CAMPUS_ADDRESS` | `192.168.233.8`, `10.0.1.68` | the addresses shown for the entries |

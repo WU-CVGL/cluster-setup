@@ -4,6 +4,11 @@ networks:
   # nginx and the proxy portal only: nginx is the portal's only way in
   proxy_portal:
     internal: true
+  # the proxy portal and Prometheus only: the portal's way to Prometheus and out to the Determined master.
+  # Not grafana_monitor: the proxies are there and send private addresses out directly, so a client could
+  # reach the portal through a proxy, past nginx.
+  proxy_portal_upstream:
+    driver: bridge
   nextcloud:
     external: false
 
@@ -432,10 +437,11 @@ services:
 
   # The proxy portal (proxy-portal/README.md): status, My access, My usage, behind nginx as
   # https://proxy.cvgl.lab. It reads the applier's status.json from the spool (read-only; requests/
-  # and results/ masked), queries Prometheus on the monitoring network, and checks sign-ins with the
-  # Determined master. Its database and secret key are in the data folder, owned by uid 3089.
-  # No Docker socket, no accounts file. No published port: nginx reaches it on the proxy_portal
-  # network only, so the X-Real-IP and X-Forwarded-Proto it trusts always come from nginx.
+  # and results/ masked), and queries Prometheus and checks sign-ins with the Determined master over
+  # proxy_portal_upstream. Its database and secret key are in the data folder, owned by uid 3089.
+  # No Docker socket, no accounts file. No published port, and on no network a proxy is on: nginx
+  # reaches it on proxy_portal only, so the X-Real-IP and X-Forwarded-Proto it trusts always come
+  # from nginx.
   proxy-portal:
     build: ./proxy-portal
     image: proxy-portal
@@ -445,8 +451,8 @@ services:
       TZ: Asia/Shanghai
       PROXY_PORTAL_MASTER_URL: ${PROXY_PORTAL_MASTER_URL:-http://192.168.233.6:8080}
     networks:
-      - grafana_monitor
       - proxy_portal
+      - proxy_portal_upstream
     volumes:
       - ${PROXY_PORTAL_SPOOL:-/var/lib/proxy-portal/spool}:/srv/spool:ro
       - ${PROXY_PORTAL_DATA:-/var/lib/proxy-portal/data}:/data
@@ -508,6 +514,7 @@ services:
     restart: unless-stopped
     networks:
       - grafana_monitor
+      - proxy_portal_upstream   # for the proxy portal's queries
     environment:
       TZ: Asia/Shanghai
     volumes:
