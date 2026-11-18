@@ -31,10 +31,10 @@ class LanguageTest(PortalTestCase):
         page = self.client.get("/", HTTP_ACCEPT_LANGUAGE="zh-CN,zh;q=0.9,en;q=0.5")
         self.assertContains(page, '<html lang="zh-Hans">')
         self.assertContains(page, "代理服务状态")
-        self.assertContains(page, "默认代理可用；代理池中 1 个代理未通过探测，故障切换正常")
-        self.assertNotContains(page, "Default proxy available")
+        self.assertContains(page, "自动切换代理可用；1 个公共代理未通过探测，切换仍然正常")
+        self.assertNotContains(page, "Auto-switching Proxy available")
         api = self.client.get("/api/status", HTTP_ACCEPT_LANGUAGE="zh-CN").json()
-        self.assertEqual(api["headline"]["text"], "默认代理可用；代理池中 1 个代理未通过探测，故障切换正常")
+        self.assertEqual(api["headline"]["text"], "自动切换代理可用；1 个公共代理未通过探测，切换仍然正常")
 
     def test_switch(self):
         response = self.client.post("/language", {"language": "zh-hans", "next": "/"})
@@ -48,7 +48,7 @@ class LanguageTest(PortalTestCase):
         page = self.client.get("/access", HTTP_ACCEPT_LANGUAGE="zh-CN")
         self.assertContains(page, "我的代理接入")
         self.assertContains(page, "代理访问已<b>关闭</b>")
-        self.assertContains(page, "公共代理自己的入口仍可使用")
+        self.assertContains(page, "公共代理自己的地址仍可使用")
         page = self.client.get("/usage", HTTP_ACCEPT_LANGUAGE="zh-CN")
         self.assertContains(page, "观测总量")
 
@@ -57,7 +57,7 @@ class LanguageTest(PortalTestCase):
         page = self.client.get("/admin/users", HTTP_ACCEPT_LANGUAGE="zh-CN")
         self.assertContains(page, "代理账号")
         self.assertContains(page, ">管理</a>")
-        self.assertContains(page, "公共代理自己的入口不需要账号")
+        self.assertContains(page, "该用户仍可使用公共代理自己的地址")
         self.assertContains(page, "svc-docker-&lt;node&gt;")
         page = self.client.get("/admin/accounts/disable?username=alice", HTTP_ACCEPT_LANGUAGE="zh-CN")
         self.assertContains(page, "关闭 alice 的代理访问")

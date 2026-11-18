@@ -48,7 +48,7 @@ id=$(incident "Proxy restarted" "A public proxy restarted after an update." prox
 compose exec -T proxy-portal python manage.py shell -c "
 from django.utils import timezone; from portal.models import Incident
 i = Incident.objects.get(id=$id); i.state = 'resolved'; i.resolved_at = timezone.now(); i.save()"
-incident "Slow downloads on one proxy" "Downloads through one public proxy are slow; the default proxy is not affected." proxies >/dev/null
+incident "Slow downloads on one proxy" "Downloads through one public proxy are slow; the Auto-switching Proxy is not affected." proxies >/dev/null
 echo "incidents:     $(r https://proxy.cvgl.lab/api/status | python3 -c 'import json,sys; print([(i["title"], i["state"]) for i in json.load(sys.stdin)["incidents"]])')"
 
 sleep 3   # Chromium aborts with ERR_NETWORK_CHANGED while Docker is still setting up interfaces

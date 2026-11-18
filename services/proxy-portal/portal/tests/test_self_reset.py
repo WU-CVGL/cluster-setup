@@ -159,17 +159,18 @@ class SelfResetTest(SelfResetMixin, PortalTestCase):
         self.assertContains(page, 'id="reset-open" hidden>Reset proxy password</button>')
         self.assertContains(page, '<dialog class="modal" id="reset-dialog"')
         self.assertContains(page, "The old password stops working: update every client that uses it.")
-        self.assertContains(page, "Applying restarts the HA entries (xray-ha). Established connections through them "
+        self.assertContains(page, "Applying restarts both auto-switching proxies. Established connections through them "
                                   "drop")
         self.assertNotContains(page, "private proxies. Established")
         texts = json.loads(page.content.decode().split('<script id="reset-texts" type="application/json">')[1]
                            .split("</script>")[0])
         self.assertEqual(texts, {"failed": "The reset could not be started. Nothing changed.",
                                  "state": "The reset's state could not be read. Reload the page to see it.",
-                                 "network": "The portal could not be reached. Try again."})
+                                 "network": "The portal could not be reached. Try again.",
+                                 "collecting": "Getting the password…"})
         carol = https_client()
         self.sign_in("carol", client=carol)  # an admin account: the private proxies restart too
-        self.assertContains(carol.get("/access"), "the HA entries (xray-ha) and the private proxies")
+        self.assertContains(carol.get("/access"), "both auto-switching proxies and the private proxies")
 
     def test_my_access_shows_the_applied_state_only(self):
         request_id = self.reset().json()["id"]

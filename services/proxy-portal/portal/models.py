@@ -7,8 +7,8 @@ class Incident(models.Model):
     """A notice on the status page: an outage, degradation or maintenance, written by an admin."""
 
     COMPONENTS = [
-        ("ha-general", pgettext_lazy("incident component", "Default proxy (ha-general)")),
-        ("ha-private", pgettext_lazy("incident component", "Private entry (ha-private)")),
+        ("ha-general", pgettext_lazy("incident component", "Auto-switching Proxy")),
+        ("ha-private", pgettext_lazy("incident component", "Private Auto-switching Proxy")),
         ("proxies", pgettext_lazy("incident component", "Individual proxies")),
         ("monitoring", pgettext_lazy("incident component", "Monitoring")),
         ("portal", pgettext_lazy("incident component", "Portal")),
@@ -100,7 +100,7 @@ class AccountRequest(models.Model):
     username = models.CharField(max_length=64, db_index=True)
     requested_by = models.CharField(max_length=128, db_index=True)  # the Determined username that requested it
     # a user's reset of their own password from My access: only that user may collect the result
-    self_service = models.BooleanField(default=False)
+    self_service = models.BooleanField(default=False, db_default=False)  # also for the previous release's code
     requested_at = models.DateTimeField(default=timezone.now, db_index=True)
     # from the applier's status file
     state = models.CharField(max_length=16, choices=STATES, default="pending", db_index=True)

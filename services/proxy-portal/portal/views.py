@@ -99,7 +99,7 @@ def _live_texts():
         "passing": _("Passing"), "failing": _("Failing"), "unknown": _("Unknown"),
         "s_ago": _("%(n)d s ago"), "min_ago": _("%(n)d min ago"), "h_ago": _("%(n)d h ago"),
         "days_ago": _("%(n)d days ago"),
-        "headline_unknown": _("Status unknown: no recent probe results for the default proxy"),
+        "headline_unknown": _("Status unknown: no recent probe results for the Auto-switching Proxy"),
         "entry_count": _("%(passing)s of %(configured)s proxies passing"),
     }
 
@@ -171,7 +171,8 @@ def access_page(request):
                                                                   "changed."),
                                                       "state": _("The reset's state could not be read. Reload the "
                                                                  "page to see it."),
-                                                      "network": _("The portal could not be reached. Try again.")}})
+                                                      "network": _("The portal could not be reached. Try again."),
+                                                      "collecting": _("Getting the password…")}})
 
 
 @require_GET

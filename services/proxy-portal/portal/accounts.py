@@ -56,12 +56,12 @@ def check(op, username, status):
         raise Refused(_("Invalid account name: lowercase letters, digits, '.', '_' and '-', starting with a letter "
                         "or digit, at most 64 characters; svc- only as svc-docker-<node>."))
     if username in PROTECTED:
-        raise Refused(_("%(name)s is changed with proxy_accounts.py on the VM only.") % {"name": username}, 403)
+        raise Refused(_("%(name)s can only be changed outside the portal.") % {"name": username}, 403)
     if not status.available:
         raise Refused(_("The accounts status is unavailable, so no change can be requested."), 503)
     row = next((r for r in status.all_accounts if r.name == username), None)
     if row is not None and row.protected:
-        raise Refused(_("%(name)s is changed with proxy_accounts.py on the VM only.") % {"name": username}, 403)
+        raise Refused(_("%(name)s can only be changed outside the portal.") % {"name": username}, 403)
     if op == "add":
         if row is not None:
             raise Refused(_("The account %(name)s exists.") % {"name": username}, 409)
@@ -92,7 +92,7 @@ def submit(op, username, requested_by, self_service=False):
         row.delete()
         log.error("request %s %s %s by %s: not written: %s", request_id, op, username, requested_by,
                   type(e).__name__)
-        raise Refused(_("The request could not be written to the applier's spool. Nothing changed."), 503)
+        raise Refused(_("The request could not be saved. Nothing changed."), 503)
     log.info("request %s: %s %s by %s%s", row.id, op, username, requested_by, " (self-service)" if self_service
              else "")
     return row
@@ -103,10 +103,10 @@ def restart_text(op, row, status):
     if status.raw_auth and status.open_proxies:
         services = _("the HA entries (xray-ha) and every proxy but %(open)s") % {"open": ", ".join(status.open_proxies)}
     elif status.raw_auth:
-        services = _("the HA entries (xray-ha) and every proxy")
+        services = _("both auto-switching proxies and every proxy")
     elif op in ("admin-on", "admin-off") or (row is not None and row.admin):
-        services = _("the HA entries (xray-ha) and the private proxies")
+        services = _("both auto-switching proxies and the private proxies")
     else:
-        services = _("the HA entries (xray-ha)")
+        services = _("both auto-switching proxies")
     return _("Applying restarts %(services)s. Established connections through them drop, and new ones fail for a "
              "few seconds.") % {"services": services}

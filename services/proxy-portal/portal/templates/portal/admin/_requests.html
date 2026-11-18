@@ -10,7 +10,7 @@
       <td>{{ row.op|op_label }}</td>
       <td class="mono">{{ row.username }}</td>
       <td>{% include "portal/admin/_state.html" with level=row|request_level %}{% if row.state == 'failed' and row.restored is False %} <span class="chip bad">{% translate "Not restored" %}</span>{% endif %}</td>
-      <td class="mono wide">{{ row.stage|default:"—" }}</td>
+      <td class="wide">{% if row.stage %}{{ row.stage|stage_label }}{% else %}—{% endif %}</td>
       <td><a href="{% url 'admin_request' row.id %}">{% translate "Details" %}</a></td>
     </tr>
     {% empty %}

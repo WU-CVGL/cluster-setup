@@ -6,7 +6,7 @@
   <div>
     <div class="eyebrow">{% translate "Service health" %}</div>
     <h1>{% translate "Proxy status" %}</h1>
-    <p class="sub">{% translate "Whether requests get through the high-availability proxies and each proxy, from probes every 30 seconds. The status of a proxy is not whether your account may use it: see My access." %}</p>
+    <p class="sub">{% translate "Whether requests get through the auto-switching proxies and each proxy, from probes every 30 seconds. The status of a proxy is not whether your account may use it: see My access." %}</p>
   </div>
   <div class="small muted">{% translate "Last check" %}: <span data-live-age="last_check_age_seconds">{{ data.last_check_age_seconds|age }}</span></div>
 </div>
@@ -15,7 +15,7 @@
   <div>
     <div class="status-title"><span class="emblem" aria-hidden="true">{% if data.headline.level == 'ok' %}✓{% elif data.headline.level == 'unknown' %}?{% else %}!{% endif %}</span><h2 id="headline">{{ data.headline.text }}</h2></div>
     <p data-live-monitoring="off"{% if data.monitoring_available %} hidden{% endif %}>{% translate "Monitoring data is unavailable, so every status is unknown." %}</p>
-    <p data-live-monitoring="on"{% if not data.monitoring_available %} hidden{% endif %}>{% translate "The default proxy ha-general sends each new connection to a passing public proxy; open connections stay on their proxy." %}</p>
+    <p data-live-monitoring="on"{% if not data.monitoring_available %} hidden{% endif %}>{% translate "The Auto-switching Proxy sends each new connection to a passing public proxy; open connections stay on their proxy." %}</p>
   </div>
   <div class="status-right">
     <div class="status-number" data-live-count>{% if general.proxies.configured is None %}—{% else %}{{ general.proxies.passing }} / {{ general.proxies.configured }}{% endif %}</div>
@@ -44,7 +44,7 @@
 </section>
 
 <section class="section" aria-labelledby="proxies-title">
-  <div class="section-bar"><div><h2 id="proxies-title">{% translate "Proxies" %}</h2><p>{% translate "Each proxy probed through its own entry. A proxy's own entry has no failover: when it fails, use ha-general." %}</p></div></div>
+  <div class="section-bar"><div><h2 id="proxies-title">{% translate "Proxies" %}</h2><p>{% translate "Each proxy probed at its own address. A proxy's own address does not switch: when it fails, use the Auto-switching Proxy." %}</p></div></div>
   <div class="card table-scroll">
     <table class="table status-table">
       <caption class="sr-only">{% translate "Proxies" %}</caption>
@@ -89,9 +89,9 @@
     <div class="section-bar"><div><h2 id="help-title">{% translate "Reading the status" %}</h2><p>{% translate "What the probes show, and what they do not." %}</p></div></div>
     <div class="card card-pad">
       <h3>{% translate "The service works but you cannot connect" %}</h3>
-      <p class="small muted">{% translate "Check My access: whether you have an account, whether its proxy access is on, and the address for your network. The probes run on the supplementary services VM and do not cover the way from your machine to it." %}</p>
-      <h3>{% translate "Failover" %}</h3>
-      <p class="small muted">{% translate "A high-availability proxy chooses a passing proxy for each new connection, within about 15 seconds of a proxy failing. Open downloads, SSH sessions and WebSockets stay on their proxy and break with it; the client has to retry." %}</p>
+      <p class="small muted">{% translate "Check My access: whether you have an account, whether its proxy access is on, and the address for your network. The probes do not cover the network path from your machine to the proxies." %}</p>
+      <h3>{% translate "Automatic switching" %}</h3>
+      <p class="small muted">{% translate "An auto-switching proxy chooses a passing proxy for each new connection, within about 15 seconds of a proxy failing. Open downloads, SSH sessions and WebSockets stay on their proxy and break with it; the client has to retry." %}</p>
       <h3>{% translate "Unknown" %}</h3>
       <p class="small muted">{% translate "No probe result in the last 90 seconds. An older result is never shown in its place." %}</p>
     </div>

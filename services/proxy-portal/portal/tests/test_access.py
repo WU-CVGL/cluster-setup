@@ -87,25 +87,28 @@ class AccessTest(PortalTestCase):
         page = self.client.get("/access")
         self.assertContains(page, "Proxy access is <b>off</b>")
         # what stops for a non-admin account, once, without the raw-auth paragraph repeating it
-        self.assertContains(page, "ha-general refuses it. The public proxies' own entries still work for you: they need no account while raw auth (accounts on")
-        self.assertNotContains(page, "ha-private and the private proxies refuse it")
+        self.assertContains(page, "The Auto-switching Proxy refuses it. The public proxies' own addresses still work "
+                                  "for you: they need no account.")
+        self.assertNotContains(page, "The auto-switching proxies and the private proxies refuse it")
         self.assertNotContains(page, "turning an account off stops only")
         self.assertContains(page, "is not a change to your cluster account")
 
     def test_raw_auth_said_plainly_while_on_or_without_account(self):
         self.get("alice")
-        self.assertContains(self.client.get("/access"), "so turning an account off stops only the HA entries")
+        self.assertContains(self.client.get("/access"),
+                            "so turning an account off stops only the auto-switching proxies")
         self.client.post("/signout")
         self.master.users["frank"] = ("pw-frank", False, True)
         self.get("frank")
-        self.assertContains(self.client.get("/access"), "so turning an account off stops only the HA entries")
+        self.assertContains(self.client.get("/access"),
+                            "so turning an account off stops only the auto-switching proxies")
 
     def test_disabled_admin(self):
         view = self.get("erin")
         usable = {e["id"]: e["usable"] for e in view["entries"]}
         self.assertFalse(usable["ha-private"])
         self.assertFalse(any(usable[name] for name in PRIVATE))
-        self.assertContains(self.client.get("/access"), "ha-general, ha-private and the private proxies refuse it.")
+        self.assertContains(self.client.get("/access"), "The auto-switching proxies and the private proxies refuse it.")
 
     def test_raw_auth_on(self):
         self.write_status(lambda d: d.update(raw_auth=True))
@@ -139,7 +142,7 @@ class AccessTest(PortalTestCase):
         self.client.post("/signout")
         bob = self.get("bob")
         self.assertFalse(any(e["usable"] for e in bob["entries"]))
-        self.assertContains(self.client.get("/access"), "Every entry refuses it, the public proxies' own entries")
+        self.assertContains(self.client.get("/access"), "Every proxy refuses it, the public proxies' own addresses")
 
     def test_no_account_raw_auth_on(self):
         self.write_status(lambda d: d.update(raw_auth=True))
@@ -207,5 +210,5 @@ class AccessTest(PortalTestCase):
     def test_page_says_raw_auth_off_plainly(self):
         self.sign_in("alice")
         page = self.client.get("/access")
-        self.assertContains(page, "a public proxy's own entry accepts anyone")
+        self.assertContains(page, "The public proxies' own addresses need no account, so turning an account off")
         self.assertContains(page, "Replace &lt;password&gt; with your account")
