@@ -108,6 +108,7 @@ class AccountRequest(models.Model):
     restarted = models.CharField(max_length=1000, blank=True)  # space-separated Compose services
     result = models.BooleanField(null=True)  # a one-time result was written
     superseded_by = models.CharField(max_length=64, blank=True)
+    applied_seq = models.BigIntegerField(null=True, blank=True)  # the applier's order of live batches
     status_at = models.DateTimeField(null=True, blank=True)
     # what became of the one-time result: "" (not collected), claimed, shown, expired or unreadable
     result_state = models.CharField(max_length=16, blank=True)

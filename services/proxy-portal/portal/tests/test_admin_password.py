@@ -153,9 +153,9 @@ class PasswordTest(PortalTransactionTestCase):
     def test_superseded_in_a_later_run(self):
         # two applier runs: the first result stays, and its status names no later request
         first = self.add("alice", op="rotate")
-        first_path = self.applied(first, "alice", op="rotate", password="Old-Pass-1111")
+        first_path = self.applied(first, "alice", op="rotate", password="Old-Pass-1111", applied_seq=1)
         second = self.add("alice", op="rotate")
-        second_path = self.applied(second, "alice", op="rotate")
+        second_path = self.applied(second, "alice", op="rotate", applied_seq=2)
         data = self.client.get(f"/api/admin/requests/{first}").json()  # the second is not looked at first
         self.assertEqual(data["password"], "superseded")
         self.assertIn(f"use the password of request {second}", data["password_text"])
@@ -168,11 +168,39 @@ class PasswordTest(PortalTransactionTestCase):
         self.assertContains(self.client.post(f"/admin/requests/{second}/password"), SENTINEL)
         self.assertFalse(second_path.exists())
 
+    def test_order_applied_not_order_requested(self):
+        # A is recorded first, B second; the applier took B first (spool order), then A: A's password is live
+        a = self.add("alice", op="rotate")
+        b = self.add("alice", op="rotate")
+        self.applied(b, "alice", op="rotate", password="B-Pass-3333", applied_seq=7)
+        self.applied(a, "alice", op="rotate", applied_seq=8)
+        self.assertEqual(self.client.get(f"/api/admin/requests/{a}").json()["password"], "ready")
+        data = self.client.get(f"/api/admin/requests/{b}").json()
+        self.assertEqual(data["password"], "superseded")
+        self.assertIn(f"use the password of request {a}", data["password_text"])
+        self.assertContains(self.client.post(f"/admin/requests/{a}/password"), SENTINEL)
+        self.assertNotContains(self.client.post(f"/admin/requests/{b}/password"), "B-Pass-3333")
+
+    def test_without_a_recorded_order_nothing_is_inferred(self):
+        # statuses without applied_seq (an older applier): only its own superseded_by counts, never requested_at
+        first = self.add("alice", op="rotate")
+        self.applied(first, "alice", op="rotate")
+        second = self.add("alice", op="rotate")
+        self.applied(second, "alice", op="rotate", password="Second-4444")
+        self.assertEqual(self.client.get(f"/api/admin/requests/{first}").json()["password"], "ready")
+        # the applier's own superseded_by stands, whatever the order says
+        third = self.add("bob", op="rotate")
+        self.applied(third, "bob", op="rotate", result=False, superseded_by=second, applied_seq=9)
+        self.applied(self.add("bob", op="rotate"), "bob", op="rotate", applied_seq=3)
+        data = self.client.get(f"/api/admin/requests/{third}").json()
+        self.assertEqual(data["password"], "superseded")
+        self.assertIn(f"use the password of request {second}", data["password_text"])
+
     def test_removed_in_a_later_run(self):
         first = self.add("bob", op="rotate")
-        path = self.applied(first, "bob", op="rotate", password="Old-Pass-2222")
+        path = self.applied(first, "bob", op="rotate", password="Old-Pass-2222", applied_seq=1)
         remove = self.add("bob", op="remove")
-        self.applied(remove, "bob", op="remove", result=False)
+        self.applied(remove, "bob", op="remove", result=False, applied_seq=2)
         response = self.client.post(f"/admin/requests/{first}/password")
         self.assertNotContains(response, "Old-Pass-2222")
         self.assertContains(response, f"The account was removed by request {remove}: this password no longer works.")

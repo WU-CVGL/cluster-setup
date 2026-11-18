@@ -7,7 +7,9 @@ The state of an account request, from the applier's status file (applier/README.
     failed        not applied: stage, error, and restored (the previous state is back, or the rollback did not finish)
     unconfirmed   live, and every login that must be refused is refused, but the logins that must pass got no 204
 
-The row keeps a copy of the outcome for the change log; the status file is the source.
+The row keeps a copy of the outcome for the change log; the status file is the source. A live request's
+applied_seq is the order in which the applier made it live, across runs: the only order a superseded one-time
+password is judged by, never the order of the requests.
 """
 
 import datetime
@@ -62,6 +64,8 @@ def refresh(row, now=None):
         "restarted": " ".join(s for s in restarted if isinstance(s, str))[:1000] if isinstance(restarted, list) else "",
         "result": data.get("result") if isinstance(data.get("result"), bool) else None,
         "superseded_by": str(data.get("superseded_by") or "")[:64],
+        "applied_seq": data.get("applied_seq") if isinstance(data.get("applied_seq"), int)
+        and not isinstance(data.get("applied_seq"), bool) and data.get("applied_seq") > 0 else None,
         "status_at": _parse_time(data.get("updated_at")),
     }
     changed = [k for k, v in values.items() if getattr(row, k) != v]
@@ -126,19 +130,24 @@ def describe(row, now=None):
 def superseded_by(row):
     """
     The request that made this one-time password invalid: (id, op), op None when that request is unknown here.
-    The applier marks it within one run (superseded_by); across runs, a later live add, rotate or remove of the
-    same account does. None when there is none.
+    The applier marks it within one run (superseded_by), which always stands; across runs, a live add, rotate
+    or remove of the same account that the applier applied after this one (a higher applied_seq) does. Without
+    a recorded order nothing is inferred. None when there is none.
     """
     if row.superseded_by:
         later = type(row).objects.filter(id=row.superseded_by).first()
         return row.superseded_by, later.op if later else None
-    rows = type(row).objects.filter(username=row.username, op__in=REPLACES, requested_at__gt=row.requested_at) \
-        .exclude(id=row.id).exclude(state="failed").order_by("requested_at", "id")
-    for later in rows:
-        refresh(later)
-        if later.state in ("applied", "unconfirmed") and later.changed is not False:
-            return later.id, later.op
-    return None
+    if row.applied_seq is None:
+        return None
+    later = []
+    for other in type(row).objects.filter(username=row.username, op__in=REPLACES).exclude(id=row.id) \
+            .exclude(state="failed"):
+        refresh(other)
+        if other.state in ("applied", "unconfirmed") and other.changed is not False \
+                and other.applied_seq is not None and other.applied_seq > row.applied_seq:
+            later.append(other)
+    first = min(later, key=lambda other: other.applied_seq, default=None)
+    return (first.id, first.op) if first else None
 
 
 def password_state(row, username):
