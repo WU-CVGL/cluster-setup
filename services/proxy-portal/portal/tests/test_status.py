@@ -212,8 +212,8 @@ class StatusTest(PortalTestCase):
         self.assertEqual(proxies["usca1-bwh-megaboxpro-2tb"]["ports"], {"http": 28889, "socks": 20089})
         self.assertEqual(proxies["jpty1-bwh-2tb"]["ports"], {"http": 55889, "socks": 55089})
         page = self.client.get("/").content.decode()
-        self.assertIn('<td class="mono">30889 / 30089</td>', page)
-        self.assertIn('<td class="mono">28889 / 20089</td>', page)
+        self.assertIn('<td class="mono ports">30889 / 30089</td>', page)
+        self.assertIn('<td class="mono ports">28889 / 20089</td>', page)
         self.assertIn("Ports", page)
 
     def test_ports_without_the_applier_status(self):
@@ -221,7 +221,7 @@ class StatusTest(PortalTestCase):
         data = self.client.get("/api/status").json()
         self.assertEqual(data["entries"]["ha-general"]["ports"], {"http": None, "socks": None})
         self.assertEqual({str(proxy["ports"]) for proxy in data["proxies"]}, {str({"http": None, "socks": None})})
-        self.assertIn('<td class="mono">— / —</td>', self.client.get("/").content.decode())
+        self.assertIn('<td class="mono ports">— / —</td>', self.client.get("/").content.decode())
 
     def test_page_layout(self):
         page = self.client.get("/").content.decode()

@@ -39,6 +39,9 @@ const fs = require('fs');
       overflow: document.documentElement.scrollWidth - document.documentElement.clientWidth, outside,
       barWidth: bar ? Math.round(bar.getBoundingClientRect().width * 10) / 10 : null,
       cards: document.querySelectorAll('.summary-grid, .metric, ol.history').length,
+      // table cells whose content does not fit: a clipped chip or port
+      clipped: Array.from(document.querySelectorAll('.status-table td, .status-table th')).filter(c => visible(c) &&
+        c.scrollWidth > c.clientWidth + 1).map(c => c.textContent.trim().slice(0, 30)),
     };
   });
   const tip = page => page.evaluate(() => {
@@ -62,7 +65,8 @@ const fs = require('fs');
       check(`${tag} loaded: 96 hourly bars per row, no cards, no overflow`, s.cards === 0 && s.rows >= 2 &&
         s.shown.every(n => n === 1) && JSON.stringify(s.counts) === '[96]' && JSON.stringify(s.kinds) === '["hours"]' &&
         s.switchShown && s.pressed[0][1] === 'true' && s.pressed[1][1] === 'false' && s.pressed[0][0] === t.hours &&
-        JSON.stringify(s.legend) === JSON.stringify([t.ago[0]]) && s.overflow === 0 && s.outside === 0, s);
+        JSON.stringify(s.legend) === JSON.stringify([t.ago[0]]) && s.overflow === 0 && s.outside === 0 &&
+        s.clipped.length === 0, s);
       await page.screenshot({ path: `${out}/status-bars-${lang}-${device}-hours.png`, fullPage: true });
 
       // the switch with the keyboard: Tab to "30 days", then Space

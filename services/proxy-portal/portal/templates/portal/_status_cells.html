@@ -1,4 +1,4 @@
-{% load i18n portal %}<td class="mono">{{ row.ports.http|default_if_none:"—" }} / {{ row.ports.socks|default_if_none:"—" }}</td>
+{% load i18n portal %}<td class="mono ports">{{ row.ports.http|default_if_none:"—" }} / {{ row.ports.socks|default_if_none:"—" }}</td>
   <td data-live-state="{{ p }}.protocols.http" data-live-age-of="{{ http_age }}">{% include "portal/state.html" with state=row.protocols.http.state %}</td>
   <td data-live-state="{{ p }}.protocols.socks" data-live-age-of="{{ socks_age }}">{% include "portal/state.html" with state=row.protocols.socks.state %}</td>
   <td class="mono wide"><span data-live-ms="{{ p }}.protocols.http" data-live-age-of="{{ http_age }}">{{ row.protocols.http.duration_seconds|milliseconds }}</span> / <span data-live-ms="{{ p }}.protocols.socks" data-live-age-of="{{ socks_age }}">{{ row.protocols.socks.duration_seconds|milliseconds }}</span></td>
