@@ -1,6 +1,7 @@
 // The Status page refreshes itself: a controlled clock (performance.now, offset by the test) and a stubbed
 // /api/status. It polls every 30 s and when the tab becomes visible, advances "N s ago" between polls, and turns
-// results older than 90 s, counted from the last answer, to Unknown when polls fail, and the counts to "—".
+// results older than 90 s, counted from the last answer, to Unknown when polls fail, and the counts to "—", also
+// when the default proxy was Unknown from the start.
 //   node e2e/status-refresh.cjs <base URL>       (Playwright for Node in NODE_PATH; CHROME optional)
 const { chromium } = require('playwright');
 
@@ -8,14 +9,18 @@ const { chromium } = require('playwright');
   const [base] = process.argv.slice(2);
   const args = ['--no-proxy-server'].concat(process.env.RESOLVE ? [`--host-resolver-rules=MAP ${process.env.RESOLVE}`] : []);
   const browser = await chromium.launch({ executablePath: process.env.CHROME || undefined, args });
-  const context = await browser.newContext({ ignoreHTTPSErrors: true, locale: 'en-US',
-    extraHTTPHeaders: { 'Accept-Language': 'en-US,en;q=0.9' } });
-  await context.addInitScript(() => {
-    const real = performance.now.bind(performance);
-    let offset = 0;
-    performance.now = () => real() + offset;
-    window.__advance = ms => { offset += ms; };
-  });
+  const clocked = async (locale, language) => {
+    const context = await browser.newContext({ ignoreHTTPSErrors: true, locale,
+      extraHTTPHeaders: { 'Accept-Language': language } });
+    await context.addInitScript(() => {
+      const real = performance.now.bind(performance);
+      let offset = 0;
+      performance.now = () => real() + offset;
+      window.__advance = ms => { offset += ms; };
+    });
+    return context;
+  };
+  const context = await clocked('en-US', 'en-US,en;q=0.9');
   const page = await context.newPage();
   const problems = [];
   let mode = 'fresh', polls = 0, template = null;
@@ -33,18 +38,24 @@ const { chromium } = require('playwright');
     return route.fulfill({ json: data });
   };
   // selectors that the page had before it refreshed itself too
-  const read = () => page.evaluate(() => {
+  const read = (on = page) => on.evaluate(() => {
     const text = el => (el ? el.textContent.replace(/\s+/g, ' ').trim() : null);
     const cards = document.querySelectorAll('.summary-grid .card .m-value');
     return { http: text(cards[0]), socks: text(cards[1]), last: text(document.querySelector('.hero-head .small.muted')),
       headline: text(document.querySelector('#headline')), hero: document.querySelector('.status-hero').className,
-      count: text(document.querySelector('.status-number')),
+      count: text(document.querySelector('.status-number')), pool: text(cards[2]),
       entries: Array.from(document.querySelectorAll('.service .desc')).map(el => text(el).split(' · ').pop()),
       duration: text(document.querySelector('.table tbody tr:nth-child(2) td.mono.wide')) };
   });
   const results = [];
   const check = (label, ok, got) => { results.push(`${ok ? 'ok  ' : 'FAIL'} ${label}: ${JSON.stringify(got)}`); if (!ok) problems.push(label); };
-  const advance = async seconds => { await page.evaluate(ms => window.__advance(ms), seconds * 1000); await page.waitForTimeout(1500); return read(); };
+  const advance = async (seconds, on = page) => {
+    await on.evaluate(ms => window.__advance(ms), seconds * 1000); await on.waitForTimeout(1500); return read(on); };
+  const report = () => {
+    console.log(results.join('\n'));
+    if (problems.length) { console.error('problems:\n' + problems.join('\n')); process.exit(1); }
+    console.log('status refresh: ok');
+  };
 
   await page.goto(base + '/', { waitUntil: 'networkidle' });
   template = await page.evaluate(() => fetch('/api/status').then(r => r.json()));  // the real answer's shape
@@ -74,15 +85,39 @@ const { chromium } = require('playwright');
   check('tab visible again: polled at once, Passing', polls === 4 && s.http === 'Passing' && !s.hero.endsWith('unknown') &&
     /: 1[1-4] s ago$/.test(s.last) && JSON.stringify(s.entries) === JSON.stringify(loaded), [polls, s]);
 
-  // the same entry line in Chinese, once the results are older than 90 s
-  const zh = await browser.newContext({ ignoreHTTPSErrors: true, locale: 'zh-CN',
-    extraHTTPHeaders: { 'Accept-Language': 'zh-Hans,zh;q=0.9' } });
-  await zh.addInitScript(() => {
-    const real = performance.now.bind(performance);
-    let offset = 0;
-    performance.now = () => real() + offset;
-    window.__advance = ms => { offset += ms; };
+  // both HA entries Unknown from the start, the proxy counts known, every poll failing: the counts age out too
+  const unknownPage = await context.newPage();
+  unknownPage.on('pageerror', e => problems.push(e.message));
+  // the page as the portal serves it, fetched by the browser (which resolves the test host), with its CSP
+  const served = await page.evaluate(() => fetch('/').then(async r => [await r.text(), r.headers.get('content-security-policy')]));
+  await unknownPage.route(base + '/', route => {
+    const body = served[0].replace(/(<script id="status-live" type="application\/json">)(.*?)(<\/script>)/s,
+      (_, open, json, close) => {
+        const data = JSON.parse(json);
+        for (const entry of Object.values(data.entries)) for (const p of ['http', 'socks']) {
+          Object.assign(entry.protocols[p], { state: 'unknown', last_check_age_seconds: null });
+        }
+        Object.assign(data, { last_check_age_seconds: null,
+          headline: { level: 'unknown', text: 'Status unknown: no recent probe results for the default proxy' } });
+        return open + JSON.stringify(data).replace(/</g, '\\u003C') + close;
+      });
+    return route.fulfill({ contentType: 'text/html; charset=utf-8', headers: { 'content-security-policy': served[1] }, body });
   });
+  await unknownPage.route('**/api/status', route => route.fulfill({ status: 503, body: 'unavailable' }));
+  await unknownPage.goto(base + '/', { waitUntil: 'networkidle' });
+  await unknownPage.waitForTimeout(1500);
+  s = await read(unknownPage);
+  check('Unknown from the start: the counts still shown', s.http === 'Unknown' && s.hero === 'status-hero unknown' &&
+    s.count === '3 / 4' && s.pool === '3 / 4' &&
+    JSON.stringify(s.entries) === JSON.stringify(['3 of 4 proxies passing', '7 of 9 proxies passing']), s);
+  s = await advance(60, unknownPage);
+  check('Unknown from the start, about 60 s: the counts still shown', s.count === '3 / 4', s);
+  s = await advance(40, unknownPage);
+  check('Unknown from the start, polls failing, older than 90 s: no counts', s.count === '—' && s.pool === '—' &&
+    s.entries.every(e => e === '— of — proxies passing'), s);
+
+  // the same entry line in Chinese, once the results are older than 90 s
+  const zh = await clocked('zh-CN', 'zh-Hans,zh;q=0.9');
   const zhPage = await zh.newPage();
   zhPage.on('pageerror', e => problems.push(e.message));
   await zhPage.goto(base + '/', { waitUntil: 'networkidle' });
@@ -95,8 +130,6 @@ const { chromium } = require('playwright');
   const zhStale = await zhEntries();
   check('zh-Hans: the entry line, then "—" past 90 s', zhLoaded.every(e => /^\d+ 个代理中 \d+ 个正常$/.test(e)) &&
     zhStale.length === 2 && zhStale.every(e => e === '— 个代理中 — 个正常'), [zhLoaded, zhStale]);
-  console.log(results.join('\n'));
   await browser.close();
-  if (problems.length) { console.error('problems:\n' + problems.join('\n')); process.exit(1); }
-  console.log('status refresh: ok');
+  report();
 })().catch(e => { console.error(e); process.exit(1); });
