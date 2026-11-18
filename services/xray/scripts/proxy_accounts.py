@@ -50,6 +50,7 @@ HA_HOST = "xray-ha"
 
 NAME_RE = re.compile(r"[a-z0-9][a-z0-9._-]{0,63}")
 SERVICE_RE = re.compile(r"svc-(?:ha|monitor|docker-[a-z0-9][a-z0-9._-]*)")
+AUTH_KEYS = {"users", "accounts"}  # an inbound's logins: "accounts" is the older name, removed on render
 PROXY_URL_RE = re.compile(r"^(\s*proxy_url:\s*)(https?|socks5h?)://(?:[^@/\s]*@)?([A-Za-z0-9._-]+)(:\d+\s*)$")
 
 
@@ -166,7 +167,7 @@ def render(accounts: Accounts) -> List[Path]:
     raw_users = accounts.pairs() if accounts.raw_auth else None
     for path in sorted(base.glob(RAW_CONFIG_GLOB)):
         old = json.loads(path.read_text(encoding="utf-8"))
-        if raw_users is None and not any("users" in (i.get("settings") or {}) for i in old.get("inbounds") or []
+        if raw_users is None and not any(AUTH_KEYS & set(i.get("settings") or {}) for i in old.get("inbounds") or []
                                          if i.get("protocol") in ("http", "socks")):
             continue  # raw auth off and no accounts there: leave the proxy's config as it is
         new = json.loads(json.dumps(old))

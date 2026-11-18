@@ -190,6 +190,44 @@ class RenderTest(_Base):
         self.assertEqual(self.raw.read_text(), self.raw_text)  # byte-identical to the generated file
         self.assertNotIn("users", json.dumps(self.ha()["outbounds"]))
 
+    def leave_accounts(self, accounts):
+        """A proxy config with a left-over "accounts" list (the older field name) on both inbounds."""
+        config = json.loads(self.raw_text)
+        for inbound in config["inbounds"]:
+            if inbound["protocol"] in ("http", "socks"):
+                inbound["settings"]["accounts"] = accounts
+        self.raw.write_text(json.dumps(config, indent=4))
+
+    def assert_only_users(self, users):
+        raw = json.loads(self.raw.read_text())
+        for inbound in raw["inbounds"]:
+            if inbound["protocol"] in ("http", "socks"):
+                self.assertNotIn("accounts", inbound["settings"], inbound["protocol"])
+        self.assertEqual(self.inbound_users(raw), {"http": users, "socks": users})
+
+    def test_leftover_empty_accounts_removed(self):
+        # "accounts": [] next to "users" turns HTTP auth off in Xray
+        self.add("alice", "svc-monitor", "svc-ha")
+        run(self.base, "raw-auth", "on")
+        self.leave_accounts([])
+        self.assertEqual(run(self.base, "render")[0], 0)
+        self.assert_only_users(self.accounts()["accounts"])
+
+    def test_leftover_revoked_password_removed(self):
+        # "accounts" wins over "users" in Xray: a revoked password there would keep working
+        self.add("alice", "svc-monitor", "svc-ha")
+        run(self.base, "raw-auth", "on")
+        self.leave_accounts([{"user": "alice", "pass": "revoked"}])
+        self.assertEqual(run(self.base, "render")[0], 0)
+        self.assert_only_users(self.accounts()["accounts"])
+        # Raw auth off: a config holding only "accounts" is cleared too, not skipped
+        run(self.base, "raw-auth", "off")
+        self.leave_accounts([{"user": "alice", "pass": "revoked"}])
+        code, out, _ = run(self.base, "render")
+        self.assertEqual(code, 0)
+        self.assertIn("xray/proxy-a/config/config.json", out.split())
+        self.assertEqual(json.loads(self.raw.read_text()), json.loads(self.raw_text))
+
     def test_raw_config_without_inbounds_fails_before_writing(self):
         self.add("svc-monitor", "svc-ha")
         bad = self.base / "xray/proxy-b/config/config.json"
@@ -267,6 +305,23 @@ class HandlerUsersTest(unittest.TestCase):
         self.assertEqual(socks["settings"]["users"], [{"user": "alice", "pass": "pw"}])
         with self.assertRaises(ValueError):
             XrayConfigHandler.build_xray_config(outbound, inbound_users=[])
+
+    def test_leftover_accounts_removed(self):
+        # Xray prefers "accounts" over "users" when both are present: "accounts": [] turns HTTP auth off,
+        # and a left-over login keeps working while the new list is ignored. Only "users" may remain.
+        outbound = {"protocol": "freedom", "settings": {}, "tag": "proxy"}
+        for leftover in ([], [{"user": "alice", "pass": "old"}]):
+            config = XrayConfigHandler.build_xray_config(outbound)
+            for inbound in config["inbounds"][:2]:
+                inbound["settings"]["accounts"] = list(leftover)
+            XrayConfigHandler.set_inbound_users(config, [("alice", "new")])
+            for inbound in config["inbounds"][:2]:
+                self.assertNotIn("accounts", inbound["settings"], (leftover, inbound["protocol"]))
+                self.assertEqual(inbound["settings"]["users"], [{"user": "alice", "pass": "new"}])
+            for inbound in config["inbounds"][:2]:
+                inbound["settings"]["accounts"] = list(leftover)
+            XrayConfigHandler.set_inbound_users(config, None)
+            self.assertEqual(config, XrayConfigHandler.build_xray_config(outbound))
 
 
 @unittest.skipUnless(shutil.which("git") and (SERVICES.parent / ".git").exists(), "needs the git checkout")
