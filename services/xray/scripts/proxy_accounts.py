@@ -291,8 +291,11 @@ def render_blackbox(example: str, accounts: Accounts) -> str:
     return header + "".join(lines)
 
 
-def render_outputs(accounts: Accounts) -> List[Tuple[Path, str]]:
-    """Render every config in memory; returns the (path, text) of those that differ from the files."""
+def render_files(accounts: Accounts) -> List[Tuple[Path, str]]:
+    """
+    Render every config in memory: the (path, text) of each file that render keeps, changed or not. A proxy
+    config that needs no change keeps its text; one left alone (raw auth off, no logins) is not listed.
+    """
     base = accounts.base_dir
     needed = [MONITOR] + ([RELAY] if accounts.raw_auth else [])
     for name in needed:
@@ -305,7 +308,8 @@ def render_outputs(accounts: Accounts) -> List[Tuple[Path, str]]:
                     render_blackbox((base / BLACKBOX_EXAMPLE).read_text(encoding="utf-8"), accounts)))
     raw_users = accounts.pairs() if accounts.raw_auth else None
     for path in sorted(base.glob(RAW_CONFIG_GLOB)):
-        old = json.loads(path.read_text(encoding="utf-8"))
+        old_text = path.read_text(encoding="utf-8")
+        old = json.loads(old_text)
         if raw_users is None and not any(AUTH_KEYS & set(i.get("settings") or {}) for i in old.get("inbounds") or []
                                          if i.get("protocol") in ("http", "socks")):
             continue  # raw auth off and no accounts there: leave the proxy's config as it is
@@ -314,11 +318,21 @@ def render_outputs(accounts: Accounts) -> List[Tuple[Path, str]]:
             XrayConfigHandler.set_inbound_users(new, raw_users)
         except ValueError as e:
             raise AccountsError(f"{path.relative_to(base)}: {e}")
-        if new != old:
-            # The format create_xray_service.py writes
-            outputs.append((path, json.dumps(new, indent=4, ensure_ascii=False)))
-    return [(path, text) for path, text in outputs
+        # The format create_xray_service.py writes
+        outputs.append((path, json.dumps(new, indent=4, ensure_ascii=False) if new != old else old_text))
+    return outputs
+
+
+def render_outputs(accounts: Accounts) -> List[Tuple[Path, str]]:
+    """Render every config in memory; returns the (path, text) of those that differ from the files."""
+    return [(path, text) for path, text in render_files(accounts)
             if not (path.exists() and path.read_text(encoding="utf-8") == text)]
+
+
+def render_sha256(base_dir: Path, files: List[Tuple[Path, str]]) -> str:
+    """One hash over the rendered files' paths and texts (render_files), as the applier records it."""
+    lines = sorted(f"{path.relative_to(base_dir).as_posix()}\0{sha256_text(text)}\n" for path, text in files)
+    return sha256_text("".join(lines))
 
 
 def render(accounts: Accounts) -> List[Path]:

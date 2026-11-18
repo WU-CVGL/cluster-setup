@@ -30,6 +30,8 @@ from XrayConfigHandler import XrayConfigHandler  # noqa: E402
 
 SERVICES = Path(__file__).resolve().parents[3]
 IMAGE = "teddysun/xray:1@sha256:" + "0" * 64
+IMAGE_ID = "sha256:" + "1" * 64      # the local image ID of IMAGE
+OLD_IMAGE_ID = "sha256:" + "2" * 64  # a container created from an older image
 PROXY = "proxy-a"
 
 
@@ -48,7 +50,9 @@ class FakeDocker:
         self.fail_restart = 0        # restarts that fail before one succeeds
         self.crash_restart = False
         self.stale = False
-        self.image = IMAGE
+        self.image = IMAGE                                     # xray-ha's image in the Compose file
+        self.proxy_image = IMAGE                               # the proxy's
+        self.containers = {"xray-ha": IMAGE_ID, "xray-" + PROXY: IMAGE_ID}  # what each container was created from
         self.ha_users = {}
         self.load()
 
@@ -63,6 +67,10 @@ class FakeDocker:
     def __call__(self, argv, input_text, timeout):
         argv = list(argv)
         self.calls.append(argv)
+        if argv[:3] == ["docker", "image", "inspect"]:
+            return (0, IMAGE_ID + "\n", "") if argv[-1] == IMAGE else (1, "", "Error: No such image: " + argv[-1])
+        if argv[:2] == ["docker", "inspect"]:
+            return 0, "".join(self.containers[cid[len("cid-"):]] + "\n" for cid in argv[4:]), ""
         if argv[:2] == ["docker", "run"]:
             json.loads(input_text)
             if self.fail_test and self.fail_test in input_text:
@@ -75,7 +83,10 @@ class FakeDocker:
         if args[:3] == ["ps", "--services", "--status"]:
             return 0, "\n".join(sorted(self.running)) + "\n", ""
         if args == ["config", "--format", "json"]:
-            return 0, json.dumps({"services": {"xray-ha": {"image": self.image}}}), ""
+            return 0, json.dumps({"services": {"xray-ha": {"image": self.image}, "xray-" + PROXY: {"image": self.proxy_image},
+                                               "blackbox-exporter": {"image": "prom/blackbox-exporter"}}}), ""
+        if args[:2] == ["ps", "-q"]:
+            return 0, (f"cid-{args[2]}\n" if args[2] in self.running else ""), ""
         if args[0] == "restart":
             if self.crash_restart:
                 raise Crash()
@@ -101,9 +112,11 @@ class FakeProbe:
         self.docker = docker
         self.mode = "ok"      # ok | down | silent | noproxies
         self.calls = []
+        self.logins = []      # (user, password) of each probe
 
     def __call__(self, user, password):
         self.calls.append(user)
+        self.logins.append((user, password))
         if self.mode == "down":
             return "unreachable", None
         if self.mode == "silent":
@@ -132,6 +145,7 @@ class _Base(unittest.TestCase):
             accounts.accounts[name] = pa.new_password()
         accounts.save()
         pa.render(accounts)
+        self.mark_applied()
         self.spool = ap.Spool(self.tmp / "spool", os.getuid())
         self.spool.init(os.getgid())
         self.docker = FakeDocker(self.base)
@@ -142,6 +156,13 @@ class _Base(unittest.TestCase):
 
     def passwords(self):
         return dict(pa.Accounts(self.base).accounts)
+
+    def mark_applied(self):
+        """applied.json as a verified apply leaves it: the running services hold the files on disk."""
+        accounts = pa.Accounts(self.base)
+        (self.base / pa.APPLIED_FILE).write_text(json.dumps({
+            "accounts_sha256": pa.sha256_text(accounts.text()),
+            "render_sha256": pa.render_sha256(self.base, pa.render_files(accounts)), "applied_at": "x"}))
 
     def applier(self):
         def sleep(seconds):
@@ -453,6 +474,7 @@ class ApplyTest(_Base):
         accounts.raw_auth = True
         accounts.save()
         pa.render(accounts)
+        self.mark_applied()  # and restarted
         self.request("abcdefgh-1", "disable", "alice")
         self.assertEqual(self.run_applier(), 0)
         self.assertEqual(self.status("abcdefgh-1")["restarted"], ["xray-ha", "xray-" + PROXY])
@@ -469,6 +491,7 @@ class ApplyTest(_Base):
         accounts.raw_auth = True
         accounts.save()
         pa.render(accounts)
+        self.mark_applied()  # and restarted
         self.docker.running.discard("xray-" + PROXY)
         self.request("abcdefgh-1", "disable", "alice")
         self.assertEqual(self.run_applier(), 0)
@@ -485,9 +508,79 @@ class ApplyTest(_Base):
         self.assertEqual([n for n, e in data["accounts"].items() if not e["enabled"]], ["bob"])
 
 
+class RunningStateTest(_Base):
+    """A request that changes nothing in the files restarts nothing only when the running entries hold them."""
+
+    def cli(self, *argv):
+        with contextlib.redirect_stderr(io.StringIO()), contextlib.redirect_stdout(io.StringIO()):
+            self.assertEqual(pa.main(["--base-dir", str(self.base)] + list(argv)), 0)
+
+    def cli_disable_without_restart(self):
+        """A live apply, then an admin's "disable alice; render" without a restart: the entry still takes alice."""
+        self.request("abcdefgh-1", "disable", "bob")
+        self.assertEqual(self.run_applier(), 0)
+        self.assertEqual(self.status("abcdefgh-1")["status"], "applied")
+        alice = self.passwords()["alice"]
+        self.cli("disable", "alice")
+        self.cli("render")
+        self.assertEqual(self.docker.ha_users.get("alice"), alice)
+        self.request("abcdefgh-2", "disable", "alice")
+        return alice
+
+    def test_change_on_disk_not_running_is_restarted_and_verified(self):
+        alice = self.cli_disable_without_restart()
+        restarts = len(self.docker.restarts())
+        self.assertEqual(self.run_applier(), 0)
+        record = self.status("abcdefgh-2")
+        self.assertEqual((record["status"], record["changed"]), ("applied", False))
+        self.assertIn("xray-ha", record["restarted"])
+        self.assertEqual(len(self.docker.restarts()), restarts + 1)
+        self.assertNotIn("alice", self.docker.ha_users)
+        self.assertIn(("alice", alice), self.probe.logins)  # the request's own account, checked directly
+
+    def test_without_applied_state_a_noop_is_restarted_and_verified(self):
+        (self.base / pa.APPLIED_FILE).unlink()
+        alice = self.passwords()["alice"]
+        self.request("abcdefgh-1", "enable", "alice")
+        self.assertEqual(self.run_applier(), 0)
+        record = self.status("abcdefgh-1")
+        self.assertEqual((record["status"], record["changed"]), ("applied", False))
+        self.assertEqual(record["restarted"], ["xray-ha", "blackbox-exporter"])
+        self.assertIn(("alice", alice), self.probe.logins)
+        self.request("abcdefgh-2", "enable", "alice")  # now known: nothing restarts
+        self.assertEqual(self.run_applier(), 0)
+        self.assertEqual(self.status("abcdefgh-2")["restarted"], [])
+        self.assertEqual(len(self.docker.restarts()), 1)
+
+    def test_apply_sequence_increases_across_runs(self):
+        self.request("abcdefgh-1", "add", "carol")
+        self.assertEqual(self.run_applier(), 0)
+        self.request("abcdefgh-2", "rotate", "carol")
+        self.assertEqual(self.run_applier(), 0)
+        first, second = self.status("abcdefgh-1")["applied_seq"], self.status("abcdefgh-2")["applied_seq"]
+        self.assertGreater(second, first)
+        self.assertEqual(json.loads((self.spool.root / ap.SEQUENCE_FILE).read_text()), {"last": second})
+        (self.spool.root / ap.SEQUENCE_FILE).unlink()  # lost: continues from the statuses
+        self.request("abcdefgh-3", "remove", "carol")
+        self.assertEqual(self.run_applier(), 0)
+        self.assertGreater(self.status("abcdefgh-3")["applied_seq"], second)
+        self.request("abcdefgh-4", "add", "alice")  # refused: no sequence number
+        self.assertEqual(self.run_applier(), 0)
+        self.assertNotIn("applied_seq", self.status("abcdefgh-4"))
+
+    def test_request_target_checked_even_when_the_files_did_not_change(self):
+        self.cli_disable_without_restart()
+        self.docker.stale = True  # the restart does not take the config: alice still gets through
+        self.assertEqual(self.run_applier(), 0)
+        record = self.status("abcdefgh-2")
+        self.assertEqual((record["status"], record["stage"], record["restored"]), ("failed", "verify", True))
+        self.assertIn("alice: expected 407, got 204", record["error"])
+
+
 class FailureTest(_Base):
     def run_failing(self, stage, restored=True):
         before = self.files()
+        applied = (self.base / pa.APPLIED_FILE).read_text()
         alice = self.passwords()["alice"]
         self.request("abcdefgh-1", "disable", "alice")
         self.request("abcdefgh-2", "add", "carol")
@@ -499,7 +592,7 @@ class FailureTest(_Base):
         self.assertEqual(self.docker.ha_users["alice"], alice)
         self.assertEqual(os.listdir(self.spool.results), [])
         self.assertFalse((self.base / ap.BACKUP_DIR).exists())
-        self.assertFalse((self.base / pa.APPLIED_FILE).exists())
+        self.assertEqual((self.base / pa.APPLIED_FILE).read_text(), applied)
         self.assert_no_leaks()
         return before
 
@@ -522,6 +615,39 @@ class FailureTest(_Base):
         self.docker.image = "teddysun/xray:latest"
         self.run_failing("test")
         self.assertEqual(self.docker.restarts(), [])
+
+    def raw_auth_on(self):
+        accounts = pa.Accounts(self.base)
+        accounts.raw_auth = True
+        accounts.save()
+        pa.render(accounts)
+        self.mark_applied()
+
+    def test_proxy_container_on_an_older_image_refused(self):
+        self.raw_auth_on()
+        self.docker.containers["xray-" + PROXY] = OLD_IMAGE_ID  # the Compose file changed, the container was restarted
+        self.run_failing("precheck")
+        self.assertIn(f"xray-{PROXY} runs another image than {IMAGE}: recreate it with docker compose up -d",
+                      self.status("abcdefgh-1")["error"])
+        self.assertEqual(self.docker.restarts(), [])
+
+    def test_proxy_configured_with_another_image_refused(self):
+        self.raw_auth_on()
+        self.docker.proxy_image = "teddysun/xray:latest"
+        self.run_failing("precheck")
+        self.assertIn(f"xray-{PROXY} is configured with teddysun/xray:latest", self.status("abcdefgh-1")["error"])
+        self.assertEqual(self.docker.restarts(), [])
+
+    def test_ha_container_on_an_older_image_refused(self):
+        self.docker.containers["xray-ha"] = OLD_IMAGE_ID
+        self.run_failing("precheck")
+        self.assertEqual(self.docker.restarts(), [])
+
+    def test_proxy_not_restarted_is_not_checked(self):
+        self.docker.containers["xray-" + PROXY] = OLD_IMAGE_ID  # raw auth off: only xray-ha restarts
+        self.request("abcdefgh-1", "disable", "alice")
+        self.assertEqual(self.run_applier(), 0)
+        self.assertEqual(self.status("abcdefgh-1")["status"], "applied")
 
     def test_ha_entry_not_running(self):
         self.docker.running.discard("xray-ha")
@@ -599,8 +725,9 @@ class FailureTest(_Base):
             with self.assertRaises(Crash):
                 self.run_applier()
         self.assertEqual(self.status("abcdefgh-1")["status"], "applied")
+        seq = self.status("abcdefgh-1")["applied_seq"]
         self.assertEqual(self.run_applier(), 0)
-        self.assertEqual(self.status("abcdefgh-1")["status"], "applied")
+        self.assertEqual((self.status("abcdefgh-1")["status"], self.status("abcdefgh-1")["applied_seq"]), ("applied", seq))
         self.assertFalse(pa.Accounts(self.base).enabled("alice"))
         self.assertNotIn("alice", self.docker.ha_users)
         self.assertFalse((self.base / ap.BACKUP_DIR).exists())
@@ -617,6 +744,8 @@ class FailureTest(_Base):
         self.assertEqual(self.run_applier(), 0)
         first, second = self.status("abcdefgh-1"), self.status("abcdefgh-2")
         self.assertEqual((first["status"], first["result"]), ("applied", False))
+        last = json.loads((self.spool.root / ap.SEQUENCE_FILE).read_text())["last"]
+        self.assertEqual((first["applied_seq"], second["applied_seq"]), (last, last))  # from the manifest
         self.assertEqual((second["status"], second["restarted"]), ("applied", ["xray-ha"]))
         self.assertNotIn("result", second)
         self.assertIn("carol", self.passwords())

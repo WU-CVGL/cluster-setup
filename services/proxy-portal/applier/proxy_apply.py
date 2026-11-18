@@ -56,6 +56,7 @@ HA_SERVICE = "xray-ha"
 BLACKBOX_SERVICE = "blackbox-exporter"
 BACKUP_DIR = Path("proxy-accounts/.apply-backup")
 MANIFEST = "manifest.json"
+SEQUENCE_FILE = "sequence.json"  # in the spool: the last apply sequence number
 
 Run = Callable[[Sequence[str], Optional[str], float], Tuple[int, str, str]]
 Probe = Callable[[str, str], Tuple[str, Optional[int]]]
@@ -258,6 +259,18 @@ class Spool:
         assert ID_RE.fullmatch(request_id)
         return self.status / f"{request_id}.json"
 
+    def max_sequence(self) -> int:
+        """The highest applied_seq in the status files, 0 when there is none."""
+        last = 0
+        for path in self.status.glob("*.json"):
+            try:
+                value = json.loads(path.read_text(encoding="utf-8")).get("applied_seq")
+            except (OSError, ValueError, AttributeError):
+                continue
+            if isinstance(value, int) and not isinstance(value, bool):
+                last = max(last, value)
+        return last
+
     def write_status(self, request_id: str, record: dict) -> None:
         write_public(self.status_path(request_id), json.dumps(dict(record, updated_at=now_iso()), indent=2) + "\n")
 
@@ -341,14 +354,38 @@ class Compose:
     def running(self) -> Set[str]:
         return set(self._ok("precheck", "ps", "--services", "--status", "running").split())
 
-    def pinned_image(self, service: str) -> str:
+    def image(self, stage: str, service: str) -> str:
+        """The image the Compose file gives service."""
         try:
-            image = json.loads(self._ok("test", "config", "--format", "json"))["services"][service]["image"]
+            image = json.loads(self._ok(stage, "config", "--format", "json"))["services"][service]["image"]
         except (ValueError, KeyError, TypeError):
-            raise ApplyError("test", f"no image for {service} in the compose config")
+            raise ApplyError(stage, f"no image for {service} in the compose config")
+        if not isinstance(image, str):
+            raise ApplyError(stage, f"no image for {service} in the compose config")
+        return image
+
+    def pinned_image(self, service: str) -> str:
+        image = self.image("test", service)
         if "@sha256:" not in image:
             raise ApplyError("test", f"the image of {service} is not pinned by digest: {image}")
         return image
+
+    def image_id(self, image: str) -> str:
+        """The local image ID of an image reference."""
+        rc, out, err = self.run(["docker", "image", "inspect", "--format", "{{.Id}}", image], None, 60)
+        if rc != 0 or not out.strip():
+            raise ApplyError("precheck", f"image {image} is not on this host: {err.strip()[-200:]}")
+        return out.strip()
+
+    def container_images(self, service: str) -> List[str]:
+        """The image IDs that service's containers were created from."""
+        ids = self._ok("precheck", "ps", "-q", service).split()
+        if not ids:
+            return []
+        rc, out, err = self.run(["docker", "inspect", "--format", "{{.Image}}"] + ids, None, 60)
+        if rc != 0:
+            raise ApplyError("precheck", f"docker inspect exited {rc}: {err.strip()[-300:]}")
+        return out.split()
 
     def restart(self, services: Sequence[str]) -> None:
         self._ok("restart", "restart", *services, timeout=300)
@@ -506,6 +543,7 @@ class Applier:
 
         try:
             accounts = pa.Accounts(self.base)
+            before = pa.Accounts(self.base)
         except (pa.AccountsError, OSError, ValueError) as e:
             for record in records.values():
                 record.update(status="failed", stage="accounts", error=str(e), restored=True)
@@ -534,21 +572,28 @@ class Applier:
         try:
             accounts_text = accounts.text()
             try:
-                outputs = pa.render_outputs(accounts)
+                files = pa.render_files(accounts)
+                known = self.running_known(before)
             except (pa.AccountsError, OSError, ValueError, KeyError) as e:
                 raise ApplyError("render", str(e))
-            if not changed_any and not outputs:
+            outputs = [(path, text) for path, text in files
+                       if not (path.exists() and path.read_text(encoding="utf-8") == text)]
+            if not changed_any and not outputs and known:
+                seq = self.next_sequence()
                 for request, _ in active:
-                    records[request["id"]].update(status="applied", restarted=[])
+                    records[request["id"]].update(status="applied", restarted=[], applied_seq=seq)
                 return self.finish(records, {}, active)
+            # Unless the running services are known to hold the files, every rendered file counts as changed
+            changed = outputs if known else files
             image = self.compose.pinned_image(HA_SERVICE)
-            for path, text in outputs:
+            for path, text in changed:
                 if path.name == "config.json":
                     ok, output = self.compose.xray_test(image, text)
                     if not ok:
                         last = ([line for line in output.splitlines() if line.strip()] or ["no output"])[-1]
                         raise ApplyError("test", f"{path.relative_to(self.base)}: {scrub(last, secrets_seen)}")
-            restart = self.restart_set(accounts, outputs)
+            restart = self.restart_set(accounts, changed)
+            self.check_images(image, restart)
             try:
                 snapshot = self.backup(outputs, accounts_text, restart, [r["id"] for r, _ in active])
             except OSError as e:
@@ -562,16 +607,20 @@ class Applier:
             log(f"files replaced; restarting {' '.join(restart)}")
             self.compose.restart(restart)
             accept, refuse = self.expectations(old_passwords, old_enabled, accounts)
+            accept, refuse = merge_logins((accept, refuse),
+                                          self.target_checks([r for r, _ in active], old_passwords, accounts))
             outcome, detail = self.verify(accept, refuse)
             if outcome == "failed":
                 raise ApplyError("verify", detail)
             status = "applied" if outcome == "ok" else "unconfirmed"
-            for request, _ in active:
-                records[request["id"]].update(status=status, restarted=restart)
-                if status == "unconfirmed":
-                    records[request["id"]].update(stage="verify", error=detail)
+            render_sha256 = pa.render_sha256(self.base, files)
             try:
-                self.commit(records, list(passwords), accounts_text)
+                seq = self.next_sequence()
+                for request, _ in active:
+                    records[request["id"]].update(status=status, restarted=restart, applied_seq=seq)
+                    if status == "unconfirmed":
+                        records[request["id"]].update(stage="verify", error=detail)
+                self.commit(records, list(passwords), accounts_text, render_sha256)
             except OSError as e:
                 raise ApplyError("commit", f"{type(e).__name__}: {e.strerror or e}")
         except ApplyError as e:
@@ -582,24 +631,76 @@ class Applier:
                 restored = self.rollback(snapshot, restart)
             for request, _ in active:
                 records[request["id"]].pop("restarted", None)
+                records[request["id"]].pop("applied_seq", None)
                 records[request["id"]].update(status="failed", stage=e.stage, error=error, restored=restored)
             return self.finish(records, {}, active)
 
-        self.write_applied(pa.sha256_text(accounts_text), now_iso())
+        self.write_applied(pa.sha256_text(accounts_text), render_sha256, now_iso())
         log(f"{status}{': ' + detail if detail else ''}")
         return self.finish(records, passwords, active)
 
-    def commit(self, records: Dict[str, dict], result_ids: List[str], accounts_text: str) -> None:
+    def commit(self, records: Dict[str, dict], result_ids: List[str], accounts_text: str, render_sha256: str) -> None:
         """Mark the backup as committed: from here on, an interrupted apply is finished, not rolled back."""
         manifest = self.base / BACKUP_DIR / MANIFEST
         data = json.loads(manifest.read_text(encoding="utf-8"))
         data.update(committed=True, records=list(records.values()), results=result_ids,
-                    accounts_sha256=pa.sha256_text(accounts_text), applied_at=now_iso())
+                    accounts_sha256=pa.sha256_text(accounts_text), render_sha256=render_sha256, applied_at=now_iso())
         pa.write_private(manifest, json.dumps(data) + "\n")
 
-    def write_applied(self, accounts_sha256: str, applied_at: str) -> None:
+    def write_applied(self, accounts_sha256: str, render_sha256: Optional[str], applied_at: str) -> None:
+        """What the running services hold: the accounts file and the rendered files of the last verified apply."""
         pa.write_private(self.base / pa.APPLIED_FILE, json.dumps(
-            {"accounts_sha256": accounts_sha256, "applied_at": applied_at}, indent=2) + "\n")
+            {"accounts_sha256": accounts_sha256, "render_sha256": render_sha256, "applied_at": applied_at},
+            indent=2) + "\n")
+
+    def running_known(self, accounts: pa.Accounts) -> bool:
+        """
+        True when the running services are known to hold the accounts file as it is: the last apply recorded this
+        file and these rendered files (applied.json), and the files on disk equal a render of it. A change made
+        with proxy_accounts.py and rendered without the restart, or a missing applied.json, makes it False.
+        """
+        try:
+            applied = json.loads((self.base / pa.APPLIED_FILE).read_text(encoding="utf-8"))
+        except (OSError, ValueError):
+            return False
+        if not isinstance(applied, dict) or applied.get("accounts_sha256") != pa.sha256_text(accounts.text()):
+            return False
+        files = pa.render_files(accounts)
+        if any(not (path.exists() and path.read_text(encoding="utf-8") == text) for path, text in files):
+            return False
+        return applied.get("render_sha256") == pa.render_sha256(self.base, files)
+
+    def next_sequence(self) -> int:
+        """
+        The next apply sequence number: increases with every batch that goes live, across runs. Kept in
+        <spool>/sequence.json; without it, it continues from the highest in the status files.
+        """
+        path = self.spool.root / SEQUENCE_FILE
+        try:
+            last = int(json.loads(path.read_text(encoding="utf-8"))["last"])
+        except (OSError, ValueError, KeyError, TypeError):
+            last = self.spool.max_sequence()
+        seq = last + 1
+        write_public(path, json.dumps({"last": seq}) + "\n")
+        return seq
+
+    def check_images(self, image: str, restart: List[str]) -> None:
+        """
+        Every Xray service about to restart must be configured with the image the configs were tested with and run
+        a container created from it: a restart keeps a container's image, so an older Xray that ignores the
+        inbounds' users would accept anyone.
+        """
+        expected = None
+        for service in restart:
+            if not service.startswith("xray-"):
+                continue
+            configured = self.compose.image("precheck", service)
+            if configured != image:
+                raise ApplyError("precheck", f"{service} is configured with {configured}, not {image}")
+            expected = expected or self.compose.image_id(image)
+            if any(running != expected for running in self.compose.container_images(service)):
+                raise ApplyError("precheck", f"{service} runs another image than {image}: recreate it with "
+                                             f"docker compose up -d {service}")
 
     def finish(self, records: Dict[str, dict], passwords: Dict[str, str],
                active: List[Tuple[Dict[str, str], int]]) -> int:
@@ -655,6 +756,25 @@ class Applier:
         if self.base / pa.BLACKBOX_CONFIG in changed and BLACKBOX_SERVICE in running:
             restart.append(BLACKBOX_SERVICE)
         return restart
+
+    @staticmethod
+    def target_checks(requests: List[Dict[str, str]], old_passwords: Dict[str, str], accounts: pa.Accounts):
+        """
+        (accept, refuse) for each request's own account, from the state it asks for rather than from what the
+        batch changed, so a request that found its account already in that state is still checked: an enabled
+        account passes, a disabled one is refused, and a removed account's or replaced password is refused.
+        """
+        accept, refuse = [], []
+        for request in requests:
+            name = request["username"]
+            new, old = accounts.accounts.get(name), old_passwords.get(name)
+            if accounts.enabled(name):
+                accept.append((name, name, new))
+            elif new is not None:
+                refuse.append((name, name, new))
+            if old is not None and old != new:
+                refuse.append((name if new is None else f"{name} (previous password)", name, old))
+        return accept, refuse
 
     @staticmethod
     def expectations(old_passwords: Dict[str, str], old_enabled: Set[str], accounts: pa.Accounts):
@@ -801,7 +921,9 @@ class Applier:
     def finish_committed(self, data: dict) -> None:
         """The interrupted apply was verified and live: write what it had not written yet, restart nothing."""
         log("finishing an interrupted apply that was already live")
-        self.write_applied(str(data["accounts_sha256"]), str(data["applied_at"]))
+        render_sha256 = data.get("render_sha256")
+        self.write_applied(str(data["accounts_sha256"]), render_sha256 if isinstance(render_sha256, str) else None,
+                           str(data["applied_at"]))
         results = {i for i in data.get("results", []) if isinstance(i, str)}
         for record in data["records"]:
             if not isinstance(record, dict) or not ID_RE.fullmatch(str(record.get("id", ""))):
@@ -820,6 +942,18 @@ class Applier:
             if record.get("status") == "applying":
                 record.update(status="failed", stage="interrupted", error="the apply was interrupted", restored=True)
                 self.spool.write_status(path.stem, record)
+
+
+def merge_logins(*pairs):
+    """Join (accept, refuse) lists, each login (user and password) once, the first label kept."""
+    accept, refuse, seen = [], [], set()
+    for which, target in ((0, accept), (1, refuse)):
+        for pair in pairs:
+            for login in pair[which]:
+                if (which,) + tuple(login[1:]) not in seen:
+                    seen.add((which,) + tuple(login[1:]))
+                    target.append(login)
+    return accept, refuse
 
 
 def scrub(text: str, secrets: Sequence[str]) -> str:
