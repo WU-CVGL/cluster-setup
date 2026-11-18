@@ -302,7 +302,8 @@ class UsersPageTest(PortalTestCase):
         self.assertEqual(rows["alice"]["actions"], [])
         self.assertEqual(rows["frank"]["actions"], [])
         self.assertEqual(data["service_accounts"], [])
-        self.assertContains(self.client.get("/admin/users"), "The accounts status is unavailable")
+        self.assertContains(self.client.get("/admin/users"),
+                            "Account information is unavailable right now, so no change can be requested.")
 
     def test_actions_create_request_files(self):
         cases = (("add", "frank", None), ("rotate", "alice", "alice"), ("disable", "alice", "alice"),

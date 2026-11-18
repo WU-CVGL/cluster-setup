@@ -75,7 +75,8 @@ def _current(username):
 def _text(row):
     """lifecycle.describe, but what a user can act on where the admins' text sends them to the applier."""
     if row.state == "failed" and row.stage != "request" and row.restored is False:
-        return _("Failed, and the rollback did not finish: the proxies may be down. Tell an admin.")
+        return _("Failed, and the previous settings could not be fully restored: the proxies may be down. Tell an "
+                 "admin.")
     return lifecycle.describe(row)
 
 
@@ -89,10 +90,11 @@ def password_text(state, row):
                  "an admin.")
     again = {
         "shown": _("The password was shown once; the portal does not keep it. To get a new one, reset it again."),
-        "expired": _("The one-time password expired: results are deleted after 10 minutes. To get a new one, reset "
-                     "it again."),
+        "expired": _("The one-time password expired: it is kept for 10 minutes only. To get a new one, reset it "
+                     "again."),
         "missing": _("No password was handed out for this reset. To get a new one, reset it again."),
-        "unreadable": _("The one-time result could not be read and was deleted. To get a new one, reset it again."),
+        "unreadable": _("The one-time password could not be read and was deleted. To get a new one, reset it "
+                        "again."),
     }
     return again.get(state) or lifecycle.password_text(state, row)
 
@@ -119,7 +121,7 @@ def page_context(username):
         # a reset of the user's own still running is resumed, not explained
         "reason": refused[1] if refused and not (code == "pending" and current) else None,
         "current": as_json(current, username) if current else None,
-        "restart": accounts.restart_text("rotate", account, status) if account else "",
+        "restart": accounts.restart_text("rotate", account, status, own=True) if account else "",
     }
 
 

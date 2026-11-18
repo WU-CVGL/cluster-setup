@@ -9,10 +9,10 @@
 {% include "portal/admin/_nav.html" %}
 
 {% if not status.available %}
-<div class="notice bad" role="status"><p>{% translate "The accounts status is unavailable, so no change can be requested." %}</p></div>
+<div class="notice bad" role="status"><p>{% translate "Account information is unavailable right now, so no change can be requested." %}</p></div>
 {% else %}
 {% if status.stale %}<div class="notice warn" role="status"><p>{% translate "The account information has not been refreshed for a while: the service that applies account changes may not be running." %}</p></div>{% endif %}
-{% if status.unapplied_changes %}<div class="notice warn" role="status"><p>{% translate "An account change made outside the portal has not been applied yet: it may not be live." %}</p></div>{% elif status.unapplied_changes is None %}<div class="notice warn" role="status"><p>{% translate "No apply is recorded since the last account change made outside the portal: it may not be live yet." %}</p></div>{% endif %}
+{% if status.unapplied_changes %}<div class="notice warn" role="status"><p>{% translate "An account change made outside the portal has not been applied yet: it may not be live." %}</p></div>{% elif status.unapplied_changes is None %}<div class="notice warn" role="status"><p>{% translate "An account change made outside the portal may not be applied yet." %}</p></div>{% endif %}
 <div class="notice"><p>{{ raw_auth_text }}</p><p>{% translate "Every change restarts the affected proxies: established connections through them drop." %}</p></div>
 {% endif %}
 
@@ -29,12 +29,12 @@
   </div>
   <nav class="subnav" aria-label="{% translate 'Filters' %}">
     <a href="{% url 'admin_users' %}{% if query %}?q={{ query|urlencode }}{% endif %}"{% if not filter %} aria-current="page"{% endif %}>{% translate "All" %}</a>
-    {% for key, n in filters %}<a href="{% url 'admin_users' %}?filter={{ key }}{% if query %}&amp;q={{ query|urlencode }}{% endif %}"{% if filter == key %} aria-current="page"{% endif %}>{% if key == 'no-account' %}{% translate "No proxy account" %}{% elif key == 'disabled' %}{% translate "Proxy access off" %}{% elif key == 'private' %}{% translate "Private access" %}{% else %}{% translate "Inactive in Determined, proxy access on" %}{% endif %} · {{ n }}</a>{% endfor %}
+    {% for key, n in filters %}<a href="{% url 'admin_users' %}?filter={{ key }}{% if query %}&amp;q={{ query|urlencode }}{% endif %}"{% if filter == key %} aria-current="page"{% endif %}>{% if key == 'no-account' %}{% translate "No proxy account" %}{% elif key == 'disabled' %}{% translate "Proxy access off" %}{% elif key == 'private' %}{% translate "Admin account" %}{% else %}{% translate "Inactive in Determined, proxy access on" %}{% endif %} · {{ n }}</a>{% endfor %}
   </nav>
   <div class="card table-scroll">
     <table class="table">
       <caption class="sr-only">{% translate "Users" %}</caption>
-      <thead><tr><th scope="col">{% translate "User" %}</th><th scope="col">{% translate "Determined" %}</th><th scope="col">{% translate "Proxy account" %}</th><th scope="col">{% translate "Private access" %}</th><th scope="col">{% translate "Pending request" %}</th><th scope="col">{% translate "Actions" %}</th></tr></thead>
+      <thead><tr><th scope="col">{% translate "User" %}</th><th scope="col">{% translate "Determined" %}</th><th scope="col">{% translate "Proxy account" %}</th><th scope="col">{% translate "Admin account" %}</th><th scope="col">{% translate "Pending request" %}</th><th scope="col">{% translate "Actions" %}</th></tr></thead>
       <tbody>
       {% for u in users %}
       <tr>

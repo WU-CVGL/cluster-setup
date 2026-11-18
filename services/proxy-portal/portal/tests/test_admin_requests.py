@@ -223,7 +223,7 @@ class AccountsListTest(PortalTestCase):
         self.assertContains(page, "uses svc-docker-&lt;node&gt;.")
 
     def test_applied_state_notice(self):
-        unknown = "No apply is recorded since the last account change made outside the portal"
+        unknown = "An account change made outside the portal may not be applied yet."
         changed = "An account change made outside the portal has not been applied yet"
         for value, shown in ((None, unknown), (True, changed), (False, None)):
             self.write_status(lambda d: d.update(unapplied_changes=value))
@@ -268,7 +268,8 @@ class LifecycleTest(PortalTestCase):
         cases = [
             ("disable", None, "pending", "the old access still works"),
             ("disable", {"status": "applying"}, "applying",
-             "The revoke is not confirmed yet: the old access may still work"),
+             "Being applied; the affected proxies restart. Until the change is confirmed, the old access may still "
+             "work."),
             ("enable", {"status": "applying"}, "applying", "Being applied"),
             ("disable", {"status": "applied", "changed": True, "restarted": ["xray-ha"]}, "applied",
              "Applied and verified."),
@@ -284,12 +285,14 @@ class LifecycleTest(PortalTestCase):
              "the previous state is back: the account is unchanged. The affected proxies restarted: "
              "established connections dropped."),
             ("enable", {"status": "failed", "stage": "verify", "error": "x", "restored": False}, "failed",
-             "the rollback did not finish"),
+             "Failed, and the previous settings could not be fully restored: the affected proxies may be down or in a "
+             "mixed state."),
             ("enable", {"status": "failed", "stage": "request", "error": "account exists", "restored": True},
              "failed", "The request was refused. Nothing changed."),
             ("disable", {"status": "unconfirmed", "stage": "verify", "error": "no 204", "restarted": ["xray-ha"]},
              "unconfirmed", "the proxies refuse the old access (verified)"),
-            ("enable", {"status": "unconfirmed", "stage": "verify"}, "unconfirmed", "Live, but not confirmed yet"),
+            ("enable", {"status": "unconfirmed", "stage": "verify"}, "unconfirmed",
+             "Live, but not confirmed yet: no proxy answered the new login in time (the proxies may be down)."),
             ("rotate", {"status": "unconfirmed", "stage": "verify", "result": True}, "unconfirmed",
              "the old password is refused (verified)"),
         ]
@@ -315,7 +318,7 @@ class LifecycleTest(PortalTestCase):
     def test_unfinished_rollback_is_read_again_until_its_outcome_is_known(self):
         request_id = self.request("disable", "alice")
         self.status(request_id, status="failed", stage="verify", error="no 407", restored=False)
-        self.assertIn("the rollback did not finish", self.get(request_id)["text"])
+        self.assertIn("the previous settings could not be fully restored", self.get(request_id)["text"])
         # the applier's next run restores the files and the entries: the same status file, restored now
         self.status(request_id, status="failed", stage="interrupted", error="the apply was interrupted",
                     restored=True, updated_at="2026-01-01T00:05:00Z")

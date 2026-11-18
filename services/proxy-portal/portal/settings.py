@@ -78,6 +78,7 @@ MIDDLEWARE = [
 ]
 
 ROOT_URLCONF = "portal.urls"
+CSRF_FAILURE_VIEW = "portal.views.csrf_failure"
 WSGI_APPLICATION = "portal.wsgi.application"
 
 TEMPLATES = [

@@ -116,6 +116,11 @@ def level(row):
     return {"pending": "info", "applying": "info", "applied": "ok", "unconfirmed": "warn"}.get(row.state, "bad")
 
 
+def sentences(first, second):
+    """Two translated sentences as one text: a space between them in English, none after a Chinese full stop."""
+    return _("%(first)s %(second)s") % {"first": first, "second": second}
+
+
 def describe(row, now=None):
     """One plain sentence or two on what the state means for the account's access."""
     now = now or timezone.now()
@@ -125,11 +130,11 @@ def describe(row, now=None):
             else _("Waiting to be applied.")
         waited = (now - row.requested_at).total_seconds()
         if waited > settings.REQUEST_PENDING_WARN:
-            text += " " + _("Not started after %(n)d minutes: the service that applies account changes may not be "
-                            "running.") % {"n": waited // 60}
+            text = sentences(text, _("Not started after %(n)d minutes: the service that applies account changes may "
+                                     "not be running.") % {"n": waited // 60})
         return text
     if row.state == "applying":
-        return _("Being applied; the affected proxies restart. The revoke is not confirmed yet: the old access may "
+        return _("Being applied; the affected proxies restart. Until the change is confirmed, the old access may "
                  "still work.") if revoke else _("Being applied; the affected proxies restart.")
     if row.state == "applied":
         if row.changed is False and row.restarted:
@@ -145,18 +150,18 @@ def describe(row, now=None):
         if row.op == "rotate":
             return _("Live: the old password is refused (verified). The new password is not confirmed yet: no "
                      "proxy answered in time.")
-        return _("Live, but not confirmed yet: no proxy answered the new login in time (the proxies or the check "
-                 "target may be down).")
+        return _("Live, but not confirmed yet: no proxy answered the new login in time (the proxies may be "
+                 "down).")
     # failed
     if row.stage == "request":
         return _("The request was refused. Nothing changed.")
     if row.restored is False:
-        return _("Failed, and the rollback did not finish: the affected proxies may be down or in a mixed state. "
-                 "Check the log of the proxy-apply service (journalctl -u proxy-apply).")
+        return _("Failed, and the previous settings could not be fully restored: the affected proxies may be down or "
+                 "in a mixed state. Check the log of the proxy-apply service (journalctl -u proxy-apply).")
     text = _("Failed; the previous state is back: the account is unchanged and the old access still works.") \
         if revoke else _("Failed; the previous state is back: the account is unchanged.")
     if row.stage in ROLLBACK_RESTARTS:
-        text += " " + _("The affected proxies restarted: established connections dropped.")
+        text = sentences(text, _("The affected proxies restarted: established connections dropped."))
     return text
 
 
@@ -247,11 +252,11 @@ def password_text(state, row):
         "other": _("Only %(admin)s, who made this request, can see the new password.") % {"admin": row.requested_by},
         "shown": _("The password was shown once; the portal does not keep it. For a new one, request a new "
                    "password."),
-        "expired": _("The one-time password expired: results are deleted after 10 minutes. For a new one, request "
+        "expired": _("The one-time password expired: it is kept for 10 minutes only. For a new one, request "
                      "a new password."),
         "superseded": _superseded_text(row) if state == "superseded" else "",
         "missing": _("No password was handed out for this request. For a new one, request a new password."),
-        "unreadable": _("The one-time result could not be read and was deleted. For a new one, request a new "
+        "unreadable": _("The one-time password could not be read and was deleted. For a new one, request a new "
                         "password."),
         "none": _("No password: the change was not applied."),
     }.get(state, "")
