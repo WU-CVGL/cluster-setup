@@ -294,7 +294,8 @@ def render_blackbox(example: str, accounts: Accounts) -> str:
 def render_files(accounts: Accounts) -> List[Tuple[Path, str]]:
     """
     Render every config in memory: the (path, text) of each file that render keeps, changed or not. A proxy
-    config that needs no change keeps its text; one left alone (raw auth off, no logins) is not listed.
+    config that needs no change keeps its text. One left alone (raw auth off, no logins) is listed too: it may
+    still run with logins, so the applier's full apply restarts it.
     """
     base = accounts.base_dir
     needed = [MONITOR] + ([RELAY] if accounts.raw_auth else [])
@@ -312,6 +313,7 @@ def render_files(accounts: Accounts) -> List[Tuple[Path, str]]:
         old = json.loads(old_text)
         if raw_users is None and not any(AUTH_KEYS & set(i.get("settings") or {}) for i in old.get("inbounds") or []
                                          if i.get("protocol") in ("http", "socks")):
+            outputs.append((path, old_text))
             continue  # raw auth off and no accounts there: leave the proxy's config as it is
         new = json.loads(json.dumps(old))
         try:
