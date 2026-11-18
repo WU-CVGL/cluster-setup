@@ -135,6 +135,9 @@ scrape_configs:
           - "xray-usca6-bwh-1tb-exporter:9550"
           - "xray-jpty1-bwh-2tb-exporter:9550"
           - "xray-miyaip-jp-01_relay_jpty1-bwh-2tb-exporter:9550"
+          - "xray-miyaip-jp-02_relay_jpty1-bwh-2tb-exporter:9550"
+          - "xray-miyaip-jp-02_relay_usca5-bwh-sla-2tb-exporter:9550"
+          - "xray-miyaip-us-01_relay_usca5-bwh-sla-2tb-exporter:9550"
           - "xray-miyaip-jp-01_relay_usca5-bwh-sla-2tb-exporter:9550"
           - "xray-miyaip-uk-01_relay_usca5-bwh-sla-2tb-exporter:9550"
           - "xray-miyaip-uk-01_relay_jpty1-bwh-2tb-exporter:9550"
@@ -196,6 +199,12 @@ scrape_configs:
           - "miyaip-jp-01_relay_usca5-bwh-sla-2tb_socks"
           - "miyaip-jp-01_relay_jpty1-bwh-2tb_http"
           - "miyaip-jp-01_relay_jpty1-bwh-2tb_socks"
+          - "miyaip-jp-02_relay_jpty1-bwh-2tb_http"
+          - "miyaip-jp-02_relay_jpty1-bwh-2tb_socks"
+          - "miyaip-jp-02_relay_usca5-bwh-sla-2tb_http"
+          - "miyaip-jp-02_relay_usca5-bwh-sla-2tb_socks"
+          - "miyaip-us-01_relay_usca5-bwh-sla-2tb_http"
+          - "miyaip-us-01_relay_usca5-bwh-sla-2tb_socks"
         labels:
           kind: raw
           pool: ha-private

@@ -228,3 +228,63 @@ modules:
       valid_status_codes:
       - 204
       preferred_ip_protocol: ip4
+  miyaip-jp-02_relay_jpty1-bwh-2tb_http:
+    prober: http
+    timeout: 8s
+    http:
+      proxy_url: http://svc-monitor:PASSWORD@xray-miyaip-jp-02_relay_jpty1-bwh-2tb:8889
+      skip_resolve_phase_with_proxy: true
+      follow_redirects: false
+      valid_status_codes:
+      - 204
+      preferred_ip_protocol: ip4
+  miyaip-jp-02_relay_jpty1-bwh-2tb_socks:
+    prober: http
+    timeout: 8s
+    http:
+      proxy_url: socks5://svc-monitor:PASSWORD@xray-miyaip-jp-02_relay_jpty1-bwh-2tb:1089
+      skip_resolve_phase_with_proxy: true
+      follow_redirects: false
+      valid_status_codes:
+      - 204
+      preferred_ip_protocol: ip4
+  miyaip-jp-02_relay_usca5-bwh-sla-2tb_http:
+    prober: http
+    timeout: 8s
+    http:
+      proxy_url: http://svc-monitor:PASSWORD@xray-miyaip-jp-02_relay_usca5-bwh-sla-2tb:8889
+      skip_resolve_phase_with_proxy: true
+      follow_redirects: false
+      valid_status_codes:
+      - 204
+      preferred_ip_protocol: ip4
+  miyaip-jp-02_relay_usca5-bwh-sla-2tb_socks:
+    prober: http
+    timeout: 8s
+    http:
+      proxy_url: socks5://svc-monitor:PASSWORD@xray-miyaip-jp-02_relay_usca5-bwh-sla-2tb:1089
+      skip_resolve_phase_with_proxy: true
+      follow_redirects: false
+      valid_status_codes:
+      - 204
+      preferred_ip_protocol: ip4
+  miyaip-us-01_relay_usca5-bwh-sla-2tb_http:
+    prober: http
+    timeout: 8s
+    http:
+      proxy_url: http://svc-monitor:PASSWORD@xray-miyaip-us-01_relay_usca5-bwh-sla-2tb:8889
+      skip_resolve_phase_with_proxy: true
+      follow_redirects: false
+      valid_status_codes:
+      - 204
+      preferred_ip_protocol: ip4
+  miyaip-us-01_relay_usca5-bwh-sla-2tb_socks:
+    prober: http
+    timeout: 8s
+    http:
+      proxy_url: socks5://svc-monitor:PASSWORD@xray-miyaip-us-01_relay_usca5-bwh-sla-2tb:1089
+      skip_resolve_phase_with_proxy: true
+      follow_redirects: false
+      valid_status_codes:
+      - 204
+      preferred_ip_protocol: ip4
