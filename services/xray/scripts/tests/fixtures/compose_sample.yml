@@ -56,7 +56,7 @@ services:
       - "5005:5005"
 
   xray-usca5-bwh-sla-1tb:
-    image: teddysun/xray:latest
+    image: teddysun/xray:26.11.9@sha256:b3e117b834878d1e12f91e7b16270db104c2f0e5f0effbc0ece9088c473b5393
     restart: unless-stopped
     environment:
       TZ: Asia/Shanghai
@@ -83,7 +83,7 @@ services:
       - 9550
 
   xray-miyaip-jp-01_relay_jpty1-bwh-2tb:
-    image: teddysun/xray:latest
+    image: teddysun/xray:26.11.9@sha256:b3e117b834878d1e12f91e7b16270db104c2f0e5f0effbc0ece9088c473b5393
     restart: unless-stopped
     environment:
       TZ: Asia/Shanghai

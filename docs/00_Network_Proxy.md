@@ -49,7 +49,7 @@ Each service looks like this (the full file is [`services/docker-compose.yml`](.
 ```yaml
 services:
   xray-usca5-bwh-sla-1tb:
-    image: teddysun/xray:latest
+    image: teddysun/xray:26.11.9@sha256:b3e117b834878d1e12f91e7b16270db104c2f0e5f0effbc0ece9088c473b5393
     restart: unless-stopped
     environment:
       TZ: Asia/Shanghai
@@ -191,8 +191,9 @@ The totals are Prometheus `increase()` over the selected range, extrapolated to 
 
 By default the proxies' own entries (the *raw* entries, hence `raw-auth`) require no account. Turn accounts on there only once every client of a proxy sends one, because a client without one is refused:
 
-1. Move the clients to the HA entry with their accounts, and the Docker daemons to their `svc-docker-<node>` accounts, one drained node at a time. A client that keeps using a proxy directly can add its account to the proxy's URL beforehand: a proxy without accounts ignores it.
-2. Turn it on and render:
+1. Make sure every proxy runs the image pinned in `docker-compose.yml`, the same version and digest as `xray-ha`. The accounts are written as the inbounds' `users`, which older Xray versions (such as 1.8.24) ignore on HTTP, so such a proxy would accept anyone. A container keeps the image it was created from: after a change to the image, recreate the proxies with `docker compose up -d`, since `docker compose restart` does not. To check one, `docker inspect --format '{{.Image}}' $(docker compose ps -q xray-<name>)` must print the same image ID as `docker image inspect --format '{{.Id}}'` on the pinned image.
+2. Move the clients to the HA entry with their accounts, and the Docker daemons to their `svc-docker-<node>` accounts, one drained node at a time. A client that keeps using a proxy directly can add its account to the proxy's URL beforehand: a proxy without accounts ignores it.
+3. Turn it on and render:
 
     ```sh
     python3 xray/scripts/proxy_accounts.py raw-auth on
@@ -200,7 +201,7 @@ By default the proxies' own entries (the *raw* entries, hence `raw-auth`) requir
     ```
 
     `render` then requires every account on the HTTP and SOCKS5 entries of every `xray/*/config/config.json`, and has the HA entry log in to the proxies as `svc-ha` and the probes as `svc-monitor`.
-3. Restart the proxies and `xray-ha` together, and reload the probes:
+4. Restart the proxies and `xray-ha` together, and reload the probes:
 
     ```sh
     docker compose restart xray-ha $(docker compose config --services | grep '^xray-' | grep -v -e exporter -e '^xray-ha$')
@@ -208,6 +209,12 @@ By default the proxies' own entries (the *raw* entries, hence `raw-auth`) requir
     ```
 
     The HA entry and the proxies must agree: the HA entry logging in to a proxy without accounts, or not logging in to a proxy with them, fails, and the HA entry fails closed until both sides have restarted.
+5. On each proxy, check that a request without an account and one with a wrong or revoked password get `407`, and one with a current account `204`:
+
+    ```sh
+    curl -s -o /dev/null -w '%{http_code}\n' -x http://127.0.0.1:<http_port> https://www.google.com/generate_204
+    curl -s -o /dev/null -w '%{http_code}\n' -x http://<user>:<old password>@127.0.0.1:<http_port> https://www.google.com/generate_204
+    ```
 
 While accounts are on, restart the proxies together with `xray-ha` after every account change. A proxy made with `create_xray_service.py` requires the accounts from its creation. `raw-auth off` followed by the same steps turns them off.
 

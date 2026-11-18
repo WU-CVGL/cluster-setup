@@ -407,7 +407,7 @@ class CreateServiceYamlTest(_TempServicesMixin, unittest.TestCase):
             '      - "80:80"\n'
             '\n'
             '  xray-a:\n'
-            '    image: teddysun/xray:latest\n'
+            '    image: teddysun/xray:26.11.9@sha256:b3e117b834878d1e12f91e7b16270db104c2f0e5f0effbc0ece9088c473b5393\n'
             '    ports:\n'
             '      - 30089:1089\n'
             '      - 38889:8889\n'
@@ -483,6 +483,29 @@ class RepoFilesYamlTest(_TempServicesMixin, unittest.TestCase):
 
 class RepoFilesRegexTest(RepoFilesYamlTest):
     use_yaml = False
+
+
+class XrayImageTest(unittest.TestCase):
+    """每个代理与 xray-ha 使用同一个固定版本和 digest 的镜像，生成器也是 (应用配置前用 xray-ha 的镜像检查)"""
+
+    def test_generator_and_repo_proxies_use_the_ha_image(self):
+        self.assertRegex(cxs.XRAY_IMAGE, r'^teddysun/xray:[0-9.]+@sha256:[0-9a-f]{64}$')
+        compose = read(REPO_SERVICES_DIR / 'docker-compose.yml')
+        images = {}
+        current = None
+        for line in compose.splitlines():
+            match = re.match(r'^  ([A-Za-z0-9._-]+):\s*$', line)
+            if match:
+                current = match.group(1)
+            match = re.match(r'^    image:\s*(\S+)\s*$', line)
+            if match and current:
+                images[current] = match.group(1)
+        self.assertEqual(images['xray-ha'], cxs.XRAY_IMAGE)
+        proxies = {name: image for name, image in images.items()
+                   if name.startswith('xray-') and not name.endswith('-exporter')}
+        self.assertGreater(len(proxies), 1)
+        self.assertEqual({name: cxs.XRAY_IMAGE for name in proxies}, proxies)
+        self.assertNotIn('teddysun/xray:latest', compose)
 
 
 class DefaultBaseDirTest(unittest.TestCase):

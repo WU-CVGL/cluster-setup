@@ -1,5 +1,5 @@
   xray-golden-test:
-    image: teddysun/xray:latest
+    image: teddysun/xray:26.11.9@sha256:b3e117b834878d1e12f91e7b16270db104c2f0e5f0effbc0ece9088c473b5393
     restart: unless-stopped
     environment:
       TZ: Asia/Shanghai
