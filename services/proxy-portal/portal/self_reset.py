@@ -169,7 +169,7 @@ def api_reset(request):
             accounts.check("rotate", username, status)
             row = accounts.submit("rotate", username, username, self_service=True)
         except accounts.Refused as e:
-            return JsonResponse({"error": str(e)}, status=e.status)
+            return JsonResponse({"error": str(e), "reason": "refused"}, status=e.status)
     return JsonResponse(as_json(row, username), status=202)
 
 

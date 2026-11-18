@@ -1380,6 +1380,9 @@ msgstr "无法连接门户，请重试。"
 msgid "Getting the password…"
 msgstr "正在获取密码…"
 
+msgid "You are signed out. Sign in again to continue."
+msgstr "你已退出登录，请重新登录后继续。"
+
 msgid "Enter your Determined username and password."
 msgstr "请输入 Determined 用户名和密码。"
 

@@ -156,14 +156,20 @@ var T=JSON.parse(document.getElementById('reset-texts').textContent);
 var csrf=dlg.querySelector('input[name=csrfmiddlewaretoken]').value,create=dlg.getAttribute('data-create');
 var current=dlg.getAttribute('data-current')||null,timer=null,tries=0,secret=document.getElementById('reset-password');
 // collecting: the password is on its way and the server no longer has it, so the dialog stays open; received: a
-// password not yet shown (it arrived while the dialog was closed anyway), shown at the next opening
+// password until the user closes its step (kept out of the page while the dialog is closed); while either holds,
+// leaving the page asks first
 var collecting=false,received=null;
 function q(sel){return dlg.querySelector(sel);}
 var reveal=q('[data-action=reveal]'),revealLabel=reveal.textContent;
+function leaving(e){e.preventDefault();e.returnValue='';}
+function guard(){if(collecting||received)window.addEventListener('beforeunload',leaving);
+  else window.removeEventListener('beforeunload',leaving);}
 function setCollecting(on){collecting=on;reveal.disabled=on;reveal.textContent=on?T.collecting:revealLabel;
   q('[data-step=progress]').setAttribute('aria-busy',on?'true':'false');
-  dlg.querySelectorAll('[data-action=close]').forEach(function(b){b.disabled=on;});}
+  dlg.querySelectorAll('[data-action=close]').forEach(function(b){b.disabled=on;});guard();}
 function showPassword(){secret.textContent=received;show('password');}
+// an error answer's text only when it is the portal's translated refusal; a signed-out session says so
+function why(res,fallback){if(res.status===401)return T.signin;return res.data.reason&&res.data.error?res.data.error:fallback;}
 function steps(){return dlg.querySelectorAll('[data-step]');}
 function focusables(){return Array.prototype.filter.call(dlg.querySelectorAll('button,a[href],input:not([type=hidden])'),
   function(el){return !el.disabled&&!el.closest('[hidden]');});}
@@ -186,7 +192,7 @@ function render(d){var chip=q('[data-field=state]');chip.textContent=d.state_lab
   if(!d.final||d.password==='waiting'){stop();if(dlg.open&&tries<450){timer=setTimeout(poll,2000);}}
   else{stop();if(d.password!=='ready')current=null;}}
 function poll(){tries++;call('GET',create+'/'+current).then(function(res){
-    if(res.status===200)render(res.data);else{error(res.data.error||T.state);}},
+    if(res.status===200)render(res.data);else{error(why(res,T.state));}},
   function(){error(T.network);if(dlg.open&&tries<450)timer=setTimeout(poll,5000);});}
 opener.hidden=false;
 opener.addEventListener('click',function(){tries=0;
@@ -198,18 +204,21 @@ dlg.addEventListener('keydown',function(e){if(e.key!=='Tab')return;var f=focusab
   var first=f[0],last=f[f.length-1];
   if(e.shiftKey&&(document.activeElement===first||!dlg.contains(document.activeElement))){e.preventDefault();last.focus();}
   else if(!e.shiftKey&&(document.activeElement===last||!dlg.contains(document.activeElement))){e.preventDefault();first.focus();}});
-function closed(){if(!q('[data-step=password]').hidden)received=null;secret.textContent='';}
-dlg.addEventListener('close',function(){stop();closed();opener.focus();});
+function closed(){if(!q('[data-step=password]').hidden)received=null;secret.textContent='';guard();}
+// a close event that arrives once the dialog is open again (a late password reopens it) is stale
+dlg.addEventListener('close',function(){if(dlg.open)return;stop();closed();opener.focus();});
 dlg.addEventListener('click',function(e){var b=e.target.closest('[data-action]');if(!b)return;var action=b.getAttribute('data-action');
   if(action==='close'){if(!collecting){closed();dlg.close();}}
   else if(action==='confirm'){b.disabled=true;call('POST',create).then(function(res){b.disabled=false;
       if(res.status===202){current=res.data.id;opener.disabled=false;show('progress');render(res.data);}
-      else{error(res.data.error||(res.status>=500?T.state:T.failed));}},function(){b.disabled=false;error(T.network);});}
+      else{error(why(res,res.status>=500?T.state:T.failed));}},function(){b.disabled=false;error(T.network);});}
   else if(action==='reveal'){setCollecting(true);call('POST',create+'/'+current+'/password').then(function(res){
       setCollecting(false);
-      if(res.status===200&&res.data.value){received=res.data.value;current=null;
-        var note=document.getElementById('reset-current');if(note)note.hidden=true;if(dlg.open)showPassword();}
-      else{render(res.data.state?res.data:{state_label:'',level:'bad',text:res.data.error||T.state,final:true});}},
+      if(res.status===200&&res.data.value){received=res.data.value;current=null;guard();
+        var note=document.getElementById('reset-current');if(note)note.hidden=true;
+        // closed anyway while it was on its way: open it again on the password
+        if(dlg.open)showPassword();else{showPassword();dlg.showModal();focusStep();}}
+      else{render(res.data.state?res.data:{state_label:'',level:'bad',text:why(res,T.state),final:true});}},
     function(){setCollecting(false);error(T.network);});}});
 })();
 </script>{% endif %}{% endblock %}

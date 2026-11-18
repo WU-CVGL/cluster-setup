@@ -172,7 +172,9 @@ def access_page(request):
                                                       "state": _("The reset's state could not be read. Reload the "
                                                                  "page to see it."),
                                                       "network": _("The portal could not be reached. Try again."),
-                                                      "collecting": _("Getting the password…")}})
+                                                      "collecting": _("Getting the password…"),
+                                                      "signin": _("You are signed out. Sign in again to "
+                                                                  "continue.")}})
 
 
 @require_GET

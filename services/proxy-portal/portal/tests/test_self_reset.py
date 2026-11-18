@@ -4,6 +4,7 @@ import datetime
 import json
 import logging
 import os
+from unittest import mock
 
 from django.conf import settings
 from django.db import connection
@@ -149,6 +150,15 @@ class SelfResetTest(SelfResetMixin, PortalTestCase):
             self.assertNotContains(client.get("/access"), "reset-open")
         self.assertEqual(self.files(), [])
 
+    def test_a_refused_change_says_why(self):
+        """The dialog shows an error answer's text only with a reason: the portal's own translated refusal."""
+        with mock.patch("portal.spool.write_request", side_effect=OSError("disk full")):
+            response = self.reset(HTTP_ACCEPT_LANGUAGE="zh-CN")
+        self.assertEqual(response.status_code, 503)
+        self.assertEqual(response.json()["reason"], "refused")
+        self.assertNotIn("Nothing changed", response.json()["error"])
+        self.assertEqual(self.files(), [])
+
     def test_status_unavailable(self):
         self.status_file.unlink()
         self.assertEqual(self.reset().status_code, 503)
@@ -167,7 +177,8 @@ class SelfResetTest(SelfResetMixin, PortalTestCase):
         self.assertEqual(texts, {"failed": "The reset could not be started. Nothing changed.",
                                  "state": "The reset's state could not be read. Reload the page to see it.",
                                  "network": "The portal could not be reached. Try again.",
-                                 "collecting": "Getting the password…"})
+                                 "collecting": "Getting the password…",
+                                 "signin": "You are signed out. Sign in again to continue."})
         carol = https_client()
         self.sign_in("carol", client=carol)  # an admin account: the private proxies restart too
         self.assertContains(carol.get("/access"), "both auto-switching proxies and the private proxies")
@@ -255,6 +266,9 @@ class SelfResetTest(SelfResetMixin, PortalTestCase):
         data = self.client.get(f"/api/me/reset/{request_id}", HTTP_ACCEPT_LANGUAGE="zh-CN").json()
         self.assertEqual(data["state_label"], "等待中")
         self.assertNotIn("Waiting", data["text"])
+        texts = json.loads(page.content.decode().split('<script id="reset-texts" type="application/json">')[1]
+                           .split("</script>")[0])
+        self.assertEqual(texts["signin"], "你已退出登录，请重新登录后继续。")
 
 
 class SelfResetCsrfTest(SelfResetMixin, PortalTestCase):
