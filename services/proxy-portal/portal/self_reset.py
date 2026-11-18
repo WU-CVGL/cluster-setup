@@ -64,7 +64,8 @@ def refusal(username, status):
 
 def _current(username):
     """The user's latest self-service reset that is still running or holds a password to collect, else None."""
-    row = _recent(username).order_by("-requested_at").first()
+    row = AccountRequest.objects.filter(requested_by=username, username=username, self_service=True) \
+        .order_by("-requested_at").first()
     if row is None:
         return None
     lifecycle.refresh(row)

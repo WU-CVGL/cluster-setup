@@ -175,6 +175,17 @@ class SelfResetTest(SelfResetMixin, PortalTestCase):
         self.status(request_id)
         self.assertContains(self.client.get("/access"), "Your new password is ready")
 
+    def test_resumed_after_more_than_an_hour(self):
+        # an applier that took long: the reset is still the user's to follow and collect, not a stranger's pending
+        request_id = self.reset().json()["id"]
+        AccountRequest.objects.update(requested_at=timezone.now() - datetime.timedelta(hours=2))
+        page = self.client.get("/access")
+        self.assertContains(page, f'data-current="{request_id}"')
+        self.assertNotContains(page, "still waiting or being applied")
+        self.status(request_id)
+        self.assertContains(self.client.get("/access"), "Your new password is ready")
+        self.assertEqual(self.client.post(f"/api/me/reset/{request_id}/password").json()["value"], SENTINEL)
+
     def test_state_only_for_the_requester(self):
         request_id = self.reset().json()["id"]
         self.status(request_id)
