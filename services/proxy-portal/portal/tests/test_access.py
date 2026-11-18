@@ -4,6 +4,7 @@ import json
 from .base import PortalTestCase
 
 PUBLIC = ["us-west-racknerd-12tb", "usca1-bwh-megaboxpro-2tb", "usca5-bwh-sla-1tb", "usca6-bwh-1tb"]
+OPEN = ["us-west-racknerd-12tb", "usca1-bwh-megaboxpro-2tb"]  # open-proxies.txt
 PRIVATE = ["jpty1-bwh-2tb", "miyaip-jp-01_relay_jpty1-bwh-2tb", "miyaip-jp-01_relay_usca5-bwh-sla-2tb",
            "miyaip-uk-01_relay_jpty1-bwh-2tb", "miyaip-uk-01_relay_usca5-bwh-sla-2tb"]
 
@@ -109,11 +110,57 @@ class AccessTest(PortalTestCase):
     def test_raw_auth_on(self):
         self.write_status(lambda d: d.update(raw_auth=True))
         alice = self.get("alice")
+        self.assertEqual(alice["open_proxies"], OPEN)
+        self.assertTrue(all(e["usable"] for e in alice["entries"]))
+        self.assertEqual([e["id"] for e in alice["entries"] if not e["requires_account"]], OPEN)
+        page = self.client.get("/access")
+        self.assertContains(page, "every entry requires an enabled account, except the own entries of "
+                                  "us-west-racknerd-12tb, usca1-bwh-megaboxpro-2tb, which need none.")
+        self.assertEqual(page.content.decode().count("No account needed"), 2)
+        self.client.post("/signout")
+        bob = self.get("bob")
+        # the open proxies still take bob: they never need an account
+        self.assertEqual([e["id"] for e in bob["entries"] if e["usable"]], OPEN)
+        page = self.client.get("/access")
+        self.assertContains(page, "Every entry refuses it, except the own entries of us-west-racknerd-12tb, "
+                                  "usca1-bwh-megaboxpro-2tb, which need no account.")
+        zh = self.client.get("/access", HTTP_ACCEPT_LANGUAGE="zh-CN")
+        self.assertContains(zh, "除 us-west-racknerd-12tb, usca1-bwh-megaboxpro-2tb 自己的入口外")
+        self.assertContains(zh, "无需账号")
+
+    def test_raw_auth_on_without_open_proxies(self):
+        def change(data):
+            data["raw_auth"] = True
+            for proxy in data["proxies"]:
+                proxy["open"] = False
+        self.write_status(change)
+        alice = self.get("alice")
         self.assertTrue(all(e["requires_account"] and e["usable"] for e in alice["entries"]))
         self.client.post("/signout")
         bob = self.get("bob")
         self.assertFalse(any(e["usable"] for e in bob["entries"]))
-        self.assertContains(self.client.get("/access"), "Every entry refuses it")
+        self.assertContains(self.client.get("/access"), "Every entry refuses it, the public proxies' own entries")
+
+    def test_no_account_raw_auth_on(self):
+        self.write_status(lambda d: d.update(raw_auth=True))
+        self.master.users["frank"] = ("pw-frank", False, True)
+        view = self.get("frank")
+        self.assertEqual([e["id"] for e in view["entries"] if e["usable"]], OPEN)
+        self.assertContains(self.client.get("/access"), "Without an account you can use the own entries of "
+                                                        "us-west-racknerd-12tb, usca1-bwh-megaboxpro-2tb: they never "
+                                                        "need one.")
+
+    def test_open_only_for_a_public_proxy(self):
+        """A status that marks a private proxy open is not believed: it still requires an admin account."""
+        def change(data):
+            data["raw_auth"] = True
+            next(p for p in data["proxies"] if p["name"] == "jpty1-bwh-2tb")["open"] = True
+        self.write_status(change)
+        view = self.get("erin")  # a disabled admin
+        entries = {e["id"]: e for e in view["entries"]}
+        self.assertTrue(entries["jpty1-bwh-2tb"]["requires_account"])
+        self.assertFalse(entries["jpty1-bwh-2tb"]["usable"])
+        self.assertNotIn("jpty1-bwh-2tb", view["open_proxies"])
 
     def test_no_account(self):
         self.master.users["frank"] = ("pw-frank", False, True)

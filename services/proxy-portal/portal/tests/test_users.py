@@ -303,6 +303,15 @@ class UsersPageTest(PortalTestCase):
         self.assertEqual(self.client.post("/admin/accounts/disable", {"username": "svc-ha", "confirm": "svc-ha"})
                          .status_code, 403)
 
+    def test_open_proxies_with_raw_auth_on(self):
+        self.write_status(lambda d: d.update(raw_auth=True))
+        page = self.client.get("/admin/users")
+        self.assertContains(page, "Raw auth is on: every entry refuses an account whose proxy access is off, except "
+                                  "the own entries of us-west-racknerd-12tb, usca1-bwh-megaboxpro-2tb. No account "
+                                  "needed there: they accept anyone.")
+        zh = self.client.get("/admin/users", HTTP_ACCEPT_LANGUAGE="zh-CN")
+        self.assertContains(zh, "us-west-racknerd-12tb, usca1-bwh-megaboxpro-2tb 自己的入口无需账号")
+
     def test_chinese(self):
         page = self.client.get("/admin/users", HTTP_ACCEPT_LANGUAGE="zh-CN")
         self.assertContains(page, "用户列表")

@@ -767,18 +767,25 @@ class Applier:
 
     def restart_set(self, accounts: pa.Accounts, outputs: List[Tuple[Path, str]]) -> List[str]:
         """
-        xray-ha; every proxy with raw auth, and a proxy whose config changed (a private proxy whenever the admins
-        it accepts change); blackbox-exporter when its config did.
+        xray-ha; with raw auth every proxy but the open ones, which hold no accounts; a proxy whose config changed (a
+        private proxy whenever the admins it accepts change, an open proxy when its logins are removed); and
+        blackbox-exporter when its config did.
         """
         running = self.compose.running()
         if HA_SERVICE not in running:
             raise ApplyError("precheck", f"{HA_SERVICE} is not running")
         known = self.compose.services()
         changed = {path for path, _ in outputs}
+        try:
+            open_ = pa.open_proxies(self.base, pa.public_proxies(self.base))
+        except (pa.AccountsError, OSError) as e:
+            raise ApplyError("precheck", str(e))
         restart = [HA_SERVICE]
         for path in sorted(self.base.glob(pa.RAW_CONFIG_GLOB)):
-            service = "xray-" + path.parent.parent.name
-            if (accounts.raw_auth or path in changed) and service in known and service in running:
+            proxy = path.parent.parent.name
+            service = "xray-" + proxy
+            if ((accounts.raw_auth and proxy not in open_) or path in changed) and service in known \
+                    and service in running:
                 restart.append(service)
         if self.base / pa.BLACKBOX_CONFIG in changed and BLACKBOX_SERVICE in running:
             restart.append(BLACKBOX_SERVICE)

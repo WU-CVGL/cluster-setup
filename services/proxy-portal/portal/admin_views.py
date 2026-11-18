@@ -84,6 +84,9 @@ def _effect_text(op, name):
 
 
 def raw_auth_text(status):
+    if status.raw_auth and status.open_proxies:
+        return _("Raw auth is on: every entry refuses an account whose proxy access is off, except the own entries of "
+                 "%(open)s. No account needed there: they accept anyone.") % {"open": ", ".join(status.open_proxies)}
     if status.raw_auth:
         return _("Raw auth is on: every entry, the public proxies' own entries included, refuses an account whose "
                  "proxy access is off.")

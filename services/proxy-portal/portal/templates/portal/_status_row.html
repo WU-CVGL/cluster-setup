@@ -4,7 +4,7 @@
   {% include "portal/_status_cells.html" with http_age=p|add:".protocols.http.last_check_age_seconds" socks_age=p|add:".protocols.socks.last_check_age_seconds" %}
 </tr>{% endwith %}{% else %}{% with p="proxy:"|add:row.name %}
 <tr class="row-main" data-row="{{ row.name }}">
-  <th scope="row"><span class="proxy-name">{{ row.name }}</span></th>
+  <th scope="row"><span class="proxy-name">{{ row.name }}</span>{% if row.account_required is False %} <span class="tag">{% translate "No account needed" %}</span>{% endif %}</th>
   {% include "portal/_status_cells.html" with http_age=p|add:".last_check_age_seconds" socks_age=p|add:".last_check_age_seconds" %}
 </tr>{% endwith %}{% endif %}
 {% with items=data.bar_items|get:row.name %}<tr class="row-bars"><td colspan="7">

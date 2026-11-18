@@ -100,7 +100,9 @@ def submit(op, username, requested_by, self_service=False):
 
 def restart_text(op, row, status):
     """What applying op restarts, for an account row (a status.AccountRow, or None for a new account)."""
-    if status.raw_auth:
+    if status.raw_auth and status.open_proxies:
+        services = _("the HA entries (xray-ha) and every proxy but %(open)s") % {"open": ", ".join(status.open_proxies)}
+    elif status.raw_auth:
         services = _("the HA entries (xray-ha) and every proxy")
     elif op in ("admin-on", "admin-off") or (row is not None and row.admin):
         services = _("the HA entries (xray-ha) and the private proxies")

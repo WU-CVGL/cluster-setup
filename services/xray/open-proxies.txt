@@ -1,0 +1,6 @@
+# The open proxies: public proxies whose own entries never require an account, also while raw auth is on.
+# Each must be listed in public-proxies.txt: a private proxy always requires accounts, and render refuses a
+# private proxy here. The HA entries reach these proxies without logging in. One proxy name (xray/<name>/) per line.
+# Read by xray/scripts/proxy_accounts.py and xray/scripts/create_xray_service.py (docs/00_Network_Proxy.md).
+usca1-bwh-megaboxpro-2tb
+us-west-racknerd-12tb

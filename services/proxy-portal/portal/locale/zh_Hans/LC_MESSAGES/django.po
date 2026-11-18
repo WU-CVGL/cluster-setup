@@ -1362,3 +1362,23 @@ msgstr "%(name)s，近 30 天"
 #, python-format
 msgid "success %(rate)s, coverage %(coverage)s"
 msgstr "成功率 %(rate)s，覆盖率 %(coverage)s"
+
+#, python-format
+msgid "the HA entries (xray-ha) and every proxy but %(open)s"
+msgstr "HA 入口 (xray-ha) 和除 %(open)s 以外的所有代理"
+
+#, python-format
+msgid "Raw auth is on: every entry refuses an account whose proxy access is off, except the own entries of %(open)s. No account needed there: they accept anyone."
+msgstr "公共代理入口认证 (raw auth) 已开启：除 %(open)s 自己的入口外，所有入口都会拒绝已关闭代理访问的账号。%(open)s 自己的入口无需账号，接受任何人。"
+
+#, python-format
+msgid "Without an account you can use the own entries of %(open)s: they never need one."
+msgstr "没有账号时可以使用 %(open)s 自己的入口：它们始终无需账号。"
+
+#, python-format
+msgid "Every entry refuses it, except the own entries of %(open)s, which need no account."
+msgstr "除 %(open)s 自己的入口外，所有入口都拒绝它；这些入口无需账号。"
+
+#, python-format
+msgid "Raw auth (accounts on the public proxies' own entries) is on: every entry requires an enabled account, except the own entries of %(open)s, which need none."
+msgstr "公共代理入口认证 (raw auth) 已开启：除 %(open)s 自己的入口外，所有入口都需要已启用的账号；这些入口无需账号。"

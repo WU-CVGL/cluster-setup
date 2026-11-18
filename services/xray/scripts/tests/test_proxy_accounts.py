@@ -281,8 +281,8 @@ class StatusTest(_Base):
                 {"name": "bob", "kind": "user", "enabled": False, "admin": False, "protected": False},
                 {"name": "svc-ha", "kind": "service", "enabled": True, "admin": False, "protected": True},
                 {"name": "svc-monitor", "kind": "service", "enabled": True, "admin": False, "protected": True}],
-            "proxies": [{"name": PRIVATE, "access": "private", "ports": {"http": None, "socks": None}},
-                      {"name": PUBLIC, "access": "public", "ports": {"http": None, "socks": None}}],
+            "proxies": [{"name": PRIVATE, "access": "private", "open": False, "ports": {"http": None, "socks": None}},
+                      {"name": PUBLIC, "access": "public", "open": False, "ports": {"http": None, "socks": None}}],
             "entries": {"ha-general": {"ports": {"http": None, "socks": None}},
                         "ha-private": {"ports": {"http": None, "socks": None}}},
             "accounts_sha256": pa.sha256_text(text), "applied": None, "unapplied_changes": None})
@@ -836,6 +836,121 @@ class IsolationTest(unittest.TestCase):
         # Take a public proxy off the list: its pool-* outbound is refused, so it cannot stay in ha-general
         with self.assertRaises(pa.AccountsError):
             pa.check_ha(self.example, self.public - {"usca6-bwh-1tb"})
+
+
+class OpenProxiesTest(_Base):
+    """The open proxies (xray/open-proxies.txt): public proxies whose own entries never require an account."""
+
+    OPEN = "usca1-bwh-megaboxpro-2tb"
+
+    def setUp(self):
+        super().setUp()
+        shutil.copy(SERVICES / pa.OPEN_PROXIES_FILE, self.base / pa.OPEN_PROXIES_FILE)
+        self.open = self.proxy(self.OPEN)
+        self.public = self.proxy(PUBLIC)
+        self.private = self.proxy(PRIVATE)
+        self.add("alice", "boss", "svc-monitor", "svc-ha")
+        run(self.base, "admin", "boss", "on")
+
+    def users(self, path):
+        config = json.loads(path.read_text())
+        return {i["protocol"]: sorted(u["user"] for u in i["settings"].get("users", []))
+                for i in config["inbounds"] if i["protocol"] in ("http", "socks")}
+
+    def relay(self):
+        """{proxy: the users the HA entry logs in with} over every pool-* and private-* outbound."""
+        ha = json.loads((self.base / pa.HA_CONFIG).read_text())
+        return {o["settings"]["servers"][0]["address"][len("xray-"):]: [u["user"] for u in
+                                                                        o["settings"]["servers"][0].get("users", [])]
+                for o in ha["outbounds"] if o["tag"].startswith(("pool-", "private-"))}
+
+    def test_committed_list(self):
+        public = pa.public_proxies(SERVICES)
+        self.assertEqual(pa.open_proxies(SERVICES, public), {"usca1-bwh-megaboxpro-2tb", "us-west-racknerd-12tb"})
+        self.assertLessEqual(pa.open_proxies(SERVICES, public), public)
+
+    def test_raw_auth_off(self):
+        self.assertEqual(run(self.base, "render")[0], 0)
+        self.assertEqual(self.open.read_text(), proxy_config())
+        self.assertEqual(self.public.read_text(), proxy_config())
+        everyone = ["boss", "svc-ha", "svc-monitor"]
+        self.assertEqual(self.users(self.private), {"http": everyone, "socks": everyone})
+        relay = self.relay()
+        self.assertEqual((relay[self.OPEN], relay["us-west-racknerd-12tb"], relay[PUBLIC], relay[PRIVATE]),
+                         ([], [], [], ["svc-ha"]))
+
+    def test_raw_auth_on(self):
+        run(self.base, "raw-auth", "on")
+        code, out, _ = run(self.base, "render")
+        self.assertEqual(code, 0)
+        self.assertNotIn(f"xray/{self.OPEN}/config/config.json", out.split())
+        self.assertEqual(self.open.read_text(), proxy_config())  # no logins, untouched
+        enabled = ["alice", "boss", "svc-ha", "svc-monitor"]
+        self.assertEqual(self.users(self.public), {"http": enabled, "socks": enabled})
+        relay = self.relay()
+        # the HA entries reach the open proxies without logging in, every other proxy as svc-ha
+        self.assertEqual({p for p, users in relay.items() if not users}, {self.OPEN, "us-west-racknerd-12tb"})
+        self.assertEqual({tuple(u) for p, u in relay.items() if u}, {("svc-ha",)})
+        # the probes are as they were: svc-monitor on every public proxy while raw auth is on
+        blackbox = (self.base / pa.BLACKBOX_CONFIG).read_text()
+        password = urllib.parse.quote(self.passwords()["svc-monitor"], safe="")
+        self.assertIn(f"proxy_url: socks5://svc-monitor:{password}@xray-{self.OPEN}:1089", blackbox)
+        # a disabled account: refused by usca5's own entry, never asked for by the open proxy's
+        run(self.base, "disable", "alice")
+        run(self.base, "render")
+        self.assertNotIn("alice", self.users(self.public)["http"])
+        self.assertEqual(self.open.read_text(), proxy_config())
+
+    def test_listing_and_unlisting_with_raw_auth_on(self):
+        (self.base / pa.OPEN_PROXIES_FILE).write_text("")
+        run(self.base, "raw-auth", "on")
+        run(self.base, "render")
+        enabled = ["alice", "boss", "svc-ha", "svc-monitor"]
+        self.assertEqual(self.users(self.open), {"http": enabled, "socks": enabled})
+        self.assertEqual(self.relay()[self.OPEN], ["svc-ha"])
+        shutil.copy(SERVICES / pa.OPEN_PROXIES_FILE, self.base / pa.OPEN_PROXIES_FILE)
+        code, out, _ = run(self.base, "render")
+        self.assertIn(f"xray/{self.OPEN}/config/config.json", out.split())  # its logins removed
+        self.assertEqual(self.open.read_text(), proxy_config())
+        self.assertEqual(self.relay()[self.OPEN], [])
+        (self.base / pa.OPEN_PROXIES_FILE).write_text("")
+        run(self.base, "render")
+        self.assertEqual(self.users(self.open), {"http": enabled, "socks": enabled})
+
+    def test_private_proxy_in_the_list_refused(self):
+        run(self.base, "render")
+        before = {p: p.read_text() for p in (self.base / pa.HA_CONFIG, self.open, self.public, self.private)}
+        (self.base / pa.OPEN_PROXIES_FILE).write_text(f"{self.OPEN}\n{PRIVATE}\n")
+        run(self.base, "raw-auth", "on")
+        code, _, err = run(self.base, "render")
+        self.assertEqual(code, 1)
+        self.assertIn(f"{PRIVATE} not in xray/public-proxies.txt", err)
+        self.assertIn("never be open", err)
+        self.assertEqual({p: p.read_text() for p in before}, before)  # nothing written
+        self.assertEqual(run(self.base, "status", "--json")[0], 1)
+        with self.assertRaises(pa.AccountsError):
+            pa.render_files(pa.Accounts(self.base))
+        # nor a name that is no proxy at all
+        (self.base / pa.OPEN_PROXIES_FILE).write_text("no-such-proxy\n")
+        self.assertEqual(run(self.base, "render")[0], 1)
+
+    def test_missing_list_opens_nothing(self):
+        (self.base / pa.OPEN_PROXIES_FILE).unlink()
+        self.assertEqual(pa.open_proxies(self.base, pa.public_proxies(self.base)), set())
+        run(self.base, "raw-auth", "on")
+        run(self.base, "render")
+        self.assertEqual(self.relay()[self.OPEN], ["svc-ha"])
+
+    def test_status(self):
+        run(self.base, "raw-auth", "on")
+        view = json.loads(run(self.base, "status", "--json")[1])
+        self.assertEqual({p["name"]: p["open"] for p in view["proxies"]}, {self.OPEN: True, PUBLIC: False,
+                                                                          PRIVATE: False})
+        out = run(self.base, "status")[1]
+        self.assertIn(f"proxy {self.OPEN:<40} public open", out)
+        self.assertIn(f"proxy {PUBLIC:<40} public", out)
+        self.assertIn(f"refused at every entry but the open proxies' own entries ({self.OPEN})", out)
+        self.assertIn("the open proxies' own entries still accept it", run(self.base, "disable", "alice")[2])
 
 
 class ProxiesTest(unittest.TestCase):

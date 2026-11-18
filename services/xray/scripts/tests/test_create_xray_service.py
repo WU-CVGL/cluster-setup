@@ -392,6 +392,19 @@ class CreateServiceYamlTest(_TempServicesMixin, unittest.TestCase):
         self.assertEqual(json.dumps(config, indent=4, ensure_ascii=False), read(FIXTURES_DIR / CREATE_SERVICE_TEMPLATE))
         self.assertNotIn('pw-a', output)
 
+    def test_raw_auth_on_open_proxy_keeps_template(self):
+        """A public proxy listed in open-proxies.txt never requires accounts, also with raw auth on."""
+        self.write_accounts(True, {'alice': 'pw-a', 'svc-ha': 'pw-h'})
+        (self.base / 'xray' / 'open-proxies.txt').write_text('csr-open\n')
+        self.create('csr-open', 56889, 56089)
+        self.assertEqual(read(self.base / 'xray' / 'csr-open' / 'config' / 'config.json'),
+                         read(FIXTURES_DIR / CREATE_SERVICE_TEMPLATE))
+
+    def test_private_proxy_listed_as_open_rejected(self):
+        self.write_accounts(False, {'svc-ha': 'pw-h', 'svc-monitor': 'pw-m'})
+        (self.base / 'xray' / 'open-proxies.txt').write_text('csr-open\n')
+        self.assertRejected('csr-open', 56889, 56089, 'open-proxies.txt', private=True)
+
     def test_raw_auth_on_without_accounts_rejected(self):
         self.write_accounts(True, {})
         self.assertRejected('csr-auth', 56889, 56089, '没有账号')

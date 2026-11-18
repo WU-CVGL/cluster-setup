@@ -32,14 +32,18 @@ See [scripts/README.md](scripts/README.md) (in Chinese):
   `xray-<name>-exporter` to `docker-compose.yml` and the exporter target to `prometheus/prometheus.yml`. The class
   is required: `--public` adds the proxy to `public-proxies.txt`; `--private` leaves it unlisted, so its own
   entry accepts only admin accounts from the start ([docs/00](../../docs/00_Network_Proxy.md#classify-a-new-proxy)).
-  A public proxy requires every proxy account from the start with `proxy_accounts.py raw-auth on`. Afterwards run
+  A public proxy requires every proxy account from the start with `proxy_accounts.py raw-auth on`, unless it is in
+  `open-proxies.txt`. Afterwards run
   `docker compose up -d xray-<name> xray-<name>-exporter` and `docker compose kill -s SIGHUP prometheus`.
 - `public-proxies.txt`: the public proxies. Every proxy not listed is private: its own entry accepts only admin
   accounts, and only the HA entry `ha-private` reaches it.
+- `open-proxies.txt`: the open proxies, public proxies whose own entries never require an account, also with
+  `raw-auth on` ([docs/00](../../docs/00_Network_Proxy.md#open-proxies)). Each must be in `public-proxies.txt`:
+  `render` refuses a private proxy there.
 - `scripts/proxy_accounts.py add|rotate|remove|enable|disable|admin|list|status|raw-auth|render`: keeps the proxy
   accounts in `services/proxy-accounts/accounts.json` (not in git) and renders every config that holds them: the
   HA entry's, the probes', the private proxies' inbounds (admin accounts, always) and, with `raw-auth on`, the public
-  proxies' inbounds
+  proxies' inbounds but the open proxies'
   ([docs/00](../../docs/00_Network_Proxy.md#accounts)). The portal's changes go through
   [`proxy-portal/applier`](../proxy-portal/applier/README.md).
 - `scripts/vless_to_config.py`: prints a standalone config for one `vless://` URL. Add `--stats-api` when the

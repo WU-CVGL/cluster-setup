@@ -641,6 +641,111 @@ class AdminTest(_Base):
         self.assertEqual(self.files(), before)
 
 
+OPEN = "usca1-bwh-megaboxpro-2tb"  # an open proxy (xray/open-proxies.txt)
+
+
+class OpenDocker(FakeDocker):
+    """FakeDocker with the open proxy as a running Compose service too."""
+
+    SERVICES = FakeDocker.SERVICES + ["xray-" + OPEN]
+
+    def __init__(self, base):
+        super().__init__(base)
+        self.containers["xray-" + OPEN] = IMAGE_ID
+
+    def __call__(self, argv, input_text, timeout):
+        if list(argv)[-3:] == ["config", "--format", "json"]:
+            self.calls.append(list(argv))
+            services = {s: {"image": self.image if s == "xray-ha" else self.proxy_image}
+                        for s in self.SERVICES if s.startswith("xray-") and not s.endswith("exporter")}
+            return 0, json.dumps({"services": services}), ""
+        return super().__call__(argv, input_text, timeout)
+
+
+class OpenProxyTest(_Base):
+    """An open proxy: never logins, so with raw auth on it is not restarted, checked or given svc-ha."""
+
+    def setUp(self):
+        super().setUp()
+        shutil.copy(SERVICES / pa.OPEN_PROXIES_FILE, self.base / pa.OPEN_PROXIES_FILE)
+        self.open = self.base / "xray" / OPEN / "config" / "config.json"
+        self.open.parent.mkdir(parents=True)
+        self.open.write_text(self.proxy.read_text())
+        accounts = pa.Accounts(self.base)
+        accounts.raw_auth = True
+        accounts.save()
+        pa.render(accounts)
+        self.mark_applied()  # and restarted
+        self.docker = OpenDocker(self.base)
+        self.probe = FakeProbe(self.docker)
+
+    def relay_users(self, proxy):
+        ha = json.loads((self.base / pa.HA_CONFIG).read_text())
+        server = next(o["settings"]["servers"][0] for o in ha["outbounds"]
+                      if (o.get("settings") or {}).get("servers", [{}])[0].get("address") == "xray-" + proxy)
+        return [u["user"] for u in server.get("users", [])]
+
+    def test_raw_auth_on_leaves_the_open_proxy(self):
+        self.request("abcdefgh-1", "disable", "alice")
+        self.assertEqual(self.run_applier(), 0)
+        record = self.status("abcdefgh-1")
+        self.assertEqual(record["status"], "applied")
+        self.assertEqual(record["restarted"], ["xray-ha", "xray-" + PRIVATE, "xray-" + PROXY])
+        self.assertFalse(pa.has_logins(json.loads(self.open.read_text())))
+        self.assertEqual((self.relay_users(OPEN), self.relay_users(PROXY)), ([], ["svc-ha"]))
+        # the verification went through the HA entries as always: svc-monitor passes, alice is refused
+        self.assertIn(("ha-general", "svc-monitor"), self.probe.entry_calls)
+        self.assertIn(("ha-general", "alice"), self.probe.entry_calls)
+        view = json.loads((self.spool.root / "status.json").read_text())
+        self.assertEqual({p["name"]: p["open"] for p in view["proxies"]}, {OPEN: True, PROXY: False, PRIVATE: False})
+        self.assert_no_leaks()
+
+    def test_open_proxy_on_an_older_image_is_not_checked(self):
+        self.docker.containers["xray-" + OPEN] = OLD_IMAGE_ID
+        self.request("abcdefgh-1", "rotate", "alice")
+        self.assertEqual(self.run_applier(), 0)
+        self.assertEqual(self.status("abcdefgh-1")["status"], "applied")
+        self.assertNotIn("xray-" + OPEN, self.status("abcdefgh-1")["restarted"])
+
+    def test_listing_a_proxy_removes_its_logins_and_restarts_it(self):
+        (self.base / pa.OPEN_PROXIES_FILE).write_text("")
+        pa.render(pa.Accounts(self.base))
+        self.mark_applied()
+        self.assertTrue(pa.has_logins(json.loads(self.open.read_text())))
+        self.request("abcdefgh-1", "disable", "alice")
+        self.assertEqual(self.run_applier(), 0)
+        self.assertIn("xray-" + OPEN, self.status("abcdefgh-1")["restarted"])  # with raw auth, like every proxy
+        shutil.copy(SERVICES / pa.OPEN_PROXIES_FILE, self.base / pa.OPEN_PROXIES_FILE)
+        self.request("abcdefgh-2", "enable", "alice")
+        self.assertEqual(self.run_applier(), 0)
+        record = self.status("abcdefgh-2")
+        self.assertEqual(record["status"], "applied")
+        self.assertIn("xray-" + OPEN, record["restarted"])  # its logins removed
+        self.assertFalse(pa.has_logins(json.loads(self.open.read_text())))
+        self.assertEqual(self.relay_users(OPEN), [])
+        self.request("abcdefgh-3", "rotate", "bob")
+        self.run_applier()
+        self.assertNotIn("xray-" + OPEN, self.status("abcdefgh-3")["restarted"])
+
+    def test_without_applied_state_the_open_proxy_restarts_too(self):
+        (self.base / pa.APPLIED_FILE).unlink()
+        self.request("abcdefgh-1", "rotate", "bob")
+        self.assertEqual(self.run_applier(), 0)
+        self.assertIn("xray-" + OPEN, self.status("abcdefgh-1")["restarted"])
+
+    def test_private_proxy_in_the_list_fails_at_render(self):
+        before = self.files()
+        (self.base / pa.OPEN_PROXIES_FILE).write_text(f"{OPEN}\n{PRIVATE}\n")
+        self.request("abcdefgh-1", "disable", "alice")
+        with self.assertRaises(pa.AccountsError):  # status.json cannot be written either: main exits 3
+            self.run_applier()
+        record = self.status("abcdefgh-1")
+        self.assertEqual((record["status"], record["stage"], record["restored"]), ("failed", "render", True))
+        self.assertIn(f"{PRIVATE} not in xray/public-proxies.txt", record["error"])
+        self.assertEqual(self.docker.restarts(), [])
+        self.assertEqual(self.files(), before)
+
+
 class RunningStateTest(_Base):
     """A request that changes nothing in the files restarts nothing only when the running entries hold them."""
 

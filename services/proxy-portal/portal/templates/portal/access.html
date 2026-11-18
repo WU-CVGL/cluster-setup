@@ -21,7 +21,7 @@
   {% if view.account is None %}
   <div class="notice">
     <p><b>{% blocktranslate with name=view.username %}{{ name }} has no proxy account.{% endblocktranslate %}</b> {% translate "To get one, ask an admin: the account is named after your Determined username, and the admin gives you its password." %}</p>
-    {% if not view.raw_auth %}<p>{% translate "Without an account you can use the public proxies' own entries: they accept anyone while raw auth is off." %}</p>{% endif %}
+    {% if not view.raw_auth %}<p>{% translate "Without an account you can use the public proxies' own entries: they accept anyone while raw auth is off." %}</p>{% elif view.open_proxies %}<p>{% blocktranslate with open=view.open_proxies|join:", " %}Without an account you can use the own entries of {{ open }}: they never need one.{% endblocktranslate %}</p>{% endif %}
   </div>
   {% elif view.account.enabled %}
   <div class="notice ok">
@@ -31,11 +31,11 @@
   {% else %}
   <div class="notice warn">
     <p>{% blocktranslate with name=view.account.name %}Proxy access is <b>off</b> for the account <b>{{ name }}</b>.{% endblocktranslate %}
-    {% if view.raw_auth %}{% translate "Every entry refuses it, the public proxies' own entries included." %}{% elif view.account.admin %}{% translate "ha-general, ha-private and the private proxies refuse it. The public proxies' own entries still work for you: they need no account while raw auth (accounts on the public proxies' own entries) is off." %}{% else %}{% translate "ha-general refuses it. The public proxies' own entries still work for you: they need no account while raw auth (accounts on the public proxies' own entries) is off." %}{% endif %}</p>
+    {% if view.raw_auth and view.open_proxies %}{% blocktranslate with open=view.open_proxies|join:", " %}Every entry refuses it, except the own entries of {{ open }}, which need no account.{% endblocktranslate %}{% elif view.raw_auth %}{% translate "Every entry refuses it, the public proxies' own entries included." %}{% elif view.account.admin %}{% translate "ha-general, ha-private and the private proxies refuse it. The public proxies' own entries still work for you: they need no account while raw auth (accounts on the public proxies' own entries) is off." %}{% else %}{% translate "ha-general refuses it. The public proxies' own entries still work for you: they need no account while raw auth (accounts on the public proxies' own entries) is off." %}{% endif %}</p>
   </div>
   {% endif %}
   <div class="notice">
-    {% if view.account is None or view.account.enabled %}{% if not view.raw_auth %}<p>{% translate "Raw auth (accounts on the public proxies' own entries) is off: a public proxy's own entry accepts anyone, without an account, so turning an account off stops only the HA entries and the private proxies for it." %}</p>{% else %}<p>{% translate "Raw auth (accounts on the public proxies' own entries) is on: every entry requires an enabled account." %}</p>{% endif %}{% endif %}
+    {% if view.account is None or view.account.enabled %}{% if not view.raw_auth %}<p>{% translate "Raw auth (accounts on the public proxies' own entries) is off: a public proxy's own entry accepts anyone, without an account, so turning an account off stops only the HA entries and the private proxies for it." %}</p>{% elif view.open_proxies %}<p>{% blocktranslate with open=view.open_proxies|join:", " %}Raw auth (accounts on the public proxies' own entries) is on: every entry requires an enabled account, except the own entries of {{ open }}, which need none.{% endblocktranslate %}</p>{% else %}<p>{% translate "Raw auth (accounts on the public proxies' own entries) is on: every entry requires an enabled account." %}</p>{% endif %}{% endif %}
     <p>{% translate "Proxy access off is not a change to your cluster account: your Determined login, jobs and files are not affected." %}</p>
     <p>{% translate "The proxy admin flag is set per proxy account by the admins; it is not the Determined admin role." %}</p>
     {% if view.account is None %}<p>{% translate "Need an account? Ask an admin." %}</p>{% endif %}

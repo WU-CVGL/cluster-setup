@@ -16,6 +16,7 @@
     - [Docker daemon with an account](#docker-daemon-with-an-account)
     - [Usage](#usage)
     - [Accounts on the proxies](#accounts-on-the-proxies)
+    - [Open proxies](#open-proxies)
     - [Changes from the portal](#changes-from-the-portal)
   - [The proxy portal](#the-proxy-portal)
   - [Proxy availability](#proxy-availability)
@@ -129,14 +130,15 @@ Who may use which entry: `ha-private` and the private proxies' own entries accep
 | :--- | :--- | :--- | :--- | :--- |
 | `ha-general` | the four public proxies | every enabled account | `30889` | `30089` |
 | `ha-private` | every proxy, public and private | enabled admin accounts | `31889` | `31089` |
-| a public proxy's own entry | that proxy | everyone; with [raw auth](#accounts-on-the-proxies), every enabled account | its own | its own |
+| an open proxy's own entry | that proxy | everyone, always ([open proxies](#open-proxies)) | its own | its own |
+| another public proxy's own entry | that proxy | everyone; with [raw auth](#accounts-on-the-proxies), every enabled account | its own | its own |
 | a private proxy's own entry | that proxy | enabled admin accounts, always | its own | its own |
 
 The ports are on `192.168.233.8` and `10.0.1.68`, as for `ha-general`. The private proxies are every proxy not listed in `services/xray/public-proxies.txt`; `proxy_accounts.py status` shows each proxy's access and ports. Client settings are those of [`ha-general`](#client-settings) with the `ha-private` ports.
 
 - **`ha-private`** runs in the same `xray-ha` service as `ha-general`, on its own two ports, and balances over every proxy in the same way (`leastPing`, the same observatory, failing closed when no proxy passes). `ha-general` has its own pool and users, and `render` checks that it can reach no private proxy.
 - **Private proxies** always require an account, whatever raw auth says. Besides the admin accounts, they accept `svc-ha` (the HA entry's connections) and `svc-monitor` (the probes).
-- **A disabled admin account** is refused everywhere accounts are required, like any disabled account. While raw auth is off, the public proxies' own entries still accept them.
+- **A disabled admin account** is refused everywhere accounts are required, like any disabled account. The open proxies' own entries, and while raw auth is off every public proxy's own entry, still accept them.
 - **Every private proxy runs the pinned image.** A proxy not listed in `public-proxies.txt` is private from its first `render`, which writes the admin accounts into its config, existing proxies included. Recreate each one with `docker compose up -d xray-<name>` on the image pinned in `docker-compose.yml`, not with `docker compose restart`: a restart keeps the container's old image, and older Xray versions ignore the accounts ([Accounts on the proxies](#accounts-on-the-proxies), step 1). Then check its own entry as in step 5 there: no account, a non-admin account and a revoked password get `407`, an admin account `204`. The restart pipelines below are for proxies that already run that image.
 
 ### Admin accounts
@@ -188,7 +190,7 @@ docker compose restart xray-ha                                # and the private 
 docker compose kill -s SIGHUP blackbox-exporter
 ```
 
-Passwords are random and are printed only by `add` and `rotate` with `--show`; give them to the user privately. A disabled account is left out of every rendered configuration, so every entry that requires accounts refuses it. While the [public proxies require no accounts](#accounts-on-the-proxies) (the default), that is the HA entries and the private proxies: a disabled user can still use a public proxy's own entry. `svc-ha` and `svc-monitor` cannot be disabled or removed. The accounts file (format version 3) records for each account whether it is enabled and whether it is an admin account; an older file is read with no admin accounts (version 2), or with every account enabled and no admin accounts (version 1), and is rewritten as version 3 at the next change. Xray reads accounts only when it starts, so a change takes effect when the services whose configs `render` wrote restart: always `xray-ha`, the private proxies after a change to an admin account, and every proxy while [raw auth](#accounts-on-the-proxies) is on. A restart breaks the connections open through the service and resets its traffic counters.
+Passwords are random and are printed only by `add` and `rotate` with `--show`; give them to the user privately. A disabled account is left out of every rendered configuration, so every entry that requires accounts refuses it. While the [public proxies require no accounts](#accounts-on-the-proxies) (the default), that is the HA entries and the private proxies: a disabled user can still use a public proxy's own entry. The [open proxies](#open-proxies) never require one. `svc-ha` and `svc-monitor` cannot be disabled or removed. The accounts file (format version 3) records for each account whether it is enabled and whether it is an admin account; an older file is read with no admin accounts (version 2), or with every account enabled and no admin accounts (version 1), and is rewritten as version 3 at the next change. Xray reads accounts only when it starts, so a change takes effect when the services whose configs `render` wrote restart: always `xray-ha`, the private proxies after a change to an admin account, and every proxy but the [open ones](#open-proxies) while [raw auth](#accounts-on-the-proxies) is on. A restart breaks the connections open through the service and resets its traffic counters.
 
 ### Client settings
 
@@ -255,7 +257,7 @@ By default the public proxies' own entries (the *raw* entries, hence `raw-auth`)
     python3 xray/scripts/proxy_accounts.py render
     ```
 
-    `render` then requires every account on the HTTP and SOCKS5 entries of every public proxy, and has the HA entry log in to them as `svc-ha` and the probes as `svc-monitor`, as it always does for the private proxies.
+    `render` then requires every account on the HTTP and SOCKS5 entries of every public proxy but the [open ones](#open-proxies), and has the HA entry log in to them as `svc-ha` and the probes as `svc-monitor`, as it always does for the private proxies.
 4. Restart the proxies and `xray-ha` together, and reload the probes:
 
     ```sh
@@ -263,15 +265,24 @@ By default the public proxies' own entries (the *raw* entries, hence `raw-auth`)
     docker compose kill -s SIGHUP blackbox-exporter
     ```
 
-    The HA entry and the proxies must agree: the HA entry logging in to a proxy without accounts, or not logging in to a proxy with them, fails, and the HA entry fails closed until both sides have restarted.
-5. On each proxy, check that a request without an account and one with a wrong or revoked password get `407`, and one with a current account `204`:
+    This restarts the open proxies too, which is harmless: their configs do not change. The HA entry and the proxies must agree: the HA entry logging in to a proxy without accounts, or not logging in to a proxy with them, fails, and the HA entry fails closed until both sides have restarted.
+5. On each proxy but the [open ones](#open-proxies), check that a request without an account and one with a wrong or revoked password get `407`, and one with a current account `204`:
 
     ```sh
     curl -s -o /dev/null -w '%{http_code}\n' -x http://127.0.0.1:<http_port> https://www.google.com/generate_204
     curl -s -o /dev/null -w '%{http_code}\n' -x http://<user>:<old password>@127.0.0.1:<http_port> https://www.google.com/generate_204
     ```
 
-While accounts are on, restart the proxies together with `xray-ha` after every account change. A proxy made with `create_xray_service.py` requires the accounts from its creation. `raw-auth off` followed by the same steps turns them off.
+While accounts are on, restart the proxies together with `xray-ha` after every account change. A proxy made with `create_xray_service.py` requires the accounts from its creation, unless it is listed as open. `raw-auth off` followed by the same steps turns them off.
+
+### Open proxies
+
+`services/xray/open-proxies.txt` lists the open proxies: public proxies whose own entries never require an account, also while raw auth is on. They are `xray-usca1-bwh-megaboxpro-2tb` and `xray-us-west-racknerd-12tb`. Only a public proxy can be open: `render` (and so the applier) refuses a name that is not in `public-proxies.txt`, so a private proxy always requires accounts. Without the file no proxy is open.
+
+- `render` leaves an open proxy's HTTP and SOCKS5 entries without logins, whatever raw auth says, and removes logins it finds there. The HA entries reach it without logging in as `svc-ha`. The probes are unchanged: with raw auth on they still send `svc-monitor`, which an entry without logins ignores.
+- Listing a proxy, or removing it from the list, while raw auth is on changes its config: render, then restart it together with `xray-ha`, as for any account change. With raw auth off the list changes nothing.
+- The applier does not restart an open proxy for an account change, also with raw auth on, unless its config changed (or every rendered file counts as changed, as after a change made with `proxy_accounts.py`); so it does not check its image either. Its verification goes through the HA entries as always, which reach an open proxy without logging in.
+- A disabled account can still use an open proxy's own entry: turning an account off cannot stop it there. The portal shows these entries as needing no account.
 
 ### Changes from the portal
 
@@ -283,17 +294,17 @@ The proxy portal does not change accounts itself. Its [admin console](#the-proxy
 - **Statuses** in `status/<id>.json`: `applying` while its batch runs, then `applied` (live and verified), `failed` (not applied; the previous files and services are restored, `restored: false` if the rollback did not finish: the [applier README](../services/proxy-portal/applier/README.md#statuses) has the recovery), or `unconfirmed` (live and every refused login gets 407, but the logins that must pass got no 204 in time, e.g. while the proxies are down).
 - **How:** the applier holds the accounts lock and applies the pending requests in batches, a second request for the same account going into the next batch: it renders in memory, tests every changed Xray config with `xray run -test`, checks that every Xray service it restarts runs the pinned image, replaces the files atomically, restarts the services and verifies through `ha-general` and `ha-private` that `svc-monitor` and every newly accepted login pass (204), that each request's account behaves as requested, and that every disabled or removed account, replaced password, admin turned off, a non-admin on `ha-private` and a wrong password are refused (407). A wrong answer rolls everything back. After a change made with `proxy_accounts.py` and not restarted, the next request restarts and verifies everything it renders, even one that changes nothing.
 - **Image:** a proxy the applier restarts must run the image pinned in `docker-compose.yml`, the one `xray-ha` uses. The first request, and the first after a change made with `proxy_accounts.py`, restart every running proxy, also with raw auth off, so every proxy must run it. After a change to the image, recreate the proxies with `docker compose up -d` (a restart keeps the old image); until then the applier refuses at `precheck`.
-- **Restart impact:** every change restarts `xray-ha`, a change to an admin account also the private proxies, and with raw auth on every proxy. Established connections through them drop, and new ones fail for a few seconds. Requests that arrive together share one restart; each further request for the same account adds one.
+- **Restart impact:** every change restarts `xray-ha`, a change to an admin account also the private proxies, and with raw auth on every proxy but the [open ones](#open-proxies). Established connections through them drop, and new ones fail for a few seconds. Requests that arrive together share one restart; each further request for the same account adds one.
 
-While raw auth is off, turning a user's access off in the portal stops it only at the HA entries (and the private proxies); the public proxies' own entries stay open to them.
+While raw auth is off, turning a user's access off in the portal stops it only at the HA entries (and the private proxies); the public proxies' own entries stay open to them. With raw auth on, the [open proxies'](#open-proxies) own entries still do.
 
 ## The proxy portal
 
 `https://proxy.cvgl.lab` shows the status of the proxies to everyone, to each user signed in with their Determined login their own access and usage, and to admins an admin console, in English or Chinese ([`services/proxy-portal`](../services/proxy-portal/README.md)).
 
 - **Status:** a headline of what the probes mean for users (for example, the default proxy available with one pool proxy not passing and failover working, or the HTTP entry failing while SOCKS5 still works); the auto-switching high-availability proxies `ha-general` and `ha-private`, with their proxies passing, and each proxy, public and private, each with its ports, HTTP and SOCKS5 status, latency, 24-hour success, last check and status bars for the last 96 hours or 30 days; and the admins' incident notices. It uses the [Proxy Availability](#proxy-availability) dashboard's queries: a result older than 90 seconds is Unknown, and a bar with results for less than half of its period is grey.
-- **My access:** for the account whose name equals the Determined username: whether the user has an account, whether its proxy access is on, whether it is an admin account, the entries it may use with their addresses on both networks, and client settings without the password. It shows the accounts file as the applier last read it, never a request still waiting. Turning proxy access off is not a change to the cluster account; while raw auth is off it stops only the HA entries and the private proxies for that account ([Manage accounts](#manage-accounts)). Users without an account ask an admin.
-- **Password reset:** a user whose account has proxy access on can reset its password on My access: the portal sends a `rotate` request for that account only, and once it is live shows the new password once, to that user only (admins cannot see it). When the change is live, the old password stops working, so every client that uses it needs the new one. Applying restarts the HA entries (also the private proxies for an admin account, and every proxy while raw auth is on), and established connections drop. At most 3 resets per user per hour, and none while a request for the account is still waiting.
+- **My access:** for the account whose name equals the Determined username: whether the user has an account, whether its proxy access is on, whether it is an admin account, the entries it may use with their addresses on both networks, and client settings without the password. It shows the accounts file as the applier last read it, never a request still waiting. Turning proxy access off is not a change to the cluster account; while raw auth is off it stops only the HA entries and the private proxies for that account ([Manage accounts](#manage-accounts)), and it never stops the [open proxies](#open-proxies), which the page marks "No account needed". Users without an account ask an admin.
+- **Password reset:** a user whose account has proxy access on can reset its password on My access: the portal sends a `rotate` request for that account only, and once it is live shows the new password once, to that user only (admins cannot see it). When the change is live, the old password stops working, so every client that uses it needs the new one. Applying restarts the HA entries (also the private proxies for an admin account, and every proxy but the open ones while raw auth is on), and established connections drop. At most 3 resets per user per hour, and none while a request for the account is still waiting.
 - **My usage:** the user's observed download, upload and total over 24 hours, 7 days and 30 days, counted where they enter the proxies as on the [Proxy Usage](#usage) dashboard, and a trend.
 - **Sign-in:** the portal checks the Determined username and password once with the master, ends the master session right away and keeps neither the password nor the token. At an admin's sign-in, before ending that session, it also reads the list of cluster users (name, active, admin) for the admins' Users page. The portal keeps the Determined admin flag read at sign-in, so a change on the master shows after signing in again. Sessions last 8 hours, and repeated failed sign-ins are refused for 15 minutes.
 - **Admin console:** for users whose Determined admin flag was true at sign-in (read only then; other users get 403). Its Users page lists every cluster user (the list read at the last admin sign-in) with their proxy account as the applier last read the accounts file, and the service accounts apart; it filters users without an account, with proxy access off, with private access, and deactivated in Determined with proxy access still on. It sends the requests of [Changes from the portal](#changes-from-the-portal) after a confirmation page; never for `svc-ha` or `svc-monitor`. Every change restarts the affected entries and drops established connections. For an add or a new password, the requesting admin sees the password once. While raw auth is off, turning an account off leaves a public proxy's own entry open to it. A change log lists every request and its outcome; incidents and their updates appear on the status page as text and never change a probe result. Details: [the portal's README](../services/proxy-portal/README.md#admin-console).

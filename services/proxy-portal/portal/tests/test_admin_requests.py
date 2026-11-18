@@ -370,7 +370,16 @@ class RestartTextTest(PortalTestCase):
                             "the HA entries (xray-ha) and the private proxies")
         self.write_status(lambda d: d.update(raw_auth=True))
         self.assertContains(self.client.get("/admin/accounts/disable?username=alice"),
-                            "the HA entries (xray-ha) and every proxy")
+                            "the HA entries (xray-ha) and every proxy but us-west-racknerd-12tb, "
+                            "usca1-bwh-megaboxpro-2tb. Established")
+
+        def none_open(data):
+            data["raw_auth"] = True
+            for proxy in data["proxies"]:
+                proxy["open"] = False
+        self.write_status(none_open)
+        self.assertContains(self.client.get("/admin/accounts/disable?username=alice"),
+                            "the HA entries (xray-ha) and every proxy. Established")
 
 
 @override_settings(REQUEST_PENDING_WARN=360)

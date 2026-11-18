@@ -166,7 +166,7 @@ python3 xray/scripts/vless_to_config.py "vless://..." -o /tmp/config.json
 
 ## 代理账号: proxy_accounts.py
 
-HA 入口、私有代理自身入口（始终）以及开启 raw auth 后的公共代理自身入口要求代理账号。账号保存在一个文件 `services/proxy-accounts/accounts.json`
+HA 入口、私有代理自身入口（始终）以及开启 raw auth 后开放代理以外的公共代理自身入口要求代理账号。账号保存在一个文件 `services/proxy-accounts/accounts.json`
 （权限 `0600`，被 gitignore）；所有含密码的配置都由 `render` 从这个文件生成，不手动维护第二份密码
 （用法和上线顺序见 [docs/00](../../../docs/00_Network_Proxy.md#accounts)）：
 
@@ -190,9 +190,11 @@ python3 xray/scripts/proxy_accounts.py render
 - 文件格式（version 3）：`{"version": 3, "raw_auth": bool, "accounts": {name: {"password": str, "enabled": bool, "admin": bool}}}`。
   version 2 的文件（没有 `admin`）照常读取，没有管理员；没有 `version` 的旧文件（`{name: password}`）照常读取，
   所有账号视为启用，没有管理员。下次修改时都写成 version 3
-- 代理的类别：`xray/public-proxies.txt` 列出公共代理，其余都是私有代理（文件缺失时报错）
+- 代理的类别：`xray/public-proxies.txt` 列出公共代理，其余都是私有代理（文件缺失时报错）。`xray/open-proxies.txt`
+  列出开放代理：自身入口始终不要求账号（`raw-auth on` 时也是）的公共代理。列表中的名称必须在 `public-proxies.txt` 中，
+  私有代理始终要求账号，列出私有代理时 `render` 报错；文件缺失时没有开放代理
 - 禁用的账号不出现在任何生成的配置中。`raw-auth off` 时公共代理自身入口不要求账号，所以禁用的账号在 HA 入口
-  （`ha-general`、`ha-private`）和私有代理被拒绝，仍可直接使用公共代理自身入口
+  （`ha-general`、`ha-private`）和私有代理被拒绝，仍可直接使用公共代理自身入口；开放代理的自身入口始终如此
 - 修改账号文件和 `render` 的命令持有排他锁 `proxy-accounts/.lock`；门户的 applier
   （[proxy-portal/applier](../../proxy-portal/applier/README.md)）在一次应用的全过程持有同一把锁
 - `render` 写入任何文件之前删除 applier 的记录 `proxy-accounts/applied.json`：手动重启不会被记录，所以之后门户的下一个请求
@@ -201,14 +203,15 @@ python3 xray/scripts/proxy_accounts.py render
   - `xray-ha/config/config.json`：`xray-ha/config.example.json` 中 `ha-general` 的 HTTP 和 SOCKS5 入站
     （`http_IN`、`socks_IN`）换成除 `svc-ha` 外的所有启用账号，`ha-private` 的入站（`ha-private_http_IN`、`ha-private_socks_IN`）
     换成启用的管理员账号和 `svc-monitor`（SOCKS5 `auth: password`）；`private-*` 出站始终、`pool-*` 出站在
-    `raw-auth on` 时以 `svc-ha` 登录代理。写入前检查 `ha-general` 不能到达任何私有代理：`pool-*` 出站只能指向
+    `raw-auth on` 时以 `svc-ha` 登录代理（指向开放代理的 `pool-*` 出站始终不登录）。写入前检查 `ha-general` 不能到达任何私有代理：`pool-*` 出站只能指向
     公共代理，`ha-general` 只选择 `pool-*`，每个入站只按 `inboundTag` 路由到自己的 balancer，第一个出站是 blackhole；
     入站只有这四个和 API 的 dokodemo-door（`api`，只路由到 API），出站只有 blackhole、`pool-*` 和 `private-*`，
     且不带 `proxySettings`、`streamSettings` 等可以串联到其他出站的设置
   - `blackbox/config/blackbox.yml`：`blackbox/blackbox.example.yml` 中经过 `xray-ha` 和私有代理的 `proxy_url` 带上
-    `svc-monitor`（percent-encode）；`raw-auth on` 时公共代理的 `proxy_url` 也带上
-  - `xray/*/config/config.json`：私有代理的入站始终要求启用的管理员账号、`svc-ha` 和 `svc-monitor`；公共代理在
-    `raw-auth on` 时要求所有启用的账号（含 `svc-ha`），`off` 时带账号的入站恢复为无认证，其他文件不动。
+    `svc-monitor`（percent-encode）；`raw-auth on` 时公共代理（包括开放代理，入站不要求账号时忽略它）的 `proxy_url` 也带上
+  - `xray/*/config/config.json`：私有代理的入站始终要求启用的管理员账号、`svc-ha` 和 `svc-monitor`；开放代理以外的
+    公共代理在 `raw-auth on` 时要求所有启用的账号（含 `svc-ha`），`off` 时（开放代理始终）带账号的入站恢复为无认证，
+    其他文件不动。
     修改用的是 `XrayConfigHandler.set_inbound_users`，`build_xray_config(..., inbound_users=...)` 也用它；
     不传 `inbound_users` 时 HTTP/SOCKS5 入站不要求认证（SOCKS5 `auth: noauth`）。账号只写在 `users` 中，
     旧字段名 `accounts` 总是删除：两者同时存在时 Xray 用 `accounts`，留下的 `accounts: []` 会关闭 HTTP 认证
@@ -217,12 +220,13 @@ python3 xray/scripts/proxy_accounts.py render
   换镜像后用 `docker compose up -d` 重新创建代理，`docker compose restart` 不会换
 - 缺少 `svc-monitor` 或 `svc-ha`、某个需要账号的代理配置没有 HTTP/SOCKS5 入站，或 HA 示例配置没有通过上面的检查时，
   `render` 报错，不写任何文件
-- 之后重启 `xray-ha` 和 `render` 写入了配置的代理（管理员变化时是私有代理，`raw-auth on` 时连同所有代理一起），
+- 之后重启 `xray-ha` 和 `render` 写入了配置的代理（管理员变化时是私有代理，`raw-auth on` 时连同开放代理以外的所有代理一起），
   并 `docker compose kill -s SIGHUP blackbox-exporter`；部署私有代理和 `raw-auth on` 之前，在每个相关代理上确认
   不带账号和带已撤销密码的请求得到 `407`（[docs/00](../../../docs/00_Network_Proxy.md#accounts-on-the-proxies)）
 
 `create_xray_service.py --private` 新建的代理在创建时就要求管理员和服务账号；`raw-auth on` 时，`--public` 新建的代理
-在创建时就要求所有账号（配置文件权限 `0600`）；账号文件中没有所需账号时拒绝创建。
+在创建时就要求所有账号（配置文件权限 `0600`），列在 `open-proxies.txt` 中的除外；账号文件中没有所需账号时拒绝创建。
+列在 `open-proxies.txt` 中的名称不能用 `--private` 创建。
 `create_xray_service.py` 从读取账号到写完新代理的文件（含 `xray/public-proxies.txt`）都持有 `proxy-accounts/.lock`，
 同时进行的账号修改和 `render` 等它写完，之后的 `render` 也覆盖新代理。
 
