@@ -1,0 +1,190 @@
+{% extends "portal/base.html" %}{% load i18n portal %}
+{% block title %}{% translate "Status" %}{% endblock %}
+{% block content %}
+{% with general=data.entries|get:"ha-general" %}
+<div class="hero-head">
+  <div>
+    <div class="eyebrow">{% translate "Service health" %}</div>
+    <h1>{% translate "Proxy status" %}</h1>
+    <p class="sub">{% translate "Whether requests get through the HA entries and each proxy, from probes every 30 seconds. The status of an entry is not whether your account may use it: see My access." %}</p>
+  </div>
+  <div class="small muted">{% translate "Last check" %}: <span data-live-age="last_check_age_seconds">{{ data.last_check_age_seconds|age }}</span></div>
+</div>
+
+<section class="status-hero {{ data.headline.level }}" aria-labelledby="headline" data-live-hero>
+  <div>
+    <div class="status-title"><span class="emblem" aria-hidden="true">{% if data.headline.level == 'ok' %}✓{% elif data.headline.level == 'unknown' %}?{% else %}!{% endif %}</span><h2 id="headline">{{ data.headline.text }}</h2></div>
+    <p data-live-monitoring="off"{% if data.monitoring_available %} hidden{% endif %}>{% translate "Monitoring data is unavailable, so every status is unknown." %}</p>
+    <p data-live-monitoring="on"{% if not data.monitoring_available %} hidden{% endif %}>{% translate "The default proxy ha-general sends each new connection to a passing public proxy; open connections stay on their proxy." %}</p>
+  </div>
+  <div class="status-right">
+    <div class="status-number" data-live-count>{% if general.proxies.configured is None %}—{% else %}{{ general.proxies.passing }} / {{ general.proxies.configured }}{% endif %}</div>
+    <div class="status-number-label">{% translate "public proxies passing" %}</div>
+  </div>
+</section>
+
+<div class="summary-grid">
+  {% for protocol, p in general.protocols.items %}<div class="card metric"><div class="m-label">{% if protocol == 'http' %}{% translate "Default proxy · HTTP" %}{% else %}{% translate "Default proxy · SOCKS5" %}{% endif %}</div><div class="m-value" data-live-state="entries.ha-general.protocols.{{ protocol }}" data-live-age-of="entries.ha-general.protocols.{{ protocol }}.last_check_age_seconds">{% include "portal/state.html" with state=p.state %}</div><div class="m-foot">{% translate "24 h success" %} <span data-live-pct="entries.ha-general.protocols.{{ protocol }}.success_rate_24h">{{ p.success_rate_24h|percent }}</span> · {% translate "coverage" %} <span data-live-pct="entries.ha-general.protocols.{{ protocol }}.coverage_24h" data-live-digits="0">{{ p.coverage_24h|percent:0 }}</span></div></div>
+  {% endfor %}
+  <div class="card metric"><div class="m-label">{% translate "Pool of the default proxy" %}</div><div class="m-value" data-live-count="small">{% if general.proxies.configured is None %}—{% else %}{{ general.proxies.passing }} <span class="muted small">/ {{ general.proxies.configured }}</span>{% endif %}</div><div class="m-foot">{% translate "passing / configured" %}</div></div>
+  <div class="card metric"><div class="m-label">{% translate "Last check" %}</div><div class="m-value" data-live-age="last_check_age_seconds">{{ data.last_check_age_seconds|age }}</div><div class="m-foot">{% blocktranslate with s=data.stale_after_seconds %}Unknown when older than {{ s }} s{% endblocktranslate %}</div></div>
+</div>
+
+<section class="section" aria-labelledby="entries-title">
+  <div class="section-bar"><div><h2 id="entries-title">{% translate "Entries" %}</h2><p>{% translate "The HA entries keep one address and choose a passing proxy for each new connection." %}</p></div></div>
+  <div class="card">
+    {% for entry in data.entries.values %}
+    <div class="service">
+      <div class="service-icon" aria-hidden="true">⇄</div>
+      <div class="service-main">
+        <h3>{% if entry.name == 'ha-general' %}{% translate "Default proxy" %} <code>ha-general</code>{% else %}{% translate "Private entry" %} <code>ha-private</code>{% endif %}</h3>
+        <div class="desc">{% if entry.name == 'ha-general' %}{% translate "Over the public proxies, for every proxy account" %}{% else %}{% translate "Over every proxy, public and private, for admin accounts" %}{% endif %} · <span data-live-entry-count="{{ entry.name }}">{% blocktranslate with passing=entry.proxies.passing|default_if_none:"—" configured=entry.proxies.configured|default_if_none:"—" %}{{ passing }} of {{ configured }} proxies passing{% endblocktranslate %}</span></div>
+      </div>
+      <div class="service-side">
+        <span class="small muted">HTTP</span><span data-live-state="entries.{{ entry.name }}.protocols.http" data-live-age-of="entries.{{ entry.name }}.protocols.http.last_check_age_seconds">{% include "portal/state.html" with state=entry.protocols.http.state %}</span>
+        <span class="small muted">SOCKS5</span><span data-live-state="entries.{{ entry.name }}.protocols.socks" data-live-age-of="entries.{{ entry.name }}.protocols.socks.last_check_age_seconds">{% include "portal/state.html" with state=entry.protocols.socks.state %}</span>
+      </div>
+    </div>
+    {% endfor %}
+  </div>
+</section>
+
+<section class="section" aria-labelledby="history-title">
+  <div class="section-bar"><div><h2 id="history-title">{% translate "Past 30 days" %}</h2><p>{% translate "The default proxy's probe success rate per 24 hours, HTTP and SOCKS5, the worse of the two. A day with probe results for less than half of it is grey." %}</p></div></div>
+  <div class="card card-pad">
+    <ol class="history">
+      {% for day in data.history.days %}
+      <li class="day {{ day.state }}" title="{{ day.start_local|date:'Y-m-d H:i' }} – {{ day.end_local|date:'Y-m-d H:i' }}: {% if day.success_rate is None %}{% translate 'no probe results' %}{% else %}{% translate 'success' %} {{ day.success_rate|percent:2 }}, {% translate 'coverage' %} {{ day.coverage|percent:0 }}{% endif %}"><span class="sr-only">{{ day.end_local|date:'Y-m-d' }}: {% if day.state == 'ok' %}{% translate "Passing" %}{% elif day.state == 'degraded' %}{% translate "Degraded" %}{% elif day.state == 'bad' %}{% translate "Failing" %}{% else %}{% translate "Unknown" %}{% endif %}{% if day.success_rate is not None %}, {% translate 'success' %} {{ day.success_rate|percent:2 }}, {% translate 'coverage' %} {{ day.coverage|percent:0 }}{% endif %}</span></li>
+      {% endfor %}
+    </ol>
+    <div class="legend"><span>{% translate "30 days ago" %}</span>
+      <div class="legend-set"><span><i class="swatch ok"></i>≥ 99 %</span><span><i class="swatch degraded"></i>≥ 90 %</span><span><i class="swatch bad"></i>&lt; 90 %</span><span><i class="swatch unknown"></i>{% translate "Unknown or too little data" %}</span></div>
+      <span>{% translate "Now" %}</span></div>
+  </div>
+</section>
+
+<section class="section" aria-labelledby="proxies-title">
+  <div class="section-bar"><div><h2 id="proxies-title">{% translate "Proxies" %}</h2><p>{% translate "Each proxy probed through its own entry. A proxy's own entry has no failover: when it fails, use the default proxy." %}</p></div></div>
+  <div class="card table-scroll">
+    <table class="table">
+      <caption class="sr-only">{% translate "Proxies" %}</caption>
+      <thead><tr><th scope="col">{% translate "Proxy" %}</th><th scope="col">HTTP</th><th scope="col">SOCKS5</th><th scope="col" class="wide">{% translate "Duration" %}</th><th scope="col">{% translate "24 h success" %}</th><th scope="col" class="wide">{% translate "Coverage" %}</th><th scope="col" class="wide">{% translate "Last check" %}</th></tr></thead>
+      <tbody>
+      {% regroup data.proxies by access as groups %}
+      {% for group in groups %}
+        <tr><th class="group" colspan="7" scope="colgroup">{% if group.grouper == 'public' %}{% translate "Public proxies" %}{% else %}{% translate "Private proxies" %}{% endif %}</th></tr>
+        {% for proxy in group.list %}
+        <tr>
+          <th scope="row"><span class="proxy-name">{{ proxy.name }}</span></th>
+          <td data-live-state="proxy:{{ proxy.name }}.protocols.http" data-live-age-of="proxy:{{ proxy.name }}.last_check_age_seconds">{% include "portal/state.html" with state=proxy.protocols.http.state %}</td>
+          <td data-live-state="proxy:{{ proxy.name }}.protocols.socks" data-live-age-of="proxy:{{ proxy.name }}.last_check_age_seconds">{% include "portal/state.html" with state=proxy.protocols.socks.state %}</td>
+          <td class="mono wide"><span data-live-ms="proxy:{{ proxy.name }}.protocols.http" data-live-age-of="proxy:{{ proxy.name }}.last_check_age_seconds">{{ proxy.protocols.http.duration_seconds|milliseconds }}</span> / <span data-live-ms="proxy:{{ proxy.name }}.protocols.socks" data-live-age-of="proxy:{{ proxy.name }}.last_check_age_seconds">{{ proxy.protocols.socks.duration_seconds|milliseconds }}</span></td>
+          <td class="mono"><span data-live-pct="proxy:{{ proxy.name }}.protocols.http.success_rate_24h">{{ proxy.protocols.http.success_rate_24h|percent }}</span> / <span data-live-pct="proxy:{{ proxy.name }}.protocols.socks.success_rate_24h">{{ proxy.protocols.socks.success_rate_24h|percent }}</span></td>
+          <td class="mono wide" data-live-pct="proxy:{{ proxy.name }}.coverage_24h" data-live-digits="0">{{ proxy.coverage_24h|percent:0 }}</td>
+          <td class="wide" data-live-age="proxy:{{ proxy.name }}.last_check_age_seconds">{{ proxy.last_check_age_seconds|age }}</td>
+        </tr>
+        {% endfor %}
+      {% empty %}
+        <tr><td colspan="7"><div class="empty">{% translate "No proxy results" %}</div></td></tr>
+      {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  <p class="tiny">{% translate "Duration and 24 h success: HTTP / SOCKS5." %} <span class="phone-only">{% translate "Duration, coverage and last check: on a wider screen." %}</span></p>
+</section>
+
+<div class="section grid-two">
+  <section aria-labelledby="incidents-title">
+    <div class="section-bar"><div><h2 id="incidents-title">{% translate "Incidents" %}</h2><p>{% translate "Notices from the admins about outages and maintenance." %}</p></div></div>
+    <div class="card card-pad">
+      {% if incidents %}
+      <ol class="timeline">
+        {% for incident in incidents %}
+        <li class="event">
+          <div class="event-dot{% if incident.open %} open{% endif %}" aria-hidden="true">{% if incident.open %}!{% else %}✓{% endif %}</div>
+          <div>
+            <div class="event-head"><b>{{ incident.title }}</b><span class="chip {% if incident.open %}warn{% else %}ok{% endif %}">{{ incident.get_state_display }}</span></div>
+            {% if incident.body %}<div class="event-body">{{ incident.body }}</div>{% endif %}
+            <div class="event-time">{{ incident.get_component_display }} · {{ incident.started_at|date:"Y-m-d H:i" }}{% if incident.resolved_at %} – {{ incident.resolved_at|date:"Y-m-d H:i" }}{% endif %}</div>
+          </div>
+        </li>
+        {% endfor %}
+      </ol>
+      {% else %}<div class="empty">{% translate "No incidents in the last 30 days" %}</div>{% endif %}
+    </div>
+  </section>
+  <section aria-labelledby="help-title">
+    <div class="section-bar"><div><h2 id="help-title">{% translate "Reading the status" %}</h2><p>{% translate "What the probes show, and what they do not." %}</p></div></div>
+    <div class="card card-pad">
+      <h3>{% translate "The service works but you cannot connect" %}</h3>
+      <p class="small muted">{% translate "Check My access: whether you have an account, whether its proxy access is on, and the address for your network. The probes run on the supplementary services VM and do not cover the way from your machine to it." %}</p>
+      <h3>{% translate "Failover" %}</h3>
+      <p class="small muted">{% translate "An HA entry chooses a passing proxy for each new connection, within about 15 seconds of a proxy failing. Open downloads, SSH sessions and WebSockets stay on their proxy and break with it; the client has to retry." %}</p>
+      <h3>{% translate "Unknown" %}</h3>
+      <p class="small muted">{% translate "No probe result in the last 90 seconds. An older result is never shown in its place." %}</p>
+    </div>
+  </section>
+</div>
+{% endwith %}
+{% endblock %}
+{% block scripts %}{{ live|json_script:"status-live" }}{{ live_texts|json_script:"status-texts" }}
+<script nonce="{{ csp_nonce }}">
+// Polls /api/status every 30 s and when the tab becomes visible, dropping a poll with no answer after 15 s, and
+// ages what it shows every second: a result older than 90 s, counted from the last answer that came, is Unknown,
+// with no duration; the proxy counts are "—" once that answer is older than 90 s, or once the entry's results are.
+(function(){'use strict';
+var POLL_MS=30000,TIMEOUT_MS=15000,texts=JSON.parse(document.getElementById('status-texts').textContent);
+var data=JSON.parse(document.getElementById('status-live').textContent),stale=data.stale_after_seconds;
+var fetched=performance.now(),polled=fetched,busy=false,pending=null;
+function get(path){var parts=path.split('.'),v=data,i=0;
+  if(parts[0].indexOf('proxy:')===0){var name=parts[0].slice(6);v=null;
+    (data.proxies||[]).forEach(function(p){if(p.name===name)v=p;});i=1;}
+  for(;i<parts.length&&v!==null&&v!==undefined;i++)v=v[parts[i]];
+  return v===undefined?null:v;}
+function age(path){var a=get(path);return a===null?null:a+(performance.now()-fetched)/1000;}
+function state(el){var s=get(el.getAttribute('data-live-state')+'.state'),a=age(el.getAttribute('data-live-age-of'));
+  return (s==='passing'||s==='failing')&&a!==null&&a<=stale?s:'unknown';}
+function ageText(a){if(a===null)return texts.unknown;a=Math.floor(a);
+  var t=a<120?[texts.s_ago,a]:a<7200?[texts.min_ago,Math.floor(a/60)]:a<172800?[texts.h_ago,Math.floor(a/3600)]:[texts.days_ago,Math.floor(a/86400)];
+  return t[0].replace('%(n)d',t[1]);}
+function pct(v,d){if(v===null)return '\u2014';var f=Math.pow(10,d);return (Math.floor(v*100*f+1e-6)/f).toFixed(d)+' %';}
+function chip(el,s){var c=document.createElement('span'),dot=document.createElement('span');c.className='chip '+s;
+  dot.className='dot '+s;dot.setAttribute('aria-hidden','true');c.appendChild(dot);c.appendChild(document.createTextNode(texts[s]));
+  el.replaceChildren(c);}
+function render(){
+  var old=(performance.now()-fetched)/1000>stale;
+  if(typeof data.monitoring_available==='boolean')document.querySelectorAll('[data-live-monitoring]').forEach(function(el){
+    el.hidden=(el.getAttribute('data-live-monitoring')==='on')!==data.monitoring_available;});
+  document.querySelectorAll('[data-live-state]').forEach(function(el){chip(el,state(el));});
+  document.querySelectorAll('[data-live-age]').forEach(function(el){el.textContent=ageText(age(el.getAttribute('data-live-age')));});
+  document.querySelectorAll('[data-live-pct]').forEach(function(el){el.textContent=pct(get(el.getAttribute('data-live-pct')),+(el.getAttribute('data-live-digits')||1));});
+  document.querySelectorAll('[data-live-ms]').forEach(function(el){var p=el.getAttribute('data-live-ms'),v=get(p+'.duration_seconds');
+    var s=get(p+'.state'),a=age(el.getAttribute('data-live-age-of'));
+    el.textContent=v===null||s!=='passing'&&s!=='failing'||a===null||a>stale?'\u2014':Math.round(v*1000)+' ms';});
+  var general=['http','socks'].map(function(p){var el=document.querySelector('[data-live-state="entries.ha-general.protocols.'+p+'"]');return el?state(el):'unknown';});
+  var aged=['http','socks'].some(function(p,i){return general[i]!==get('entries.ha-general.protocols.'+p+'.state');});
+  var level=aged?'unknown':data.headline.level,hero=document.querySelector('[data-live-hero]');
+  if(hero){hero.className='status-hero '+level;hero.querySelector('#headline').textContent=aged?texts.headline_unknown:data.headline.text;
+    hero.querySelector('.emblem').textContent=level==='ok'?'\u2713':level==='unknown'?'?':'!';}
+  document.querySelectorAll('[data-live-entry-count]').forEach(function(el){var name=el.getAttribute('data-live-entry-count');
+    var late=['http','socks'].some(function(p){var c=document.querySelector('[data-live-state="entries.'+name+'.protocols.'+p+'"]');
+      return c&&state(c)!==get('entries.'+name+'.protocols.'+p+'.state');});
+    var n=get('entries.'+name+'.proxies')||{},none=late||old||n.configured===null||n.configured===undefined;
+    function v(x){return none||x===null||x===undefined?'\u2014':String(x);}
+    el.textContent=texts.entry_count.replace('%(passing)s',v(n.passing)).replace('%(configured)s',v(n.configured));});
+  var proxies=get('entries.ha-general.proxies')||{},none=aged||old||proxies.configured===null||proxies.configured===undefined;
+  document.querySelectorAll('[data-live-count]').forEach(function(el){
+    if(none){el.textContent='\u2014';return;}
+    if(el.getAttribute('data-live-count')==='small'){var s=document.createElement('span');s.className='muted small';
+      s.textContent='/ '+proxies.configured;el.replaceChildren(document.createTextNode(proxies.passing+' '),s);}
+    else{el.textContent=proxies.passing+' / '+proxies.configured;}});}
+function poll(){if(busy)return;busy=true;var started=performance.now();polled=started;pending=new AbortController();
+  fetch('/api/status',{credentials:'same-origin',cache:'no-store',headers:{'Accept':'application/json'},signal:pending.signal})
+    .then(function(r){if(!r.ok)throw new Error(String(r.status));return r.json();})
+    .then(function(d){data=d;stale=d.stale_after_seconds;fetched=started;},function(){})
+    .then(function(){busy=false;pending=null;render();});}
+setInterval(function(){var now=performance.now();if(pending&&now-polled>=TIMEOUT_MS){pending.abort();pending=null;}
+  if(document.visibilityState!=='hidden'&&now-polled>=POLL_MS)poll();render();},1000);
+document.addEventListener('visibilitychange',function(){if(document.visibilityState==='visible')poll();});
+})();
+</script>{% endblock %}

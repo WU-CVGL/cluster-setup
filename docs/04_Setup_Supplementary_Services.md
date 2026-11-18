@@ -211,6 +211,7 @@ Finally, add the corresponding HOSTS to your PC:
 10.0.1.68 gpu.cvgl.lab
 10.0.1.68 grafana.cvgl.lab
 10.0.1.68 harbor.cvgl.lab
+10.0.1.68 proxy.cvgl.lab
 ```
 
 Open the URLs in your browser:

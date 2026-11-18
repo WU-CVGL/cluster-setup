@@ -35,6 +35,11 @@ links:
   icon: lan
   desc: Status of the cluster's proxies
 
+- name: Proxy Portal
+  link: https://proxy.cvgl.lab
+  icon: lan
+  desc: Proxy status, your access and usage
+
 - name: frp Dashboard
   link: https://frp.cvgl.lab
   icon: wan

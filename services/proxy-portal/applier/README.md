@@ -8,7 +8,7 @@ The units and the settings file are in [`services/system-configurations/etc`](..
 
 ```sh
 cd ~/ws/cluster-setup/services
-sudo useradd --system --no-create-home --shell /usr/sbin/nologin proxy-portal   # the portal's uid
+sudo useradd --system --uid 3089 --user-group --no-create-home --shell /usr/sbin/nologin proxy-portal   # the portal's image runs as 3089
 sudo install -m 644 system-configurations/etc/systemd/system/proxy-apply.{service,path,timer} /etc/systemd/system/
 sudo install -m 644 system-configurations/etc/default/proxy-apply /etc/default/proxy-apply
 sudoedit /etc/default/proxy-apply   # PROXY_APPLY_SERVICES_DIR: this checkout's services folder
@@ -45,7 +45,7 @@ The settings come from `/etc/default/proxy-apply` only, never from a request:
 | `status.json` | root, `0644` | the accounts without passwords: `proxy_accounts.py status --json` |
 | `sequence.json` | root, `0644` | the last apply sequence number (`applied_seq`) |
 
-The portal's container mounts the spool and runs as the requester's uid (`id -u proxy-portal`); files written under any other uid are refused. It writes a request under a name that does not end in `.json` and then renames it to `<id>.json`, so a request is never read half-written. The applier reads every `*.json` entry and removes it, whether valid or not. It opens the entry without following links, and accepts only a regular file with one link, owned by the requester and at most 4096 bytes.
+The portal's container mounts the spool and runs as the requester's uid, 3089, fixed in its image ([`../README.md`](../README.md)); files written under any other uid are refused. Check that 3089 is free (`getent passwd 3089`) before creating the user. It writes a request under a name that does not end in `.json` and then renames it to `<id>.json`, so a request is never read half-written. The applier reads every `*.json` entry and removes it, whether valid or not. It opens the entry without following links, and accepts only a regular file with one link, owned by the requester and at most 4096 bytes.
 
 ## Requests
 

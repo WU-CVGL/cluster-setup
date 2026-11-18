@@ -1,0 +1,105 @@
+{% extends "portal/base.html" %}{% load i18n portal %}
+{% block title %}{% translate "My access" %}{% endblock %}
+{% block content %}
+<div class="hero-head">
+  <div>
+    <div class="eyebrow">{% translate "My access" %}</div>
+    <h1>{% translate "My proxy access" %}</h1>
+    <p class="sub">{% translate "Your proxy account, named after your Determined username, as the proxy accounts file records it, and the entries it may use. Requests still waiting are not shown. Passwords are never shown here." %}</p>
+  </div>
+</div>
+
+{% if not view.status_available %}
+<div class="notice warn" role="status"><p>{% translate "Account information is unavailable right now. Try again later; the proxies themselves are not affected." %}</p></div>
+{% else %}
+{% if view.status_stale %}
+<div class="notice warn" role="status"><p>{% translate "This account information has not been refreshed for a while and may be out of date." %}</p></div>
+{% endif %}
+
+<section aria-labelledby="account-title">
+  <h2 id="account-title" class="sr-only">{% translate "Account" %}</h2>
+  {% if view.account is None %}
+  <div class="notice">
+    <p><b>{% blocktranslate with name=view.username %}{{ name }} has no proxy account.{% endblocktranslate %}</b> {% translate "To get one, ask an admin: the account is named after your Determined username, and the admin gives you its password." %}</p>
+    {% if not view.raw_auth %}<p>{% translate "Without an account you can use the public proxies' own entries: they accept anyone while raw auth is off." %}</p>{% endif %}
+  </div>
+  {% elif view.account.enabled %}
+  <div class="notice ok">
+    <p>{% blocktranslate with name=view.account.name %}Proxy access is <b>on</b> for the account <b>{{ name }}</b>.{% endblocktranslate %}</p>
+    {% if view.account.admin %}<p>{% translate "This is an admin account: it may also use ha-private and the private proxies." %}</p>{% endif %}
+  </div>
+  {% else %}
+  <div class="notice warn">
+    <p>{% blocktranslate with name=view.account.name %}Proxy access is <b>off</b> for the account <b>{{ name }}</b>.{% endblocktranslate %}
+    {% if view.raw_auth %}{% translate "Every entry refuses it, the public proxies' own entries included." %}{% elif view.account.admin %}{% translate "ha-general, ha-private and the private proxies refuse it. The public proxies' own entries still work for you: they need no account while raw auth (accounts on the public proxies' own entries) is off." %}{% else %}{% translate "ha-general refuses it. The public proxies' own entries still work for you: they need no account while raw auth (accounts on the public proxies' own entries) is off." %}{% endif %}</p>
+  </div>
+  {% endif %}
+  <div class="notice">
+    {% if view.account is None or view.account.enabled %}{% if not view.raw_auth %}<p>{% translate "Raw auth (accounts on the public proxies' own entries) is off: a public proxy's own entry accepts anyone, without an account, so turning an account off stops only the HA entries and the private proxies for it." %}</p>{% else %}<p>{% translate "Raw auth (accounts on the public proxies' own entries) is on: every entry requires an enabled account." %}</p>{% endif %}{% endif %}
+    <p>{% translate "Proxy access off is not a change to your cluster account: your Determined login, jobs and files are not affected." %}</p>
+    <p>{% translate "The proxy admin flag is set per proxy account by the admins; it is not the Determined admin role." %}</p>
+    <p>{% translate "Need an account or a new password? Ask an admin." %}</p>
+  </div>
+</section>
+
+<section class="section" aria-labelledby="entries-title">
+  <div class="section-bar"><div><h2 id="entries-title">{% translate "Entries" %}</h2><p>{% translate "Every account may use ha-general and the public proxies; admin accounts also ha-private and the private proxies. Same ports on both networks: the private network from the nodes, the campus network from the login node." %}</p></div></div>
+  <div class="access-list">
+    {% for entry in view.entries %}
+    <div class="card access-card{% if not entry.usable %} locked{% endif %}">
+      <div class="card-head">
+        <h3>{% if entry.id == 'ha-general' %}{% translate "Default proxy" %} <code>ha-general</code>{% elif entry.id == 'ha-private' %}{% translate "Private entry" %} <code>ha-private</code>{% else %}<code>{{ entry.id }}</code>{% endif %}
+          {% if entry.access == 'private' and entry.kind != 'ha' %}<span class="tag admin">{% translate "Private" %}</span>{% endif %}</h3>
+        {% if entry.usable and not entry.requires_account %}<span class="chip info">{% translate "No account needed" %}</span>
+        {% elif entry.usable %}<span class="chip ok">{% translate "Usable" %}</span>
+        {% elif view.account is None %}<span class="chip">{% translate "Needs an account" %}</span>
+        {% else %}<span class="chip warn">{% translate "Proxy access off" %}</span>{% endif %}
+      </div>
+      <div class="small muted">{% if entry.kind == 'ha' %}{% if entry.id == 'ha-general' %}{% translate "HA over the public proxies, with your account." %}{% else %}{% translate "HA over every proxy, with your admin account." %}{% endif %}{% elif entry.requires_account %}{% translate "One proxy, no failover, with your account." %}{% else %}{% translate "One proxy, no failover, without an account." %}{% endif %}</div>
+      {% for address in entry.addresses %}
+      <div class="endpoint">
+        <div><div class="tiny">{% if address.network == 'private' %}{% translate "Private network" %}{% else %}{% translate "Campus network" %}{% endif %}</div>
+          {% if address.http %}<div>HTTP <code id="ep-{{ forloop.parentloop.counter }}-{{ forloop.counter }}-h">{{ address.http }}</code></div>{% endif %}
+          {% if address.socks %}<div>SOCKS5 <code id="ep-{{ forloop.parentloop.counter }}-{{ forloop.counter }}-s">{{ address.socks }}</code></div>{% endif %}
+          {% if not address.http and not address.socks %}<div class="tiny">{% translate "Ports not published" %}</div>{% endif %}
+        </div>
+      </div>
+      {% endfor %}
+    </div>
+    {% empty %}
+    <div class="card card-pad"><div class="empty">{% translate "No entries" %}</div></div>
+    {% endfor %}
+  </div>
+</section>
+
+<section class="section" aria-labelledby="templates-title">
+  <div class="section-bar"><div><h2 id="templates-title">{% translate "Client settings" %}</h2><p>{% blocktranslate with placeholder=password_placeholder %}For the default proxy ha-general. Replace {{ placeholder }} with your account's password; socks5h lets the proxy resolve names.{% endblocktranslate %}</p></div>
+    {% if view.templates %}<div class="seg" data-switch="network" data-default="private" hidden role="group" aria-label="{% translate 'Network' %}">
+      <button type="button" data-value="private" aria-pressed="true">{% translate "Private network" %}</button>
+      <button type="button" data-value="campus" aria-pressed="false">{% translate "Campus network" %}</button>
+    </div>{% endif %}
+  </div>
+  <div class="card card-pad">
+    {% if view.templates %}
+    <div class="notice"><p>{% translate "Keep the password to yourself: set it in your own shell profile or task environment, never in images, notebooks, shared task templates or repositories. If it leaks, ask an admin for a new one." %}</p></div>
+    {% for network, items in view.templates.networks.items %}
+    <div data-panel="network" data-value="{{ network }}">
+      <h3 class="section">{% if network == 'private' %}{% translate "Private network (the nodes)" %}{% else %}{% translate "Campus network (the login node)" %}{% endif %}</h3>
+      {% for item in items %}
+      <div class="code-panel">
+        <div class="controls"><span>{% if item.kind == 'environment' %}{% translate "Environment variables" %}{% elif item.kind == 'curl' %}{% translate "curl over HTTP" %}{% elif item.kind == 'socks5h' %}{% translate "curl over SOCKS5 (socks5h)" %}{% elif item.kind == 'git' %}{% translate "git, for GitHub over HTTPS" %}{% else %}pip{% endif %}</span>
+          <button type="button" data-copy="tpl-{{ network }}-{{ item.kind }}" data-done="{% translate 'Copied' %}">{% translate "Copy" %}</button></div>
+        <pre id="tpl-{{ network }}-{{ item.kind }}">{{ item.text }}</pre>
+      </div>
+      {% endfor %}
+    </div>
+    {% endfor %}
+    {% elif view.account is None %}
+    <div class="empty">{% translate "Client settings appear here once you have a proxy account." %}</div>
+    {% else %}
+    <div class="empty">{% translate "Client settings appear here while proxy access is on." %}</div>
+    {% endif %}
+  </div>
+</section>
+{% endif %}
+{% endblock %}

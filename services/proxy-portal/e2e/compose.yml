@@ -1,0 +1,56 @@
+# A local run of the portal behind nginx, against stubs (run.sh). Nothing here reaches a real master or
+# Prometheus. The networks are those of services/docker-compose.yml, both internal here: nginx and the
+# portal share proxy_portal; the portal reaches the stubs, standing in for Prometheus and the master, on
+# proxy_portal_upstream.
+name: proxy-portal-e2e
+
+networks:
+  proxy_portal:
+    internal: true
+  proxy_portal_upstream:
+    internal: true
+  edge: {}
+
+volumes:
+  data: {}
+
+services:
+  stubs:
+    image: python:3.13.18-slim-trixie@sha256:e48f59cdba69a3cbd9ed2cf0f348d90d45a8d350d98134cf1070bc106ee9ed90
+    command: ["python", "-B", "-m", "portal.tests.stubs", "--host", "0.0.0.0"]
+    working_dir: /src
+    volumes:
+      - ..:/src:ro
+    networks: [proxy_portal_upstream]
+
+  proxy-portal:
+    build: ..
+    image: proxy-portal:e2e
+    user: "3089:3089"
+    environment:
+      TZ: Asia/Shanghai
+      PROXY_PORTAL_MASTER_URL: http://stubs:18080
+      PROXY_PORTAL_PROMETHEUS_URL: http://stubs:19090
+    volumes:
+      - ./run/spool:/srv/spool:ro
+      - data:/data
+    tmpfs:
+      - /srv/spool/requests:size=64k,mode=0700,uid=3089,gid=3089
+      - /srv/spool/results:size=64k,mode=0700,uid=3089,gid=3089
+      - /tmp:size=16m,mode=1777
+    read_only: true
+    cap_drop: [ALL]
+    security_opt: ["no-new-privileges:true"]
+    networks: [proxy_portal, proxy_portal_upstream]
+    depends_on: [stubs]
+
+  nginx:
+    image: nginx:1.30.6-alpine@sha256:901e593c95dc85f5a729f5765516321366ef4ac401821431d408897e95287d0a
+    volumes:
+      - ../../nginx/build/nginx.conf:/etc/nginx/nginx.conf:ro
+      - ./run/ssl:/opt/ssl:ro
+    networks: [proxy_portal, edge]
+    ports:
+      - "127.0.0.1:80:80"
+      - "127.0.0.1:443:443"
+    depends_on: [proxy-portal]

@@ -9,7 +9,7 @@ Proxy accounts: one protected accounts file, from which every authenticated prox
     proxy_accounts.py enable NAME
     proxy_accounts.py admin NAME on|off      admin accounts may use ha-private and the private proxies
     proxy_accounts.py list                   account names, admins marked, without passwords
-    proxy_accounts.py status [--json]        accounts, proxies, raw auth and the last applied file hash
+    proxy_accounts.py status [--json]        accounts, proxies and their ports, raw auth and the last applied file hash
     proxy_accounts.py raw-auth [on|off]      show or set authentication on the public proxies (off by default)
     proxy_accounts.py render                 write the configs below from the accounts file
 
@@ -68,6 +68,7 @@ BLACKBOX_EXAMPLE = Path("blackbox/blackbox.example.yml")
 BLACKBOX_CONFIG = Path("blackbox/config/blackbox.yml")
 RAW_CONFIG_GLOB = "xray/*/config/config.json"
 PUBLIC_PROXIES_FILE = Path("xray/public-proxies.txt")
+COMPOSE_FILE = Path("docker-compose.yml")
 
 RELAY = "svc-ha"
 MONITOR = "svc-monitor"
@@ -82,6 +83,10 @@ API_TAG = "api"  # the stats API's inbound, routed to Xray's API handler
 API_PROTOCOLS = ("dokodemo-door", "tunnel")
 HA_TOP_LEVEL = {"log", "stats", "api", "policy", "inbounds", "outbounds", "observatory", "routing"}
 HA_HOST = "xray-ha"
+# Container ports of the proxy entries, as in docker-compose.yml: a proxy's HTTP and SOCKS5 inbounds, and the HA
+# entries' (ha-general on a proxy's ports, ha-private on its own)
+PROXY_CONTAINER_PORTS = {"http": 8889, "socks": 1089}
+HA_CONTAINER_PORTS = {GENERAL: {"http": 8889, "socks": 1089}, HA_PRIVATE: {"http": 8890, "socks": 1090}}
 PROXY_HOST_PREFIX = "xray-"
 
 NAME_RE = re.compile(r"[a-z0-9][a-z0-9._-]{0,63}")
@@ -326,6 +331,50 @@ def kind(name: str) -> str:
     return "service" if name.startswith("svc-") else "user"
 
 
+def _host_port(entry) -> Tuple[Optional[int], Optional[int]]:
+    """(container port, host port) of a compose ports entry: "59889:8889", "127.0.0.1:30889:8889" or the long form."""
+    if isinstance(entry, dict):
+        target, published = entry.get("target"), entry.get("published")
+    else:
+        text = str(entry).strip().strip("\"'").split("/", 1)[0]
+        if text.startswith("["):
+            text = text.partition("]")[2].lstrip(":")
+        parts = text.split(":")
+        if len(parts) not in (2, 3):
+            return None, None
+        published, target = parts[-2], parts[-1]
+    try:
+        return int(str(target)), int(str(published))
+    except (TypeError, ValueError):
+        return None, None
+
+
+def compose_ports(base_dir: Path) -> Dict[str, Dict[int, int]]:
+    """{service: {container port: host port}} from docker-compose.yml; {} when it is missing or unreadable."""
+    try:
+        text = (Path(base_dir) / COMPOSE_FILE).read_text(encoding="utf-8")
+        from create_xray_service import compose_services  # it imports this module
+        services = compose_services(text)
+    except Exception as e:  # ports are informational: status must never fail on them
+        print(f"warning: no ports from {COMPOSE_FILE}: {type(e).__name__}", file=sys.stderr)
+        return {}
+    result = {}  # type: Dict[str, Dict[int, int]]
+    for service, entries in services.items():
+        if not isinstance(entries, list):
+            continue
+        ports = {}  # type: Dict[int, int]
+        for entry in entries:
+            target, published = _host_port(entry)
+            if target is not None:
+                ports.setdefault(target, published)
+        result[service] = ports
+    return result
+
+
+def _ports(published: Dict[int, int], container: Dict[str, int]) -> Dict[str, Optional[int]]:
+    return {protocol: published.get(port) for protocol, port in container.items()}
+
+
 def status(accounts: Accounts) -> dict:
     """A view of the accounts without passwords, for the portal (status --json)."""
     applied = None
@@ -339,6 +388,7 @@ def status(accounts: Accounts) -> dict:
     applied_sha = applied.get("accounts_sha256") if isinstance(applied, dict) else None
     proxies = proxy_names(accounts.base_dir)
     public = public_proxies(accounts.base_dir) if proxies else set()
+    ports = compose_ports(accounts.base_dir)
     return {
         "raw_auth": accounts.raw_auth,
         # The entries that refuse a disabled account: while raw auth is off, the public proxies' own entries
@@ -348,8 +398,12 @@ def status(accounts: Accounts) -> dict:
         "accounts": [{"name": name, "kind": kind(name), "enabled": accounts.enabled(name),
                       "admin": name in accounts.admins, "protected": name in PROTECTED}
                      for name in sorted(accounts.accounts)],
-        "proxies": [{"name": name, "access": "public" if name in public else "private"}
+        "proxies": [{"name": name, "access": "public" if name in public else "private",
+                     # host ports from docker-compose.yml, null when not published
+                     "ports": _ports(ports.get(PROXY_HOST_PREFIX + name, {}), PROXY_CONTAINER_PORTS)}
                     for name in proxies],
+        "entries": {entry: {"ports": _ports(ports.get(HA_HOST, {}), container)}
+                    for entry, container in HA_CONTAINER_PORTS.items()},
         "accounts_sha256": current,
         "applied": applied,
         "unapplied_changes": None if applied_sha is None else current != applied_sha,
@@ -669,7 +723,9 @@ def read_command(accounts: Accounts, args: argparse.Namespace) -> int:
             flags = ("  admin" if entry["admin"] else "") + ("  protected" if entry["protected"] else "")
             print(f"{entry['name']:<32} {entry['kind']:<8} {state}{flags}")
         for proxy in view["proxies"]:
-            print(f"proxy {proxy['name']:<40} {'public' if proxy['access'] == 'public' else 'private'}")
+            access = "public" if proxy["access"] == "public" else "private"
+            ports = "  ".join(f"{protocol} {port}" for protocol, port in proxy["ports"].items() if port)
+            print(f"proxy {proxy['name']:<40} {access:<12} {ports}".rstrip())
         applied = view["applied"] or {}
         print(f"accounts file sha256: {view['accounts_sha256']}")
         last = f"{applied.get('accounts_sha256') or 'unknown'} {applied.get('applied_at') or ''}".rstrip()

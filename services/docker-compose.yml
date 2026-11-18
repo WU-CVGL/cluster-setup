@@ -1,6 +1,14 @@
 networks:
   grafana_monitor:
     driver: bridge
+  # nginx and the proxy portal only: nginx is the portal's only way in
+  proxy_portal:
+    internal: true
+  # the proxy portal and Prometheus only: the portal's way to Prometheus and out to the Determined master.
+  # Not grafana_monitor: the proxies are there and send private addresses out directly, so a client could
+  # reach the portal through a proxy, past nginx.
+  proxy_portal_upstream:
+    driver: bridge
   nextcloud:
     external: false
 
@@ -82,6 +90,9 @@ services:
         - "33322:22"
         - "8080:8080"
     restart: always
+    networks:
+      - default
+      - proxy_portal
     volumes:
       - ./nginx/data/html:/usr/share/nginx/html:ro
       - /etc/ssl/private:/opt/ssl:ro
@@ -424,6 +435,42 @@ services:
     expose:
       - 9550
 
+  # The proxy portal (proxy-portal/README.md): status, My access, My usage, behind nginx as
+  # https://proxy.cvgl.lab. It reads the applier's status.json from the spool (read-only; requests/
+  # and results/ masked), and queries Prometheus and checks sign-ins with the Determined master over
+  # proxy_portal_upstream. Its database and secret key are in the data folder, owned by uid 3089.
+  # No Docker socket, no accounts file. No published port, and on no network a proxy is on: nginx
+  # reaches it on proxy_portal only, so the X-Real-IP and X-Forwarded-Proto it trusts always come
+  # from nginx.
+  proxy-portal:
+    build: ./proxy-portal
+    image: proxy-portal
+    restart: unless-stopped
+    user: "3089:3089"
+    environment:
+      TZ: Asia/Shanghai
+      PROXY_PORTAL_MASTER_URL: ${PROXY_PORTAL_MASTER_URL:-http://192.168.233.6:8080}
+    networks:
+      - proxy_portal
+      - proxy_portal_upstream
+    volumes:
+      - ${PROXY_PORTAL_SPOOL:-/var/lib/proxy-portal/spool}:/srv/spool:ro
+      - ${PROXY_PORTAL_DATA:-/var/lib/proxy-portal/data}:/data
+    tmpfs:
+      - /srv/spool/requests:size=64k,mode=0700,uid=3089,gid=3089
+      - /srv/spool/results:size=64k,mode=0700,uid=3089,gid=3089
+      - /tmp:size=16m,mode=1777
+    read_only: true
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request as u; u.urlopen(u.Request('http://127.0.0.1:8000/healthz', headers={'Host': 'proxy.cvgl.lab', 'X-Forwarded-Proto': 'https'}), timeout=5)"]
+      interval: 1m
+      timeout: 10s
+      retries: 3
+
   grafana:
     image: grafana/grafana:13.0.1-security-01
     restart: unless-stopped
@@ -467,6 +514,7 @@ services:
     restart: unless-stopped
     networks:
       - grafana_monitor
+      - proxy_portal_upstream   # for the proxy portal's queries
     environment:
       TZ: Asia/Shanghai
     volumes:

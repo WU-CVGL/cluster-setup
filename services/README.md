@@ -48,6 +48,8 @@ We are currently offering these web services:
   - https://harbor.cvgl.lab
 - Grafana
   - https://grafana.cvgl.lab
+- Proxy portal (proxy status, and each user's access and usage; [notes](proxy-portal/README.md))
+  - https://proxy.cvgl.lab
 - Weights & Biases (wandb)
   - https://wandb.cvgl.lab
 - Portainer

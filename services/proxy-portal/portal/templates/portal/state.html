@@ -1,0 +1,1 @@
+{% load i18n %}<span class="chip {{ state }}"><span class="dot {{ state }}" aria-hidden="true"></span>{% if state == 'passing' %}{% translate "Passing" %}{% elif state == 'failing' %}{% translate "Failing" %}{% else %}{% translate "Unknown" %}{% endif %}</span>

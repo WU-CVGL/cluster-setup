@@ -1,0 +1,6 @@
+# The portal's database and secret key (PROXY_PORTAL_DATA_DIR), the local e2e run's files (a key among them),
+# compiled translations, Python caches
+data/
+e2e/run/
+*.mo
+__pycache__/

@@ -1,0 +1,692 @@
+msgid ""
+msgstr ""
+"Project-Id-Version: proxy-portal\n"
+"Report-Msgid-Bugs-To: \n"
+"POT-Creation-Date: 2026-11-18 16:38+0800\n"
+"PO-Revision-Date: 2026-11-18 00:00+0800\n"
+"Last-Translator: \n"
+"Language-Team: \n"
+"Language: zh_Hans\n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=UTF-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+"Plural-Forms: nplurals=1; plural=0;\n"
+
+msgid "Status unknown: no recent probe results for the default proxy"
+msgstr "状态未知：默认代理近期没有探测结果"
+
+msgid "Default proxy available"
+msgstr "默认代理可用"
+
+#, python-format
+msgid "Default proxy available; its %(n)d pool proxy is passing"
+msgid_plural "Default proxy available; all %(n)d pool proxies passing"
+msgstr[0] "默认代理可用；代理池中 %(n)d 个代理全部正常"
+
+msgid "Default proxy answering, but no pool proxy passes its probe"
+msgstr "默认代理有响应，但代理池中没有代理通过探测"
+
+msgid "Default proxy available on its last passing pool proxy, without a spare"
+msgstr "默认代理仅剩一个正常的池内代理，没有备用"
+
+#, python-format
+msgid "Default proxy available; %(n)d pool proxy not passing, failover working"
+msgid_plural ""
+"Default proxy available; %(n)d pool proxies not passing, failover working"
+msgstr[0] "默认代理可用；代理池中 %(n)d 个代理未通过探测，故障切换正常"
+
+msgid ""
+"Default proxy failing while its pool proxies pass: the HA entry itself is "
+"down"
+msgstr "默认代理故障，但代理池中的代理正常：高可用入口本身不可用"
+
+msgid "Default proxy failing: no pool proxy passes its probe"
+msgstr "默认代理故障：代理池中没有代理通过探测"
+
+msgid "Default proxy failing"
+msgstr "默认代理故障"
+
+msgid "HTTP entry failing, SOCKS5 still available"
+msgstr "HTTP 入口故障，SOCKS5 仍可用"
+
+msgid "SOCKS5 entry failing, HTTP still available"
+msgstr "SOCKS5 入口故障，HTTP 仍可用"
+
+msgid "HTTP entry available; SOCKS5 status unknown"
+msgstr "HTTP 入口可用；SOCKS5 状态未知"
+
+msgid "SOCKS5 entry available; HTTP status unknown"
+msgstr "SOCKS5 入口可用；HTTP 状态未知"
+
+msgid "HTTP entry failing; SOCKS5 status unknown"
+msgstr "HTTP 入口故障；SOCKS5 状态未知"
+
+msgid "SOCKS5 entry failing; HTTP status unknown"
+msgstr "SOCKS5 入口故障；HTTP 状态未知"
+
+msgctxt "incident component"
+msgid "Default proxy (ha-general)"
+msgstr "默认代理 (ha-general)"
+
+msgctxt "incident component"
+msgid "Private entry (ha-private)"
+msgstr "私有入口 (ha-private)"
+
+msgctxt "incident component"
+msgid "Individual proxies"
+msgstr "各个代理"
+
+msgctxt "incident component"
+msgid "Monitoring"
+msgstr "监控"
+
+msgctxt "incident component"
+msgid "Portal"
+msgstr "门户"
+
+msgctxt "incident state"
+msgid "Investigating"
+msgstr "调查中"
+
+msgctxt "incident state"
+msgid "Identified"
+msgstr "已定位"
+
+msgctxt "incident state"
+msgid "Monitoring"
+msgstr "观察中"
+
+msgctxt "incident state"
+msgid "Resolved"
+msgstr "已恢复"
+
+msgctxt "incident state"
+msgid "Maintenance"
+msgstr "维护"
+
+msgid "My access"
+msgstr "我的接入"
+
+msgid "My proxy access"
+msgstr "我的代理接入"
+
+msgid ""
+"Your proxy account, named after your Determined username, as the proxy "
+"accounts file records it, and the entries it may use. Requests still waiting "
+"are not shown. Passwords are never shown here."
+msgstr ""
+"你的代理账号（以你的 Determined 用户名命名）在代理账号文件中的记录，以及它可"
+"以使用的入口。尚在等待中的请求不在此显示。这里从不显示密码。"
+
+msgid ""
+"Account information is unavailable right now. Try again later; the proxies "
+"themselves are not affected."
+msgstr "账号信息暂时不可用，请稍后再试；代理本身不受影响。"
+
+msgid ""
+"This account information has not been refreshed for a while and may be out "
+"of date."
+msgstr "账号信息已有一段时间没有更新，可能不是最新状态。"
+
+msgid "Account"
+msgstr "账号"
+
+#, python-format
+msgid "%(name)s has no proxy account."
+msgstr "%(name)s 没有代理账号。"
+
+msgid ""
+"To get one, ask an admin: the account is named after your Determined "
+"username, and the admin gives you its password."
+msgstr ""
+"如需账号，请联系管理员：账号以你的 Determined 用户名命名，由管理员告诉你密"
+"码。"
+
+msgid ""
+"Without an account you can use the public proxies' own entries: they accept "
+"anyone while raw auth is off."
+msgstr ""
+"没有账号时可以使用公共代理自己的入口：在公共代理入口认证 (raw auth) 关闭时，"
+"它们接受任何人。"
+
+#, python-format
+msgid "Proxy access is <b>on</b> for the account <b>%(name)s</b>."
+msgstr "账号 <b>%(name)s</b> 的代理访问已<b>开启</b>。"
+
+msgid ""
+"This is an admin account: it may also use ha-private and the private proxies."
+msgstr "这是管理员账号：还可以使用 ha-private 和私有代理。"
+
+#, python-format
+msgid "Proxy access is <b>off</b> for the account <b>%(name)s</b>."
+msgstr "账号 <b>%(name)s</b> 的代理访问已<b>关闭</b>。"
+
+msgid "Every entry refuses it, the public proxies' own entries included."
+msgstr "所有入口都拒绝它，包括公共代理自己的入口。"
+
+msgid ""
+"ha-general, ha-private and the private proxies refuse it. The public "
+"proxies' own entries still work for you: they need no account while raw auth "
+"(accounts on the public proxies' own entries) is off."
+msgstr ""
+"ha-general、ha-private 和私有代理拒绝它。公共代理自己的入口仍可使用：公共代理"
+"入口认证 (raw auth) 关闭时无需账号。"
+
+msgid ""
+"ha-general refuses it. The public proxies' own entries still work for you: "
+"they need no account while raw auth (accounts on the public proxies' own "
+"entries) is off."
+msgstr ""
+"ha-general 拒绝它。公共代理自己的入口仍可使用：公共代理入口认证 (raw auth) 关"
+"闭时无需账号。"
+
+msgid ""
+"Raw auth (accounts on the public proxies' own entries) is off: a public "
+"proxy's own entry accepts anyone, without an account, so turning an account "
+"off stops only the HA entries and the private proxies for it."
+msgstr ""
+"公共代理入口认证 (raw auth) 已关闭：公共代理自己的入口无需账号、接受任何人，"
+"所以关闭一个账号的代理访问只会让高可用入口和私有代理拒绝它。"
+
+msgid ""
+"Raw auth (accounts on the public proxies' own entries) is on: every entry "
+"requires an enabled account."
+msgstr "公共代理入口认证 (raw auth) 已开启：所有入口都需要已启用的账号。"
+
+msgid ""
+"Proxy access off is not a change to your cluster account: your Determined "
+"login, jobs and files are not affected."
+msgstr ""
+"关闭代理访问不会改变你的集群账号：你的 Determined 登录、任务和文件都不受影"
+"响。"
+
+msgid ""
+"The proxy admin flag is set per proxy account by the admins; it is not the "
+"Determined admin role."
+msgstr "代理管理员标记由管理员按代理账号设置，与 Determined 的管理员角色无关。"
+
+msgid "Need an account or a new password? Ask an admin."
+msgstr "需要账号或新密码？请联系管理员。"
+
+msgid "Entries"
+msgstr "入口"
+
+msgid ""
+"Every account may use ha-general and the public proxies; admin accounts also "
+"ha-private and the private proxies. Same ports on both networks: the private "
+"network from the nodes, the campus network from the login node."
+msgstr ""
+"每个账号都可以使用 ha-general 和公共代理；管理员账号还可以使用 ha-private 和"
+"私有代理。两个网络的端口相同：节点上用内网地址，登录节点上用校园网地址。"
+
+msgid "Default proxy"
+msgstr "默认代理"
+
+msgid "Private entry"
+msgstr "私有入口"
+
+msgid "Private"
+msgstr "私有"
+
+msgid "No account needed"
+msgstr "无需账号"
+
+msgid "Usable"
+msgstr "可用"
+
+msgid "Needs an account"
+msgstr "需要账号"
+
+msgid "Proxy access off"
+msgstr "代理访问已关闭"
+
+msgid "HA over the public proxies, with your account."
+msgstr "在公共代理之间高可用切换，使用你的账号。"
+
+msgid "HA over every proxy, with your admin account."
+msgstr "在所有代理之间高可用切换，使用你的管理员账号。"
+
+msgid "One proxy, no failover, with your account."
+msgstr "单个代理，不切换，使用你的账号。"
+
+msgid "One proxy, no failover, without an account."
+msgstr "单个代理，不切换，无需账号。"
+
+msgid "Private network"
+msgstr "内网"
+
+msgid "Campus network"
+msgstr "校园网"
+
+msgid "Ports not published"
+msgstr "端口未发布"
+
+msgid "No entries"
+msgstr "没有入口"
+
+msgid "Client settings"
+msgstr "客户端设置"
+
+#, python-format
+msgid ""
+"For the default proxy ha-general. Replace %(placeholder)s with your "
+"account's password; socks5h lets the proxy resolve names."
+msgstr ""
+"适用于默认代理 ha-general。把 %(placeholder)s 换成你账号的密码；socks5h 表示"
+"由代理解析域名。"
+
+msgid "Network"
+msgstr "网络"
+
+msgid ""
+"Keep the password to yourself: set it in your own shell profile or task "
+"environment, never in images, notebooks, shared task templates or "
+"repositories. If it leaks, ask an admin for a new one."
+msgstr ""
+"请自行保管密码：只写在自己的 shell 配置或任务环境中，不要写进镜像、notebook、"
+"共享的任务模板或代码仓库。如有泄露，请联系管理员更换。"
+
+msgid "Private network (the nodes)"
+msgstr "内网（节点）"
+
+msgid "Campus network (the login node)"
+msgstr "校园网（登录节点）"
+
+msgid "Environment variables"
+msgstr "环境变量"
+
+msgid "curl over HTTP"
+msgstr "curl，HTTP"
+
+msgid "curl over SOCKS5 (socks5h)"
+msgstr "curl，SOCKS5 (socks5h)"
+
+msgid "git, for GitHub over HTTPS"
+msgstr "git，经 HTTPS 访问 GitHub"
+
+msgid "Copied"
+msgstr "已复制"
+
+msgid "Copy"
+msgstr "复制"
+
+msgid "Client settings appear here once you have a proxy account."
+msgstr "有代理账号后，这里会显示客户端设置。"
+
+msgid "Client settings appear here while proxy access is on."
+msgstr "代理访问开启时，这里会显示客户端设置。"
+
+msgid "CVGL Proxy"
+msgstr "CVGL 代理"
+
+msgid "Skip to content"
+msgstr "跳到正文"
+
+msgid "Proxy status and access"
+msgstr "代理状态与接入"
+
+msgid "Main"
+msgstr "主导航"
+
+msgid "Status"
+msgstr "服务状态"
+
+msgid "My usage"
+msgstr "我的流量"
+
+msgid "Language"
+msgstr "语言"
+
+#, python-format
+msgid "Signed in as <b>%(name)s</b>"
+msgstr "已登录：<b>%(name)s</b>"
+
+msgid "Read from Determined at sign-in"
+msgstr "登录时从 Determined 读取"
+
+msgid "Determined admin"
+msgstr "Determined 管理员"
+
+msgid "Sign out"
+msgstr "退出"
+
+msgid "Sign in"
+msgstr "登录"
+
+msgid ""
+"Probe results from Prometheus. Account information from the proxy accounts "
+"file, refreshed at least every 5 minutes."
+msgstr ""
+"探测结果来自 Prometheus；账号信息来自代理账号文件，至少每 5 分钟刷新一次。"
+
+msgid "Proxy Availability in Grafana"
+msgstr "Grafana：代理可用性"
+
+msgid "Proxy Usage in Grafana"
+msgstr "Grafana：代理流量"
+
+msgid "Sign in with your Determined login"
+msgstr "用 Determined 账号登录"
+
+msgid ""
+"The portal checks your username and password once with the Determined master "
+"and keeps neither the password nor the master's token."
+msgstr ""
+"门户只向 Determined master 校验一次用户名和密码，不保存密码，也不保存 master "
+"的令牌。"
+
+msgid "Username"
+msgstr "用户名"
+
+msgid "Password"
+msgstr "密码"
+
+#, python-format
+msgid ""
+"You stay signed in for %(hours)s hours. Your Determined admin flag is read "
+"at sign-in: sign in again after it changes."
+msgstr ""
+"登录状态保持 %(hours)s 小时。Determined 管理员标记在登录时读取：标记变化后请"
+"重新登录。"
+
+msgid "Passing"
+msgstr "正常"
+
+msgid "Failing"
+msgstr "故障"
+
+msgid "Unknown"
+msgstr "未知"
+
+msgid "Service health"
+msgstr "服务健康"
+
+msgid "Proxy status"
+msgstr "代理服务状态"
+
+msgid ""
+"Whether requests get through the HA entries and each proxy, from probes "
+"every 30 seconds. The status of an entry is not whether your account may use "
+"it: see My access."
+msgstr ""
+"根据每 30 秒一次的探测，显示请求能否通过高可用入口和各个代理。入口的状态不代"
+"表你的账号可以使用它：请看“我的接入”。"
+
+msgid "Last check"
+msgstr "最近检查"
+
+msgid "Monitoring data is unavailable, so every status is unknown."
+msgstr "监控数据不可用，所有状态均为未知。"
+
+msgid ""
+"The default proxy ha-general sends each new connection to a passing public "
+"proxy; open connections stay on their proxy."
+msgstr ""
+"默认代理 ha-general 把每个新连接发往一个正常的公共代理；已建立的连接留在原代"
+"理上。"
+
+msgid "public proxies passing"
+msgstr "公共代理正常"
+
+msgid "Default proxy · HTTP"
+msgstr "默认代理 · HTTP"
+
+msgid "Default proxy · SOCKS5"
+msgstr "默认代理 · SOCKS5"
+
+msgid "24 h success"
+msgstr "24 小时成功率"
+
+msgid "coverage"
+msgstr "覆盖率"
+
+msgid "Pool of the default proxy"
+msgstr "默认代理的代理池"
+
+msgid "passing / configured"
+msgstr "正常 / 已配置"
+
+#, python-format
+msgid "Unknown when older than %(s)s s"
+msgstr "超过 %(s)s 秒即为未知"
+
+msgid ""
+"The HA entries keep one address and choose a passing proxy for each new "
+"connection."
+msgstr "高可用入口地址固定，为每个新连接选择一个正常的代理。"
+
+msgid "Over the public proxies, for every proxy account"
+msgstr "在公共代理之间切换，所有代理账号可用"
+
+msgid "Over every proxy, public and private, for admin accounts"
+msgstr "在所有公共和私有代理之间切换，仅管理员账号可用"
+
+#, python-format
+msgid "%(passing)s of %(configured)s proxies passing"
+msgstr "%(configured)s 个代理中 %(passing)s 个正常"
+
+msgid "Past 30 days"
+msgstr "过去 30 天"
+
+msgid ""
+"The default proxy's probe success rate per 24 hours, HTTP and SOCKS5, the "
+"worse of the two. A day with probe results for less than half of it is grey."
+msgstr ""
+"默认代理每 24 小时的探测成功率，取 HTTP 和 SOCKS5 中较差的一个。探测结果不足"
+"半天的日子显示为灰色。"
+
+msgid "no probe results"
+msgstr "没有探测结果"
+
+msgid "success"
+msgstr "成功率"
+
+msgid "Degraded"
+msgstr "部分异常"
+
+msgid "30 days ago"
+msgstr "30 天前"
+
+msgid "Unknown or too little data"
+msgstr "未知或数据不足"
+
+msgid "Now"
+msgstr "现在"
+
+msgid "Proxies"
+msgstr "代理"
+
+msgid ""
+"Each proxy probed through its own entry. A proxy's own entry has no "
+"failover: when it fails, use the default proxy."
+msgstr ""
+"每个代理都通过它自己的入口探测。代理自己的入口没有故障切换：代理故障时请使用"
+"默认代理。"
+
+msgid "Proxy"
+msgstr "代理"
+
+msgid "Duration"
+msgstr "耗时"
+
+msgid "Coverage"
+msgstr "覆盖率"
+
+msgid "Public proxies"
+msgstr "公共代理"
+
+msgid "Private proxies"
+msgstr "私有代理"
+
+msgid "No proxy results"
+msgstr "没有代理结果"
+
+msgid "Duration and 24 h success: HTTP / SOCKS5."
+msgstr "耗时和 24 小时成功率：HTTP / SOCKS5。"
+
+msgid "Duration, coverage and last check: on a wider screen."
+msgstr "耗时、覆盖率和最近检查：请在更宽的屏幕上查看。"
+
+msgid "Incidents"
+msgstr "事件"
+
+msgid "Notices from the admins about outages and maintenance."
+msgstr "管理员发布的故障和维护通知。"
+
+msgid "No incidents in the last 30 days"
+msgstr "过去 30 天没有事件"
+
+msgid "Reading the status"
+msgstr "如何理解状态"
+
+msgid "What the probes show, and what they do not."
+msgstr "探测能说明什么，不能说明什么。"
+
+msgid "The service works but you cannot connect"
+msgstr "服务正常但你无法连接"
+
+msgid ""
+"Check My access: whether you have an account, whether its proxy access is "
+"on, and the address for your network. The probes run on the supplementary "
+"services VM and do not cover the way from your machine to it."
+msgstr ""
+"请查看“我的接入”：你是否有账号、代理访问是否开启，以及你所在网络的地址。探测"
+"在附属服务虚拟机上运行，不覆盖从你的机器到它的网络路径。"
+
+msgid "Failover"
+msgstr "故障切换"
+
+msgid ""
+"An HA entry chooses a passing proxy for each new connection, within about 15 "
+"seconds of a proxy failing. Open downloads, SSH sessions and WebSockets stay "
+"on their proxy and break with it; the client has to retry."
+msgstr ""
+"代理故障后约 15 秒内，高可用入口会为新连接选择正常的代理。已建立的下载、SSH "
+"会话和 WebSocket 留在原代理上，会随之中断，需要客户端重试。"
+
+msgid ""
+"No probe result in the last 90 seconds. An older result is never shown in "
+"its place."
+msgstr "最近 90 秒内没有探测结果；不会用更早的结果代替。"
+
+msgid "My proxy usage"
+msgstr "我的代理流量"
+
+#, python-format
+msgid ""
+"Observed traffic of the account %(name)s, counted where you enter the "
+"proxies: the HA entries, and a proxy's own entry when it requires accounts. "
+"Traffic through a proxy's own entry without an account is counted under no "
+"user."
+msgstr ""
+"账号 %(name)s 的观测流量，按你接入代理的入口计数：高可用入口，以及需要账号时"
+"代理自己的入口。不带账号经代理自己的入口产生的流量不计入任何用户。"
+
+msgid ""
+"Usage data is unavailable right now: Prometheus did not answer. Try again "
+"later."
+msgstr "流量数据暂时不可用：Prometheus 没有响应，请稍后再试。"
+
+msgid "Observed totals"
+msgstr "观测总量"
+
+msgid ""
+"Download and upload through the proxies over the last 24 hours, 7 days and "
+"30 days."
+msgstr "最近 24 小时、7 天和 30 天经代理的下载和上传流量。"
+
+msgid "Last 24 hours"
+msgstr "最近 24 小时"
+
+msgid "Last 7 days"
+msgstr "最近 7 天"
+
+msgid "Last 30 days"
+msgstr "最近 30 天"
+
+msgid "Download"
+msgstr "下载"
+
+msgid "Upload"
+msgstr "上传"
+
+msgid "No traffic observed"
+msgstr "未观测到流量"
+
+msgid "Trend"
+msgstr "趋势"
+
+msgid ""
+"Download and upload per hour (24 hours), per 6 hours (7 days) and per day "
+"(30 days)."
+msgstr "下载和上传：每小时（24 小时）、每 6 小时（7 天）、每天（30 天）。"
+
+msgid "Range"
+msgstr "时间范围"
+
+msgid "24 hours"
+msgstr "24 小时"
+
+msgid "7 days"
+msgstr "7 天"
+
+msgid "30 days"
+msgstr "30 天"
+
+#, python-format
+msgid "Traffic per bucket; the highest bucket is %(peak)s."
+msgstr "每个时间段的流量；最高的时间段为 %(peak)s。"
+
+#, python-format
+msgid "Highest bar: %(peak)s"
+msgstr "最高：%(peak)s"
+
+msgid "Notes"
+msgstr "说明"
+
+msgid ""
+"These are observed totals, not a bill or a quota. They include traffic to "
+"private addresses and destinations in China. Counters restart when a proxy "
+"restarts, as after an account change, so a little traffic before a restart "
+"can be missing, and a total built from few samples can read high."
+msgstr ""
+"这些是观测总量，不是账单或配额，包括访问内网和国内目标的流量。代理重启时（例"
+"如账号变更后）计数器归零，因此重启前的少量流量可能缺失，样本很少时的总量可能"
+"偏高。"
+
+msgid "Only the signed-in user's own usage is shown."
+msgstr "这里只显示当前登录用户自己的流量。"
+
+#, python-format
+msgid "%(n)d s ago"
+msgstr "%(n)d 秒前"
+
+#, python-format
+msgid "%(n)d min ago"
+msgstr "%(n)d 分钟前"
+
+#, python-format
+msgid "%(n)d h ago"
+msgstr "%(n)d 小时前"
+
+#, python-format
+msgid "%(n)d days ago"
+msgstr "%(n)d 天前"
+
+msgid "Enter your Determined username and password."
+msgstr "请输入 Determined 用户名和密码。"
+
+#, python-format
+msgid "Too many failed sign-ins. Try again in %(n)d minute."
+msgid_plural "Too many failed sign-ins. Try again in %(n)d minutes."
+msgstr[0] "登录失败次数过多，请 %(n)d 分钟后再试。"
+
+msgid ""
+"The Determined master cannot check your sign-in right now. Try again later."
+msgstr "Determined master 暂时无法校验登录，请稍后再试。"
+
+msgid "This Determined account is deactivated."
+msgstr "这个 Determined 账号已停用。"
+
+msgid "Wrong username or password."
+msgstr "用户名或密码错误。"
