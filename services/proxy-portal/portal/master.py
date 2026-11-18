@@ -10,6 +10,7 @@ and admin flags of every cluster user, for the admins' Users page. A failure the
 """
 
 import logging
+import time
 from dataclasses import dataclass
 from typing import Optional, Tuple
 
@@ -37,6 +38,7 @@ class SignIn:
 
 USERS_PAGE = 500
 USERS_MAX = 20000
+USERS_SECONDS = 15  # for the whole list: the sign-in waits for it, and nginx for the sign-in
 
 
 def _parse_users(answer):
@@ -61,11 +63,27 @@ def _parse_users(answer):
 @sensitive_variables("token")
 def _cluster_users(token):
     """Every cluster user, page by page, read with the admin's token; None on any failure (logged without it)."""
-    users = []
-    while len(users) < USERS_MAX:
+    try:
+        return _read_users(token)
+    except Exception as e:  # nothing the list read raises may fail the sign-in
+        log.warning("Determined user list at an admin sign-in: %s; the previous list is kept", type(e).__name__)
+        return None
+
+
+@sensitive_variables("token")
+def _read_users(token):
+    users, seen = [], set()
+    deadline = time.monotonic() + USERS_SECONDS
+    while True:
+        remaining = deadline - time.monotonic()
+        if remaining <= 0:
+            log.warning("Determined user list at an admin sign-in: not read within %d seconds; the previous list is "
+                        "kept", USERS_SECONDS)
+            return None
         try:
-            answer = request_json(f"{settings.MASTER_URL}/api/v1/users?offset={len(users)}"
-                                  f"&limit={USERS_PAGE}", headers={"Authorization": "Bearer " + token})
+            answer = request_json(f"{settings.MASTER_URL}/api/v1/users?offset={len(users)}&limit={USERS_PAGE}",
+                                  headers={"Authorization": "Bearer " + token},
+                                  timeout=min(settings.UPSTREAM_TIMEOUT, remaining))
         except UpstreamError as e:
             log.warning("Determined user list at an admin sign-in: %s; the previous list is kept", e)
             return None
@@ -74,13 +92,20 @@ def _cluster_users(token):
             log.warning("Determined user list at an admin sign-in: an unexpected answer; the previous list is kept")
             return None
         page, total = parsed
+        names = {name for name, _, _ in page}
+        if len(names) != len(page) or names & seen:
+            log.warning("Determined user list at an admin sign-in: repeated names; the previous list is kept")
+            return None
+        seen |= names
         users.extend(page)
         if not page or (len(users) >= total if total is not None else len(page) < USERS_PAGE):
             break
-    names = [u[0] for u in users]
-    if not users or len(set(names)) != len(names):
-        log.warning("Determined user list at an admin sign-in: empty or with repeated names; the previous list is "
-                    "kept")
+        if len(users) >= USERS_MAX:
+            log.warning("Determined user list at an admin sign-in: more than %d users; the previous list is kept",
+                        USERS_MAX)
+            return None
+    if not users:
+        log.warning("Determined user list at an admin sign-in: empty; the previous list is kept")
         return None
     return tuple(users)
 

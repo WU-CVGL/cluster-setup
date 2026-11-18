@@ -33,7 +33,7 @@ class MasterStub:
         self.tokens = {}        # token: username, for the open master sessions
         self.fail_logout = False
         self.events = []        # ("login" | "logout" | "users", token or username), in order
-        self.users_answer = None  # (status, body) to answer GET /api/v1/users with instead
+        self.users_answer = None  # (status, body) to answer GET /api/v1/users with instead; ("raw", bytes) as is
         self.page_size = None     # cap the users per page, to make the portal page through them
         self.active_flag_override = None  # answer 200 with this "active" value (a master that does not refuse)
         self.lock = threading.Lock()
@@ -153,6 +153,10 @@ def serve(stub, port=0, host="127.0.0.1"):
             headers = {k: v for k, v in self.headers.items()}
             headers["_url"] = self.path
             status, data = stub.handle(self.command, urllib.parse.urlsplit(self.path).path, headers, body)
+            if status == "raw":  # a broken answer, written as it is, then the connection closes
+                self.wfile.write(data)
+                self.close_connection = True
+                return
             raw = json.dumps(data).encode()
             self.send_response(status)
             self.send_header("Content-Type", "application/json")

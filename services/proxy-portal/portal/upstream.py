@@ -1,5 +1,6 @@
 """HTTP to the upstreams (the Determined master, Prometheus): JSON in, JSON out, standard library only."""
 
+import http.client
 import ipaddress
 import json
 import urllib.error
@@ -56,13 +57,13 @@ def request_json(url, data=None, headers=None, timeout=None):
         with _OPENER.open(request, timeout=timeout or settings.UPSTREAM_TIMEOUT) as response:
             raw = response.read(8 * 1024 * 1024)
     except urllib.error.HTTPError as e:
-        raw = e.read(64 * 1024)
         try:
-            parsed = json.loads(raw.decode("utf-8"))
-        except ValueError:
+            parsed = json.loads(e.read(64 * 1024).decode("utf-8"))
+        except (OSError, ValueError, http.client.HTTPException):
             parsed = None
         raise HTTPStatusError(e.code, parsed) from None
-    except (OSError, ValueError) as e:
+    except (OSError, ValueError, http.client.HTTPException) as e:
+        # http.client.HTTPException: a cut-off body (IncompleteRead), a bad status line, too long a header line
         raise UpstreamError(type(e).__name__) from None
     try:
         return json.loads(raw.decode("utf-8")) if raw else {}

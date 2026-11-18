@@ -1,12 +1,16 @@
 """The cluster user list read at an admin's sign-in, and the admins' Users page with its filters and actions."""
 
+import itertools
 import json
 import logging
 import os
+import types
+from unittest import mock
 
 from django.conf import settings
 from django.db import connection
 
+from portal import master, upstream
 from portal.models import AccountRequest, ClusterUser
 
 from .base import PortalTestCase, PortalTransactionTestCase, https_client
@@ -77,6 +81,63 @@ class CaptureTest(PortalTransactionTestCase):
         self.assertEqual(len(warnings), 5)
         self.assertNotIn("v2.public.", "\n".join(self.capture.lines))
         self.assertEqual(self.master.tokens, {})  # every session was still ended
+
+    def test_broken_answer_keeps_the_previous_list(self):
+        self.sign_in("carol")
+        before = self.listed()
+        cut = (b"HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nTransfer-Encoding: chunked\r\n\r\n"
+               b"100\r\n{\"users\": [")
+        for raw in (cut, b"garbage\r\n\r\n", b"HTTP/1.1 200 " + b"x" * 70000 + b"\r\n\r\n"):
+            self.master.users_answer = ("raw", raw)
+            client = https_client()
+            self.assertEqual(self.sign_in("carol", client=client).status_code, 302, raw[:40])
+            self.assertIs(client.session["is_determined_admin"], True)
+            self.assertEqual(self.listed(), before)
+        self.assertEqual(len([line for line in self.capture.lines if "user list" in line]), 3)
+        self.assertNotIn("v2.public.", "\n".join(self.capture.lines))
+        self.assertEqual(self.master.tokens, {})  # every session was still ended
+
+    def users_calls(self):
+        return [kind for kind, _ in self.master.events].count("users")
+
+    def test_a_master_ignoring_the_offset_is_read_twice_only(self):
+        self.sign_in("carol")
+        before = self.listed()
+        rows = [{"username": f"user{i:03d}", "active": True, "admin": False} for i in range(master.USERS_PAGE)]
+        self.master.users_answer = (200, {"users": rows})  # every page the same, full, with no total
+        self.master.events.clear()
+        self.assertEqual(self.sign_in("carol", client=https_client()).status_code, 302)
+        self.assertEqual(self.users_calls(), 2)
+        self.assertEqual(self.listed(), before)
+        self.assertTrue(any("repeated names" in line for line in self.capture.lines))
+
+    def test_more_than_the_limit_keeps_the_previous_list(self):
+        self.sign_in("carol")
+        before = self.listed()
+        self.master.page_size = 2
+        self.master.users.update({f"user{i:02d}": (f"pw-user{i:02d}", False, True) for i in range(7)})
+        self.master.events.clear()
+        with mock.patch.object(master, "USERS_MAX", 4):
+            self.assertEqual(self.sign_in("carol", client=https_client()).status_code, 302)
+        self.assertEqual(self.users_calls(), 2)
+        self.assertEqual(self.listed(), before)
+        self.assertTrue(any("more than 4 users" in line for line in self.capture.lines))
+
+    def test_a_slow_list_stops_at_the_time_limit(self):
+        self.sign_in("carol")
+        before = self.listed()
+        self.master.page_size = 2
+        self.master.events.clear()
+        clock = types.SimpleNamespace(monotonic=itertools.count(0, 10).__next__)  # 10 s pass per page
+        with mock.patch.object(master, "time", clock), \
+                mock.patch.object(master, "request_json", wraps=upstream.request_json) as call:
+            self.assertEqual(self.sign_in("carol", client=https_client()).status_code, 302)
+        users = [c for c in call.call_args_list if "/api/v1/users" in c.args[0]]
+        self.assertEqual(len(users), 1)
+        self.assertEqual(users[0].kwargs["timeout"], master.USERS_SECONDS - 10)  # the time left, not 10 s more
+        self.assertEqual(self.listed(), before)
+        self.assertTrue(any("not read within 15 seconds" in line for line in self.capture.lines))
+        self.assertEqual(self.master.tokens, {})
 
     def test_unreachable_keeps_the_previous_list(self):
         self.sign_in("carol")
