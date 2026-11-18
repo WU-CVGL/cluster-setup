@@ -3,7 +3,8 @@
 // modal follows it through a stub applier status (applying, then applied with a result written as the portal's uid),
 // says so when a poll gets an error page instead of an answer, and reveals the password once, with a working copy button; the result file is deleted and a second reveal is
 // refused. A second reset's password answer is held back: the dialog cannot be closed (Esc twice, Close) while it
-// is on its way, and when it closes anyway, the password that arrives afterwards is shown when it reopens.
+// is on its way, leaving the page asks first, and when it closes anyway, it opens again on the password that arrives
+// afterwards. A create from a signed-out page says to sign in again.
 // In English at desktop width and in Chinese at phone width, without horizontal overflow.
 //   node e2e/self-reset.cjs <base URL> <screenshot folder>   (run from e2e/, as run.sh does; Playwright in NODE_PATH)
 const { chromium } = require('playwright');
@@ -46,10 +47,10 @@ os.write(fd, json.dumps({'id': '${id}', 'username': '${user}', 'password': '${pa
     { lang: 'en', user: 'alice', viewport: { width: 1280, height: 900 }, device: 'desktop', locale: 'en-US', header: 'en-US,en;q=0.9',
       t: { button: 'Reset proxy password', collecting: 'Getting the password…', pending: 'Pending', applying: 'Applying', applied: 'Applied', warning: 'will not be shown again', copied: 'Copied',
         state: "The reset's state could not be read. Reload the page to see it.",
-        failed: 'The reset could not be started. Nothing changed.' } },
+        failed: 'The reset could not be started. Nothing changed.', signin: 'You are signed out. Sign in again to continue.' } },
     { lang: 'zh', user: 'carol', viewport: { width: 390, height: 844 }, device: 'phone', locale: 'zh-CN', header: 'zh-CN,zh;q=0.9',
       t: { button: '重置代理密码', collecting: '正在获取密码…', pending: '等待中', applying: '应用中', applied: '已应用', warning: '不会再次显示', copied: '已复制',
-        state: '无法读取重置的状态，请刷新页面查看。', failed: '无法开始重置，没有任何变更。' } },
+        state: '无法读取重置的状态，请刷新页面查看。', failed: '无法开始重置，没有任何变更。', signin: '你已退出登录，请重新登录后继续。' } },
   ];
   for (const run of runs) {
     const tag = `${run.lang}/${run.device}`;
@@ -57,7 +58,7 @@ os.write(fd, json.dumps({'id': '${id}', 'username': '${user}', 'password': '${pa
       extraHTTPHeaders: { 'Accept-Language': run.header } });
     await context.grantPermissions(['clipboard-read', 'clipboard-write'], { origin: new URL(base).origin });
     const page = await context.newPage();
-    page.on('console', m => { if (m.type() === 'error' && !/\b(403|409|502)\b/.test(m.text())) problems.push(`${tag} console: ${m.text()}`); });
+    page.on('console', m => { if (m.type() === 'error' && !/\b(401|403|409|502)\b/.test(m.text())) problems.push(`${tag} console: ${m.text()}`); });
     page.on('pageerror', e => problems.push(`${tag} page error: ${e.message}`));
     await page.goto(base + '/signin?next=/access', { waitUntil: 'networkidle' });
     await page.fill('#username', run.user);
@@ -175,8 +176,11 @@ os.write(fd, json.dumps({'id': '${id}', 'username': '${user}', 'password': '${pa
     check(`${tag}: no reset left to resume`, (await page.locator('#reset-current').count()) === 0, null);
 
     // a second reset whose password answer is held back after the portal has already handed it out (and deleted
-    // the result): while it is on its way, neither Esc (twice) nor Close closes the dialog; when the dialog closes
-    // anyway, the password that then arrives is shown when it reopens
+    // the result): while it is on its way, neither Esc (twice) nor Close closes the dialog and leaving the page asks
+    // first; when the dialog closes anyway, it opens again on the password that then arrives
+    // (a dispatched cancelable beforeunload event: the page's handler cancels it, which is what makes Chromium ask)
+    const asksBeforeLeaving = () => page.evaluate(() => {
+      const e = new Event('beforeunload', { cancelable: true }); window.dispatchEvent(e); return e.defaultPrevented; });
     await opener.click();
     const [response2] = await Promise.all([
       page.waitForResponse(r => r.url().endsWith('/api/me/reset') && r.request().method() === 'POST'),
@@ -216,22 +220,33 @@ os.write(fd, json.dumps({'id': '${id}', 'username': '${user}', 'password': '${pa
     check(`${tag}: Close does not close it while the password is on its way`, s.open && s.step === 'progress', s);
     const revealLabel = (await page.locator('[data-action=reveal]').textContent()).trim();
     check(`${tag}: the wait is shown`, revealLabel === run.t.collecting && await page.locator('[data-action=reveal]').isDisabled(), revealLabel);
+    check(`${tag}: leaving the page asks first while the password is on its way`, await asksBeforeLeaving(), null);
     await page.screenshot({ path: `${out}/reset-collecting-${run.lang}-${run.device}.png` });
     await page.evaluate(() => document.getElementById('reset-dialog').close());  // a close the page could not prevent
     await page.evaluate(() => window.__held.release());
     await page.waitForTimeout(300);
     s = await state();
-    check(`${tag}: the late password is not put into the closed dialog`, !s.open && s.secret === '', s);
-    await opener.click();
-    s = await state();
-    check(`${tag}: reopening shows the late password`, s.open && s.step === 'password' && s.secret === password2 && s.inside, s);
+    check(`${tag}: the late password opens the dialog again on it`, s.open && s.step === 'password' && s.secret === password2 && s.inside, s);
+    check(`${tag}: leaving the page asks first while the password is shown`, await asksBeforeLeaving(), null);
     if (s.step === 'password') await page.click('[data-step=password] [data-action=close]');
     else await page.keyboard.press('Escape');
     s = await state();
     check(`${tag}: closed after the password was shown`, !s.open && s.secret === '' && s.focus === 'reset-open', s);
+    check(`${tag}: then leaving the page does not ask`, !(await asksBeforeLeaving()), null);
     await opener.click();
     s = await state();
     check(`${tag}: then the next opening starts a new reset`, s.open && s.step === 'confirm', s);
+
+    // signed out in another tab (no session cookie): a create says to sign in again, in the page's language
+    const requestsNow = fs.readdirSync(path.join(spool, 'requests')).length;
+    await context.clearCookies();
+    const refused = page.waitForResponse(r => r.url().endsWith('/api/me/reset') && r.status() === 401);
+    await page.click('[data-action=confirm]');
+    await refused;
+    await createError.waitFor({ state: 'visible', timeout: 10000 });
+    check(`${tag}: signed out says to sign in again`, (await createError.textContent()) === run.t.signin, await createError.textContent());
+    check(`${tag}: no request file from it`, fs.readdirSync(path.join(spool, 'requests')).length === requestsNow, fs.readdirSync(path.join(spool, 'requests')));
+    await page.screenshot({ path: `${out}/reset-signed-out-${run.lang}-${run.device}.png` });
     await page.keyboard.press('Escape');
     await context.close();
   }
