@@ -1,6 +1,6 @@
 // The Status page refreshes itself: a controlled clock (performance.now, offset by the test) and a stubbed
 // /api/status. It polls every 30 s and when the tab becomes visible, advances "N s ago" between polls, and turns
-// results older than 90 s, counted from the last answer, to Unknown when polls fail.
+// results older than 90 s, counted from the last answer, to Unknown when polls fail, and the counts to "—".
 //   node e2e/status-refresh.cjs <base URL>       (Playwright for Node in NODE_PATH; CHROME optional)
 const { chromium } = require('playwright');
 
@@ -39,6 +39,7 @@ const { chromium } = require('playwright');
     return { http: text(cards[0]), socks: text(cards[1]), last: text(document.querySelector('.hero-head .small.muted')),
       headline: text(document.querySelector('#headline')), hero: document.querySelector('.status-hero').className,
       count: text(document.querySelector('.status-number')),
+      entries: Array.from(document.querySelectorAll('.service .desc')).map(el => text(el).split(' · ').pop()),
       duration: text(document.querySelector('.table tbody tr:nth-child(2) td.mono.wide')) };
   });
   const results = [];
@@ -49,7 +50,9 @@ const { chromium } = require('playwright');
   template = await page.evaluate(() => fetch('/api/status').then(r => r.json()));  // the real answer's shape
   await page.route('**/api/status', stub);
   let s = await read();
-  check('loaded: Passing, as rendered', s.http === 'Passing' && /s ago$/.test(s.last), s);
+  const loaded = s.entries;
+  check('loaded: Passing, as rendered', s.http === 'Passing' && /s ago$/.test(s.last) &&
+    loaded.length === 2 && loaded.every(e => /^\d+ of \d+ proxies passing$/.test(e)), s);
   s = await advance(30);
   check('30 s later: one poll, its result 11 s old', polls === 1 && s.http === 'Passing' && /: 1[1-4] s ago$/.test(s.last), [polls, s]);
   s = await advance(20);
@@ -62,13 +65,36 @@ const { chromium } = require('playwright');
   s = await advance(20);
   check('older than 90 s: Unknown, no duration, headline unknown', s.http === 'Unknown' && s.socks === 'Unknown' &&
     s.hero === 'status-hero unknown' && s.headline.startsWith('Status unknown') && s.count === '—' &&
-    s.duration === '— / —' && /: 9[5-9] s ago$/.test(s.last), [polls, s]);
+    s.duration === '— / —' && /: 9[5-9] s ago$/.test(s.last) &&
+    s.entries.every(e => e === '— of — proxies passing'), [polls, s]);
   mode = 'fresh';
   await page.evaluate(() => document.dispatchEvent(new Event('visibilitychange')));
   await page.waitForTimeout(1500);
   s = await read();
   check('tab visible again: polled at once, Passing', polls === 4 && s.http === 'Passing' && !s.hero.endsWith('unknown') &&
-    /: 1[1-4] s ago$/.test(s.last), [polls, s]);
+    /: 1[1-4] s ago$/.test(s.last) && JSON.stringify(s.entries) === JSON.stringify(loaded), [polls, s]);
+
+  // the same entry line in Chinese, once the results are older than 90 s
+  const zh = await browser.newContext({ ignoreHTTPSErrors: true, locale: 'zh-CN',
+    extraHTTPHeaders: { 'Accept-Language': 'zh-Hans,zh;q=0.9' } });
+  await zh.addInitScript(() => {
+    const real = performance.now.bind(performance);
+    let offset = 0;
+    performance.now = () => real() + offset;
+    window.__advance = ms => { offset += ms; };
+  });
+  const zhPage = await zh.newPage();
+  zhPage.on('pageerror', e => problems.push(e.message));
+  await zhPage.goto(base + '/', { waitUntil: 'networkidle' });
+  await zhPage.route('**/api/status', route => route.fulfill({ status: 503, body: 'unavailable' }));
+  const zhEntries = () => zhPage.evaluate(() => Array.from(document.querySelectorAll('.service .desc'))
+    .map(el => el.textContent.replace(/\s+/g, ' ').trim().split(' · ').pop()));
+  const zhLoaded = await zhEntries();
+  await zhPage.evaluate(ms => window.__advance(ms), 100000);
+  await zhPage.waitForTimeout(1500);
+  const zhStale = await zhEntries();
+  check('zh-Hans: the entry line, then "—" past 90 s', zhLoaded.every(e => /^\d+ 个代理中 \d+ 个正常$/.test(e)) &&
+    zhStale.length === 2 && zhStale.every(e => e === '— 个代理中 — 个正常'), [zhLoaded, zhStale]);
   console.log(results.join('\n'));
   await browser.close();
   if (problems.length) { console.error('problems:\n' + problems.join('\n')); process.exit(1); }
