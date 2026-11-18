@@ -118,18 +118,22 @@ class StatusTest(PortalTestCase):
         html = response.content.decode()
         live = json.loads(re.search(r'<script id="status-live" type="application/json">(.*?)</script>', html).group(1))
         api = self.client.get("/api/status").json()
+        polled = self.client.get("/api/status/live").json()
+        self.assertEqual(live, polled)  # what the page polls, in the same form
         for key in ("monitoring_available", "headline", "entries", "proxies", "stale_after_seconds"):
             self.assertEqual(live[key], api[key], key)
-        self.assertNotIn("bars", live)  # the bars update on reload
+        self.assertNotIn("bars", live)  # the bars and the incidents update on reload
+        self.assertNotIn("incidents", live)
         # both texts on the page, for the script to switch: the note on missing monitoring data hidden
         self.assertIn('<p data-live-monitoring="off" hidden>Monitoring data is unavailable', html)
-        self.assertIn('<p data-live-monitoring="on">ha-general sends each new connection', html)
+        self.assertIn('<p data-live-monitoring="on">The default proxy ha-general sends each new connection', html)
         texts = json.loads(re.search(r'<script id="status-texts" type="application/json">(.*?)</script>', html).group(1))
         self.assertEqual((texts["passing"], texts["s_ago"]), ("Passing", "%(n)d s ago"))
         nonce = response["Content-Security-Policy"].split("'nonce-")[1].split("'")[0]
         self.assertEqual(html.count(f'<script nonce="{nonce}">'), 2)  # the base script and the status poller
         self.assertEqual(html.count("<script"), 4)  # and the two JSON blocks, which never run
-        self.assertIn("fetch('/api/status'", html)
+        self.assertIn("fetch('/api/status/live'", html)
+        self.assertNotIn("fetch('/api/status'", html)
         for proxy in api["proxies"]:
             self.assertIn(f'data-live-state="proxy:{proxy["name"]}.protocols.http"', html)
         for entry in api["entries"]:
@@ -412,7 +416,19 @@ class BarsCostTest(PortalTestCase):
         # bounds against growth: about 45 kB and 260 kB with these rows
         self.assertLess(len(api.content), 64 * 1024)
         self.assertLess(len(page.content), 320 * 1024)
-        # the polled answer is cached with the rest: no more queries
+        # the full answer again and the polled one are cached with the rest: no more queries
         n = len(self.prometheus.queries)
         self.client.get("/api/status")
+        live = self.client.get("/api/status/live")
         self.assertEqual(len(self.prometheus.queries), n)
+        # the polled answer leaves out the bars: about 5.5 kB with these rows
+        self.assertNotIn("bars", live.json())
+        self.assertLess(len(live.content), 12 * 1024)
+
+    def test_polled_answer_runs_no_range_query(self):
+        live = self.client.get("/api/status/live")
+        self.assertEqual(live.status_code, 200)
+        self.assertEqual(set(live.json()), {"monitoring_available", "headline", "last_check_age_seconds",
+                                            "stale_after_seconds", "entries", "proxies"})
+        self.assertEqual([q for q in self.prometheus.queries if q[0].endswith("query_range")], [])
+        self.assertEqual(self.client.post("/api/status/live").status_code, 405)

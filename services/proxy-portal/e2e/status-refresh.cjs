@@ -1,5 +1,5 @@
 // The Status page refreshes itself: a controlled clock (performance.now, offset by the test) and a stubbed
-// /api/status. It polls every 30 s and when the tab becomes visible, drops a poll that gets no answer in 15 s,
+// /api/status/live. It polls every 30 s and when the tab becomes visible, drops a poll that gets no answer in 15 s,
 // advances "N s ago" between polls, and turns results older than 90 s, counted from the last answer, to Unknown
 // when polls fail, and the counts to "—", also when the default proxy was Unknown from the start. With
 // "monitoring-down" (run.sh stops the stubs first), the page loads with monitoring data unavailable and drops that
@@ -66,7 +66,7 @@ const { chromium } = require('playwright');
     if (problems.length) { console.error('problems:\n' + problems.join('\n')); process.exit(1); }
     console.log('status refresh: ok');
   };
-  const fresh = (d, monitoring) => {  // an answer from /api/status, fresh: both entries passing, results 11 s old
+  const fresh = (d, monitoring) => {  // an answer from /api/status/live, fresh: both entries passing, results 11 s old
     const data = JSON.parse(JSON.stringify(d));
     for (const entry of Object.values(data.entries)) {
       for (const p of ['http', 'socks']) Object.assign(entry.protocols[p], { state: 'passing', last_check_age_seconds: 11 });
@@ -82,10 +82,10 @@ const { chromium } = require('playwright');
     // the page as the portal renders it without Prometheus; then a poll answers with monitoring data
     let answers = 0;
     await page.goto(base + '/', { waitUntil: 'networkidle' });
-    const down = await page.evaluate(() => fetch('/api/status').then(r => r.json()));
+    const down = await page.evaluate(() => fetch('/api/status/live').then(r => r.json()));
     const up = fresh(down, { monitoring_available: true, headline: { level: 'ok', text: 'Default proxy available' } });
     up.entries['ha-general'].proxies = { passing: 4, configured: 4 };
-    await page.route('**/api/status', route => { answers++; return route.fulfill({ json: up }); });
+    await page.route('**/api/status/live', route => { answers++; return route.fulfill({ json: up }); });
     let s = await read();
     check('loaded without monitoring data: the note, Unknown', down.monitoring_available === false &&
       s.notes.length === 1 && s.notes[0].startsWith('Monitoring data is unavailable') && s.http === 'Unknown', [down.monitoring_available, s]);
@@ -96,9 +96,11 @@ const { chromium } = require('playwright');
     return report();
   }
 
+  let full = 0;  // requests for the whole /api/status, bars included: the page never polls it
+  page.on('request', r => { if (new URL(r.url()).pathname === '/api/status') full++; });
   await page.goto(base + '/', { waitUntil: 'networkidle' });
-  template = await page.evaluate(() => fetch('/api/status').then(r => r.json()));  // the real answer's shape
-  await page.route('**/api/status', stub);
+  template = await page.evaluate(() => fetch('/api/status/live').then(r => r.json()));  // the real answer's shape
+  await page.route('**/api/status/live', stub);
   let s = await read();
   const loaded = s.entries;
   check('loaded: Passing, as rendered, without metric cards', s.http === 'Passing' && /s ago$/.test(s.last) &&
@@ -124,6 +126,8 @@ const { chromium } = require('playwright');
   s = await read();
   check('tab visible again: polled at once, Passing', polls === 4 && s.http === 'Passing' && !s.hero.endsWith('unknown') &&
     /: 1[1-4] s ago$/.test(s.last) && JSON.stringify(s.entries) === JSON.stringify(loaded), [polls, s]);
+  check('the polls ask for /api/status/live, without the bars', full === 0 && polls === 4 && !('bars' in template),
+    [full, polls, Object.keys(template)]);
 
   // a poll that never gets an answer: dropped after 15 s, so the next poll still comes
   const hangPage = await context.newPage();
@@ -131,7 +135,7 @@ const { chromium } = require('playwright');
   hangPage.on('console', m => { if (m.type() === 'error') problems.push(m.text()); });
   let hangPolls = 0;
   await hangPage.goto(base + '/', { waitUntil: 'networkidle' });
-  await hangPage.route('**/api/status', route => { if (++hangPolls > 1) return route.fulfill({ json: fresh(template) }); });
+  await hangPage.route('**/api/status/live', route => { if (++hangPolls > 1) return route.fulfill({ json: fresh(template) }); });
   await advance(30, hangPage);
   s = await advance(20, hangPage);
   check('a poll with no answer: still one poll after 20 s', hangPolls === 1, [hangPolls, s]);
@@ -158,7 +162,7 @@ const { chromium } = require('playwright');
       });
     return route.fulfill({ contentType: 'text/html; charset=utf-8', headers: { 'content-security-policy': served[1] }, body });
   });
-  await unknownPage.route('**/api/status', route => route.fulfill({ status: 503, body: 'unavailable' }));
+  await unknownPage.route('**/api/status/live', route => route.fulfill({ status: 503, body: 'unavailable' }));
   await unknownPage.goto(base + '/', { waitUntil: 'networkidle' });
   await unknownPage.waitForTimeout(1500);
   s = await read(unknownPage);
@@ -176,7 +180,7 @@ const { chromium } = require('playwright');
   const zhPage = await zh.newPage();
   zhPage.on('pageerror', e => problems.push(e.message));
   await zhPage.goto(base + '/', { waitUntil: 'networkidle' });
-  await zhPage.route('**/api/status', route => route.fulfill({ status: 503, body: 'unavailable' }));
+  await zhPage.route('**/api/status/live', route => route.fulfill({ status: 503, body: 'unavailable' }));
   const zhEntries = () => zhPage.evaluate(() => Array.from(document.querySelectorAll('[data-live-entry-count]'))
     .map(el => el.textContent.replace(/\s+/g, ' ').trim()));
   const zhLoaded = await zhEntries();

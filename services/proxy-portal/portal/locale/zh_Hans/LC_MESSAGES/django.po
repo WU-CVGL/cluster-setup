@@ -1315,14 +1315,14 @@ msgstr "用户名或密码错误。"
 msgid "Whether requests get through the high-availability proxies and each proxy, from probes every 30 seconds. The status of a proxy is not whether your account may use it: see My access."
 msgstr "根据每 30 秒一次的探测，显示请求能否通过高可用代理和各个代理。代理的状态不代表你的账号可以使用它：请看“我的接入”。"
 
-msgid "ha-general sends each new connection to a passing public proxy; open connections stay on their proxy."
-msgstr "ha-general 把每个新连接发往一个正常的公共代理；已建立的连接留在原代理上。"
+msgid "The default proxy ha-general sends each new connection to a passing public proxy; open connections stay on their proxy."
+msgstr "默认代理 ha-general 把每个新连接发往一个正常的公共代理；已建立的连接留在原代理上。"
 
 msgid "Auto-switching High-availability Proxies"
 msgstr "自动切换高可用代理"
 
 msgid "One address each; every new connection goes to a passing proxy."
-msgstr "每个地址固定不变；每个新连接都发往一个正常的代理。"
+msgstr "各有一个固定地址；每个新连接都发往一个正常的代理。"
 
 msgid "Status bars"
 msgstr "状态条"

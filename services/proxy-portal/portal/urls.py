@@ -24,6 +24,7 @@ urlpatterns = [
     path("signout", views.signout, name="signout"),
     path("language", set_language, name="set_language"),
     path("api/status", views.api_status, name="api_status"),
+    path("api/status/live", views.api_status_live, name="api_status_live"),
     path("api/me/access", views.api_me_access, name="api_me_access"),
     path("api/me/usage", views.api_me_usage, name="api_me_usage"),
     path("api/me/reset", self_reset.api_reset, name="api_me_reset"),
