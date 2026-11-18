@@ -40,6 +40,9 @@ CONTAINER_HTTP_PORT = DEFAULT_HTTP_PORT     # 8889
 CONTAINER_SOCKS_PORT = DEFAULT_SOCKS_PORT   # 1089
 API_PORT = DEFAULT_API_PORT                 # 10085
 EXPORTER_PORT = 9550
+# 与 xray-ha 相同的版本和 digest：proxy_accounts.py 写入的入站账号 (HTTP "users") 需要这个版本，
+# 应用配置前用这个镜像检查 (proxy-portal/applier)。旧版本 (如 1.8.24) 不读 HTTP "users"，入站不认证
+XRAY_IMAGE = 'teddysun/xray:26.11.9@sha256:b3e117b834878d1e12f91e7b16270db104c2f0e5f0effbc0ece9088c473b5393'
 
 # 在 docker-compose.yml 的 ports: 中看不到、但占用主机端口的服务 (见模块说明)
 RESERVED_HOST_PORTS = {
@@ -276,7 +279,7 @@ class XrayServiceCreator:
         # 容器内固定端口：1089 (SOCKS5), 8889 (HTTP)
         xray_service_lines = [
             f'  {xray_service_name}:\n',
-            '    image: teddysun/xray:latest\n',
+            f'    image: {XRAY_IMAGE}\n',
             '    restart: unless-stopped\n',
             '    environment:\n',
             '      TZ: Asia/Shanghai\n',
