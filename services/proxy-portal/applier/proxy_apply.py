@@ -629,6 +629,8 @@ class Applier:
             restored = True
             if snapshot is not None:
                 restored = self.rollback(snapshot, restart)
+                if not restored:
+                    self.forget_applied()
             for request, _ in active:
                 records[request["id"]].pop("restarted", None)
                 records[request["id"]].pop("applied_seq", None)
@@ -652,6 +654,15 @@ class Applier:
         pa.write_private(self.base / pa.APPLIED_FILE, json.dumps(
             {"accounts_sha256": accounts_sha256, "render_sha256": render_sha256, "applied_at": applied_at},
             indent=2) + "\n")
+
+    def forget_applied(self) -> None:
+        """After a rollback that did not finish, nothing is known to be running: the next batch restarts all."""
+        try:
+            (self.base / pa.APPLIED_FILE).unlink()
+        except FileNotFoundError:
+            pass
+        except OSError as e:
+            log(f"{pa.APPLIED_FILE}: not removed: {type(e).__name__}")
 
     def running_known(self, accounts: pa.Accounts) -> bool:
         """
@@ -908,6 +919,8 @@ class Applier:
             snapshot.append((path, backup, int(entry["mode"])))
         log("recovering an interrupted apply: restoring its files")
         restored = self.rollback(snapshot, [s for s in data["services"] if isinstance(s, str)])
+        if not restored:
+            self.forget_applied()
         if self.keep_backup:
             raise OSError("cannot restore the files of an interrupted apply")
         for request_id in data["ids"]:

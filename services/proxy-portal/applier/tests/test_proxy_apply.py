@@ -442,6 +442,7 @@ class ApplyTest(_Base):
     def test_same_account_add_then_rotate(self):
         self.same_account(("add", "carol"), ("rotate", "carol"))
         first, second = self.status("abcdefgh-1"), self.status("abcdefgh-2")
+        self.assertGreater(second["applied_seq"], first["applied_seq"])  # the order applied, within one run
         self.assertEqual((first["status"], first["result"], first["superseded_by"]), ("applied", False, "abcdefgh-2"))
         self.assertEqual((second["status"], second["result"]), ("applied", True))
         self.assertEqual(os.listdir(self.spool.results), ["abcdefgh-2.json"])
@@ -592,7 +593,8 @@ class FailureTest(_Base):
         self.assertEqual(self.docker.ha_users["alice"], alice)
         self.assertEqual(os.listdir(self.spool.results), [])
         self.assertFalse((self.base / ap.BACKUP_DIR).exists())
-        self.assertEqual((self.base / pa.APPLIED_FILE).read_text(), applied)
+        if restored:
+            self.assertEqual((self.base / pa.APPLIED_FILE).read_text(), applied)
         self.assert_no_leaks()
         return before
 
@@ -680,6 +682,19 @@ class FailureTest(_Base):
     def test_rollback_restart_failure_reported(self):
         self.docker.fail_restart = 2
         self.run_failing("restart", restored=False)
+
+    def test_after_an_unfinished_rollback_a_noop_is_restarted_and_verified(self):
+        # the files are back, but the services may run anything: nothing is known to be running
+        self.docker.fail_restart = 2
+        self.run_failing("restart", restored=False)
+        alice = self.passwords()["alice"]
+        self.probe.logins.clear()
+        self.request("abcdefgh-3", "enable", "alice")
+        self.assertEqual(self.run_applier(), 0)
+        record = self.status("abcdefgh-3")
+        self.assertEqual((record["status"], record["changed"]), ("applied", False))
+        self.assertIn("xray-ha", record["restarted"])
+        self.assertIn(("alice", alice), self.probe.logins)
 
     def test_unconfirmed_keeps_the_change_and_delivers(self):
         self.probe.mode = "noproxies"  # logins are taken, no proxy answers
