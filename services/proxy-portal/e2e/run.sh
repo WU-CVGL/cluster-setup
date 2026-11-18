@@ -48,6 +48,7 @@ echo "incidents:     $(r https://proxy.cvgl.lab/api/status | python3 -c 'import 
 
 sleep 3   # Chromium aborts with ERR_NETWORK_CHANGED while Docker is still setting up interfaces
 RESOLVE="proxy.cvgl.lab 127.0.0.1" node shots.cjs https://proxy.cvgl.lab "$out" carol pw-carol
+RESOLVE="proxy.cvgl.lab 127.0.0.1" node status-refresh.cjs https://proxy.cvgl.lab
 
 stats() { compose exec -T proxy-portal python -c "import urllib.request as u; print(u.urlopen('$1/stub/stats').read().decode())"; }
 echo "master stub:     $(stats http://stubs:18080)"

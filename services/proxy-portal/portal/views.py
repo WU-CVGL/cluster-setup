@@ -57,10 +57,27 @@ def _status_context():
     return data
 
 
+def _live(data):
+    """What the status page's script refreshes, in /api/status's form: it polls that and ages the results."""
+    return {key: data[key] for key in ("headline", "last_check_age_seconds", "stale_after_seconds", "entries",
+                                       "proxies")}
+
+
+def _live_texts():
+    """The page script's texts, in the page's language."""
+    return {
+        "passing": _("Passing"), "failing": _("Failing"), "unknown": _("Unknown"),
+        "s_ago": _("%(n)d s ago"), "min_ago": _("%(n)d min ago"), "h_ago": _("%(n)d h ago"),
+        "days_ago": _("%(n)d days ago"),
+        "headline_unknown": _("Status unknown: no recent probe results for the default proxy"),
+    }
+
+
 @require_GET
 def status_page(request):
     data = _status_context()
-    return render(request, "portal/status.html", {"nav": "status", "data": data, "incidents": incidents()})
+    return render(request, "portal/status.html", {"nav": "status", "data": data, "incidents": incidents(),
+                                                  "live": _live(data), "live_texts": _live_texts()})
 
 
 @require_GET

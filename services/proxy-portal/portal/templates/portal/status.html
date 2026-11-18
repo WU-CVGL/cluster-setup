@@ -8,25 +8,25 @@
     <h1>{% translate "Proxy status" %}</h1>
     <p class="sub">{% translate "Whether requests get through the HA entries and each proxy, from probes every 30 seconds. The status of an entry is not whether your account may use it: see My access." %}</p>
   </div>
-  <div class="small muted">{% translate "Last check" %}: {{ data.last_check_age_seconds|age }}</div>
+  <div class="small muted">{% translate "Last check" %}: <span data-live-age="last_check_age_seconds">{{ data.last_check_age_seconds|age }}</span></div>
 </div>
 
-<section class="status-hero {{ data.headline.level }}" aria-labelledby="headline">
+<section class="status-hero {{ data.headline.level }}" aria-labelledby="headline" data-live-hero>
   <div>
     <div class="status-title"><span class="emblem" aria-hidden="true">{% if data.headline.level == 'ok' %}✓{% elif data.headline.level == 'unknown' %}?{% else %}!{% endif %}</span><h2 id="headline">{{ data.headline.text }}</h2></div>
     <p>{% if not data.monitoring_available %}{% translate "Monitoring data is unavailable, so every status is unknown." %}{% else %}{% translate "The default proxy ha-general sends each new connection to a passing public proxy; open connections stay on their proxy." %}{% endif %}</p>
   </div>
   <div class="status-right">
-    <div class="status-number">{% if general.proxies.configured is None %}—{% else %}{{ general.proxies.passing }} / {{ general.proxies.configured }}{% endif %}</div>
+    <div class="status-number" data-live-count>{% if general.proxies.configured is None %}—{% else %}{{ general.proxies.passing }} / {{ general.proxies.configured }}{% endif %}</div>
     <div class="status-number-label">{% translate "public proxies passing" %}</div>
   </div>
 </section>
 
 <div class="summary-grid">
-  {% with p=general.protocols.http %}<div class="card metric"><div class="m-label">{% translate "Default proxy · HTTP" %}</div><div class="m-value">{% include "portal/state.html" with state=p.state %}</div><div class="m-foot">{% translate "24 h success" %} {{ p.success_rate_24h|percent }} · {% translate "coverage" %} {{ p.coverage_24h|percent:0 }}</div></div>{% endwith %}
-  {% with p=general.protocols.socks %}<div class="card metric"><div class="m-label">{% translate "Default proxy · SOCKS5" %}</div><div class="m-value">{% include "portal/state.html" with state=p.state %}</div><div class="m-foot">{% translate "24 h success" %} {{ p.success_rate_24h|percent }} · {% translate "coverage" %} {{ p.coverage_24h|percent:0 }}</div></div>{% endwith %}
-  <div class="card metric"><div class="m-label">{% translate "Pool of the default proxy" %}</div><div class="m-value">{% if general.proxies.configured is None %}—{% else %}{{ general.proxies.passing }} <span class="muted small">/ {{ general.proxies.configured }}</span>{% endif %}</div><div class="m-foot">{% translate "passing / configured" %}</div></div>
-  <div class="card metric"><div class="m-label">{% translate "Last check" %}</div><div class="m-value">{{ data.last_check_age_seconds|age }}</div><div class="m-foot">{% blocktranslate with s=data.stale_after_seconds %}Unknown when older than {{ s }} s{% endblocktranslate %}</div></div>
+  {% for protocol, p in general.protocols.items %}<div class="card metric"><div class="m-label">{% if protocol == 'http' %}{% translate "Default proxy · HTTP" %}{% else %}{% translate "Default proxy · SOCKS5" %}{% endif %}</div><div class="m-value" data-live-state="entries.ha-general.protocols.{{ protocol }}" data-live-age-of="entries.ha-general.protocols.{{ protocol }}.last_check_age_seconds">{% include "portal/state.html" with state=p.state %}</div><div class="m-foot">{% translate "24 h success" %} <span data-live-pct="entries.ha-general.protocols.{{ protocol }}.success_rate_24h">{{ p.success_rate_24h|percent }}</span> · {% translate "coverage" %} <span data-live-pct="entries.ha-general.protocols.{{ protocol }}.coverage_24h" data-live-digits="0">{{ p.coverage_24h|percent:0 }}</span></div></div>
+  {% endfor %}
+  <div class="card metric"><div class="m-label">{% translate "Pool of the default proxy" %}</div><div class="m-value" data-live-count="small">{% if general.proxies.configured is None %}—{% else %}{{ general.proxies.passing }} <span class="muted small">/ {{ general.proxies.configured }}</span>{% endif %}</div><div class="m-foot">{% translate "passing / configured" %}</div></div>
+  <div class="card metric"><div class="m-label">{% translate "Last check" %}</div><div class="m-value" data-live-age="last_check_age_seconds">{{ data.last_check_age_seconds|age }}</div><div class="m-foot">{% blocktranslate with s=data.stale_after_seconds %}Unknown when older than {{ s }} s{% endblocktranslate %}</div></div>
 </div>
 
 <section class="section" aria-labelledby="entries-title">
@@ -40,8 +40,8 @@
         <div class="desc">{% if entry.name == 'ha-general' %}{% translate "Over the public proxies, for every proxy account" %}{% else %}{% translate "Over every proxy, public and private, for admin accounts" %}{% endif %} · {% blocktranslate with passing=entry.proxies.passing|default_if_none:"—" configured=entry.proxies.configured|default_if_none:"—" %}{{ passing }} of {{ configured }} proxies passing{% endblocktranslate %}</div>
       </div>
       <div class="service-side">
-        <span class="small muted">HTTP</span>{% include "portal/state.html" with state=entry.protocols.http.state %}
-        <span class="small muted">SOCKS5</span>{% include "portal/state.html" with state=entry.protocols.socks.state %}
+        <span class="small muted">HTTP</span><span data-live-state="entries.{{ entry.name }}.protocols.http" data-live-age-of="entries.{{ entry.name }}.protocols.http.last_check_age_seconds">{% include "portal/state.html" with state=entry.protocols.http.state %}</span>
+        <span class="small muted">SOCKS5</span><span data-live-state="entries.{{ entry.name }}.protocols.socks" data-live-age-of="entries.{{ entry.name }}.protocols.socks.last_check_age_seconds">{% include "portal/state.html" with state=entry.protocols.socks.state %}</span>
       </div>
     </div>
     {% endfor %}
@@ -75,12 +75,12 @@
         {% for proxy in group.list %}
         <tr>
           <th scope="row"><span class="proxy-name">{{ proxy.name }}</span></th>
-          <td>{% include "portal/state.html" with state=proxy.protocols.http.state %}</td>
-          <td>{% include "portal/state.html" with state=proxy.protocols.socks.state %}</td>
-          <td class="mono wide">{{ proxy.protocols.http.duration_seconds|milliseconds }} / {{ proxy.protocols.socks.duration_seconds|milliseconds }}</td>
-          <td class="mono">{{ proxy.protocols.http.success_rate_24h|percent }} / {{ proxy.protocols.socks.success_rate_24h|percent }}</td>
-          <td class="mono wide">{{ proxy.coverage_24h|percent:0 }}</td>
-          <td class="wide">{{ proxy.last_check_age_seconds|age }}</td>
+          <td data-live-state="proxy:{{ proxy.name }}.protocols.http" data-live-age-of="proxy:{{ proxy.name }}.last_check_age_seconds">{% include "portal/state.html" with state=proxy.protocols.http.state %}</td>
+          <td data-live-state="proxy:{{ proxy.name }}.protocols.socks" data-live-age-of="proxy:{{ proxy.name }}.last_check_age_seconds">{% include "portal/state.html" with state=proxy.protocols.socks.state %}</td>
+          <td class="mono wide"><span data-live-ms="proxy:{{ proxy.name }}.protocols.http" data-live-age-of="proxy:{{ proxy.name }}.last_check_age_seconds">{{ proxy.protocols.http.duration_seconds|milliseconds }}</span> / <span data-live-ms="proxy:{{ proxy.name }}.protocols.socks" data-live-age-of="proxy:{{ proxy.name }}.last_check_age_seconds">{{ proxy.protocols.socks.duration_seconds|milliseconds }}</span></td>
+          <td class="mono"><span data-live-pct="proxy:{{ proxy.name }}.protocols.http.success_rate_24h">{{ proxy.protocols.http.success_rate_24h|percent }}</span> / <span data-live-pct="proxy:{{ proxy.name }}.protocols.socks.success_rate_24h">{{ proxy.protocols.socks.success_rate_24h|percent }}</span></td>
+          <td class="mono wide" data-live-pct="proxy:{{ proxy.name }}.coverage_24h" data-live-digits="0">{{ proxy.coverage_24h|percent:0 }}</td>
+          <td class="wide" data-live-age="proxy:{{ proxy.name }}.last_check_age_seconds">{{ proxy.last_check_age_seconds|age }}</td>
         </tr>
         {% endfor %}
       {% empty %}
@@ -127,3 +127,53 @@
 </div>
 {% endwith %}
 {% endblock %}
+{% block scripts %}{{ live|json_script:"status-live" }}{{ live_texts|json_script:"status-texts" }}
+<script nonce="{{ csp_nonce }}">
+// Polls /api/status every 30 s and when the tab becomes visible, and ages what it shows every second: a result
+// older than 90 s, counted from the last answer that came, is Unknown, with no duration.
+(function(){'use strict';
+var POLL_MS=30000,texts=JSON.parse(document.getElementById('status-texts').textContent);
+var data=JSON.parse(document.getElementById('status-live').textContent),stale=data.stale_after_seconds;
+var fetched=performance.now(),polled=fetched,busy=false;
+function get(path){var parts=path.split('.'),v=data,i=0;
+  if(parts[0].indexOf('proxy:')===0){var name=parts[0].slice(6);v=null;
+    (data.proxies||[]).forEach(function(p){if(p.name===name)v=p;});i=1;}
+  for(;i<parts.length&&v!==null&&v!==undefined;i++)v=v[parts[i]];
+  return v===undefined?null:v;}
+function age(path){var a=get(path);return a===null?null:a+(performance.now()-fetched)/1000;}
+function state(el){var s=get(el.getAttribute('data-live-state')+'.state'),a=age(el.getAttribute('data-live-age-of'));
+  return (s==='passing'||s==='failing')&&a!==null&&a<=stale?s:'unknown';}
+function ageText(a){if(a===null)return texts.unknown;a=Math.floor(a);
+  var t=a<120?[texts.s_ago,a]:a<7200?[texts.min_ago,Math.floor(a/60)]:a<172800?[texts.h_ago,Math.floor(a/3600)]:[texts.days_ago,Math.floor(a/86400)];
+  return t[0].replace('%(n)d',t[1]);}
+function pct(v,d){if(v===null)return '\u2014';var f=Math.pow(10,d);return (Math.floor(v*100*f+1e-6)/f).toFixed(d)+' %';}
+function chip(el,s){var c=document.createElement('span'),dot=document.createElement('span');c.className='chip '+s;
+  dot.className='dot '+s;dot.setAttribute('aria-hidden','true');c.appendChild(dot);c.appendChild(document.createTextNode(texts[s]));
+  el.replaceChildren(c);}
+function render(){
+  document.querySelectorAll('[data-live-state]').forEach(function(el){chip(el,state(el));});
+  document.querySelectorAll('[data-live-age]').forEach(function(el){el.textContent=ageText(age(el.getAttribute('data-live-age')));});
+  document.querySelectorAll('[data-live-pct]').forEach(function(el){el.textContent=pct(get(el.getAttribute('data-live-pct')),+(el.getAttribute('data-live-digits')||1));});
+  document.querySelectorAll('[data-live-ms]').forEach(function(el){var p=el.getAttribute('data-live-ms'),v=get(p+'.duration_seconds');
+    var s=get(p+'.state'),a=age(el.getAttribute('data-live-age-of'));
+    el.textContent=v===null||s!=='passing'&&s!=='failing'||a===null||a>stale?'\u2014':Math.round(v*1000)+' ms';});
+  var general=['http','socks'].map(function(p){var el=document.querySelector('[data-live-state="entries.ha-general.protocols.'+p+'"]');return el?state(el):'unknown';});
+  var aged=['http','socks'].some(function(p,i){return general[i]!==get('entries.ha-general.protocols.'+p+'.state');});
+  var level=aged?'unknown':data.headline.level,hero=document.querySelector('[data-live-hero]');
+  if(hero){hero.className='status-hero '+level;hero.querySelector('#headline').textContent=aged?texts.headline_unknown:data.headline.text;
+    hero.querySelector('.emblem').textContent=level==='ok'?'\u2713':level==='unknown'?'?':'!';}
+  var proxies=get('entries.ha-general.proxies')||{},none=aged||proxies.configured===null||proxies.configured===undefined;
+  document.querySelectorAll('[data-live-count]').forEach(function(el){
+    if(none){el.textContent='\u2014';return;}
+    if(el.getAttribute('data-live-count')==='small'){var s=document.createElement('span');s.className='muted small';
+      s.textContent='/ '+proxies.configured;el.replaceChildren(document.createTextNode(proxies.passing+' '),s);}
+    else{el.textContent=proxies.passing+' / '+proxies.configured;}});}
+function poll(){if(busy)return;busy=true;var started=performance.now();polled=started;
+  fetch('/api/status',{credentials:'same-origin',cache:'no-store',headers:{'Accept':'application/json'}})
+    .then(function(r){if(!r.ok)throw new Error(String(r.status));return r.json();})
+    .then(function(d){data=d;stale=d.stale_after_seconds;fetched=started;},function(){})
+    .then(function(){busy=false;render();});}
+setInterval(function(){if(document.visibilityState!=='hidden'&&performance.now()-polled>=POLL_MS)poll();render();},1000);
+document.addEventListener('visibilitychange',function(){if(document.visibilityState==='visible')poll();});
+})();
+</script>{% endblock %}

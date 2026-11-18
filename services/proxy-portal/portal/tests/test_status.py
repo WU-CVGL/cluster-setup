@@ -101,6 +101,27 @@ class StatusTest(PortalTestCase):
         self.assertNotIn("accounts", str(data.keys()))
         self.assert_only_fixed_queries()
 
+    def test_page_carries_the_data_its_script_refreshes(self):
+        import json
+        import re
+        response = self.client.get("/")
+        html = response.content.decode()
+        live = json.loads(re.search(r'<script id="status-live" type="application/json">(.*?)</script>', html).group(1))
+        api = self.client.get("/api/status").json()
+        for key in ("headline", "entries", "proxies", "stale_after_seconds"):
+            self.assertEqual(live[key], api[key], key)
+        texts = json.loads(re.search(r'<script id="status-texts" type="application/json">(.*?)</script>', html).group(1))
+        self.assertEqual((texts["passing"], texts["s_ago"]), ("Passing", "%(n)d s ago"))
+        nonce = response["Content-Security-Policy"].split("'nonce-")[1].split("'")[0]
+        self.assertEqual(html.count(f'<script nonce="{nonce}">'), 2)  # the base script and the status poller
+        self.assertEqual(html.count("<script"), 4)  # and the two JSON blocks, which never run
+        self.assertIn("fetch('/api/status'", html)
+        for proxy in api["proxies"]:
+            self.assertIn(f'data-live-state="proxy:{proxy["name"]}.protocols.http"', html)
+        zh = self.client.get("/", HTTP_ACCEPT_LANGUAGE="zh-CN").content.decode()
+        texts = json.loads(re.search(r'<script id="status-texts" type="application/json">(.*?)</script>', zh).group(1))
+        self.assertNotEqual(texts["passing"], "Passing")
+
     def test_history(self):
         days = self.client.get("/api/status").json()["history"]["days"]
         self.assertEqual(len(days), 30)

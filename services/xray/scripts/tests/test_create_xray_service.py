@@ -18,6 +18,7 @@ import stat
 import subprocess
 import sys
 import tempfile
+import threading
 import unittest
 from pathlib import Path
 from unittest import mock
@@ -466,7 +467,7 @@ class CreateServiceYamlTest(_TempServicesMixin, unittest.TestCase):
             '      - "80:80"\n'
             '\n'
             '  xray-a:\n'
-            '    image: teddysun/xray:latest\n'
+            '    image: teddysun/xray:26.11.9@sha256:b3e117b834878d1e12f91e7b16270db104c2f0e5f0effbc0ece9088c473b5393\n'
             '    ports:\n'
             '      - 30089:1089\n'
             '      - 38889:8889\n'
@@ -556,6 +557,82 @@ class RepoFilesYamlTest(_TempServicesMixin, unittest.TestCase):
 
 class RepoFilesRegexTest(RepoFilesYamlTest):
     use_yaml = False
+
+
+class AccountsLockTest(_TempServicesMixin, unittest.TestCase):
+    """新代理从读取账号到写入配置都持有 proxy-accounts/.lock：同时进行的 disable + render 不会留下旧账号"""
+
+    def test_concurrent_disable_does_not_leave_the_user_on_the_new_proxy(self):
+        self.concurrent_change(private=False, user='alice', change=lambda accounts: accounts.set_enabled('alice', False))
+
+    def test_concurrent_admin_off_does_not_leave_the_admin_on_the_new_private_proxy(self):
+        self.concurrent_change(private=True, user='boss', change=lambda accounts: accounts.set_admin('boss', False))
+
+    def concurrent_change(self, private, user, change):
+        import proxy_accounts as pa
+        for rel in (pa.HA_EXAMPLE, pa.BLACKBOX_EXAMPLE):
+            (self.base / rel).parent.mkdir(parents=True, exist_ok=True)
+            shutil.copy(REPO_SERVICES_DIR / rel, self.base / rel)
+        accounts = pa.Accounts(self.base)
+        accounts.raw_auth = not private  # a private proxy requires its admins either way
+        for name in ('alice', 'bob', 'boss', 'carol', 'svc-ha', 'svc-monitor'):
+            accounts.accounts[name] = pa.new_password()
+        accounts.admins |= {'boss', 'carol'}
+        accounts.save()
+
+        def disable_and_render():
+            # What "proxy_accounts.py disable alice" (or "admin boss off") and then "render" do, without their output
+            with pa.accounts_lock(self.base):
+                accounts = pa.Accounts(self.base)
+                change(accounts)
+                accounts.save()
+            with pa.accounts_lock(self.base):
+                codes.append(len(pa.render(pa.Accounts(self.base))))
+            done.set()
+
+        codes, done, during = [], threading.Event(), []
+        other = threading.Thread(target=disable_and_render)
+        parse = XrayConfigHandler.parse_share_url
+
+        def parse_while_another_disables(url):
+            # The accounts were read; another admin disables alice and renders now
+            other.start()
+            during.append(done.wait(1.0))
+            return parse(url)
+
+        with mock.patch.object(cxs.XrayConfigHandler, 'parse_share_url', side_effect=parse_while_another_disables):
+            self.create('csr-locked', 56889, 56089, private=private)
+        other.join(10)
+        self.assertEqual(len(codes), 1)
+        config = json.loads(read(self.base / 'xray' / 'csr-locked' / 'config' / 'config.json'))
+        for inbound in config['inbounds'][:2]:
+            users = [u['user'] for u in inbound['settings']['users']]
+            self.assertNotIn(user, users)
+            self.assertIn('carol' if private else 'bob', users)
+        self.assertEqual(during, [False])  # the disable waited for the new proxy
+
+
+class XrayImageTest(unittest.TestCase):
+    """每个代理与 xray-ha 使用同一个固定版本和 digest 的镜像，生成器也是 (应用配置前用 xray-ha 的镜像检查)"""
+
+    def test_generator_and_repo_proxies_use_the_ha_image(self):
+        self.assertRegex(cxs.XRAY_IMAGE, r'^teddysun/xray:[0-9.]+@sha256:[0-9a-f]{64}$')
+        compose = read(REPO_SERVICES_DIR / 'docker-compose.yml')
+        images = {}
+        current = None
+        for line in compose.splitlines():
+            match = re.match(r'^  ([A-Za-z0-9._-]+):\s*$', line)
+            if match:
+                current = match.group(1)
+            match = re.match(r'^    image:\s*(\S+)\s*$', line)
+            if match and current:
+                images[current] = match.group(1)
+        self.assertEqual(images['xray-ha'], cxs.XRAY_IMAGE)
+        proxies = {name: image for name, image in images.items()
+                   if name.startswith('xray-') and not name.endswith('-exporter')}
+        self.assertGreater(len(proxies), 1)
+        self.assertEqual({name: cxs.XRAY_IMAGE for name in proxies}, proxies)
+        self.assertNotIn('teddysun/xray:latest', compose)
 
 
 class DefaultBaseDirTest(unittest.TestCase):
