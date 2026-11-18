@@ -1,7 +1,7 @@
 {
   "uid": "proxy-availability",
   "title": "Proxy Availability",
-  "description": "End-to-end probes through the HA proxy entry and every xray proxy (docs/00_Network_Proxy.md).",
+  "description": "End-to-end probes through the HA proxy entries and every xray proxy (docs/00_Network_Proxy.md).",
   "tags": [
     "proxy"
   ],
@@ -53,9 +53,9 @@
     },
     {
       "type": "stat",
-      "title": "HA entry \u00b7 HTTP",
+      "title": "ha-general \u00b7 HTTP",
       "id": 2,
-      "description": "A request through the HA entry's HTTP port returned 204 within 8 s. Unknown: no result in the last 90 s.",
+      "description": "A request through ha-general's HTTP port returned 204 within 8 s. Unknown: no result in the last 90 s.",
       "datasource": {
         "type": "prometheus",
         "uid": "${prometheus_source}"
@@ -72,7 +72,7 @@
             "type": "prometheus",
             "uid": "${prometheus_source}"
           },
-          "expr": "(max by (protocol) (probe_success{job=\"proxy-probe\",kind=\"ha\",protocol=\"http\"} unless on (instance) (time() - timestamp(probe_success{job=\"proxy-probe\",kind=\"ha\",protocol=\"http\"}) > 90))) or (max by (protocol) (max_over_time(up{job=\"proxy-probe\",kind=\"ha\",protocol=\"http\"}[1d])) * 0 - 1)",
+          "expr": "(max by (protocol) (probe_success{job=\"proxy-probe\",kind=\"ha\",pool=\"ha-general\",protocol=\"http\"} unless on (instance) (time() - timestamp(probe_success{job=\"proxy-probe\",kind=\"ha\",pool=\"ha-general\",protocol=\"http\"}) > 90))) or (max by (protocol) (max_over_time(up{job=\"proxy-probe\",kind=\"ha\",pool=\"ha-general\",protocol=\"http\"}[1d])) * 0 - 1)",
           "legendFormat": "HTTP",
           "refId": "A",
           "instant": true,
@@ -149,9 +149,9 @@
     },
     {
       "type": "stat",
-      "title": "HA entry \u00b7 SOCKS5",
+      "title": "ha-general \u00b7 SOCKS5",
       "id": 3,
-      "description": "A request through the HA entry's SOCKS5 port returned 204 within 8 s. Unknown: no result in the last 90 s.",
+      "description": "A request through ha-general's SOCKS5 port returned 204 within 8 s. Unknown: no result in the last 90 s.",
       "datasource": {
         "type": "prometheus",
         "uid": "${prometheus_source}"
@@ -168,7 +168,7 @@
             "type": "prometheus",
             "uid": "${prometheus_source}"
           },
-          "expr": "(max by (protocol) (probe_success{job=\"proxy-probe\",kind=\"ha\",protocol=\"socks\"} unless on (instance) (time() - timestamp(probe_success{job=\"proxy-probe\",kind=\"ha\",protocol=\"socks\"}) > 90))) or (max by (protocol) (max_over_time(up{job=\"proxy-probe\",kind=\"ha\",protocol=\"socks\"}[1d])) * 0 - 1)",
+          "expr": "(max by (protocol) (probe_success{job=\"proxy-probe\",kind=\"ha\",pool=\"ha-general\",protocol=\"socks\"} unless on (instance) (time() - timestamp(probe_success{job=\"proxy-probe\",kind=\"ha\",pool=\"ha-general\",protocol=\"socks\"}) > 90))) or (max by (protocol) (max_over_time(up{job=\"proxy-probe\",kind=\"ha\",pool=\"ha-general\",protocol=\"socks\"}[1d])) * 0 - 1)",
           "legendFormat": "SOCKS5",
           "refId": "A",
           "instant": true,
@@ -330,7 +330,7 @@
       "type": "stat",
       "title": "Probe duration",
       "id": 5,
-      "description": "Time of the last probe through the HA entry.",
+      "description": "Time of the last probe through ha-general.",
       "datasource": {
         "type": "prometheus",
         "uid": "${prometheus_source}"
@@ -347,7 +347,7 @@
             "type": "prometheus",
             "uid": "${prometheus_source}"
           },
-          "expr": "max by (protocol) (probe_duration_seconds{job=\"proxy-probe\",kind=\"ha\"} unless on (instance) (time() - timestamp(probe_duration_seconds{job=\"proxy-probe\",kind=\"ha\"}) > 90))",
+          "expr": "max by (protocol) (probe_duration_seconds{job=\"proxy-probe\",kind=\"ha\",pool=\"ha-general\"} unless on (instance) (time() - timestamp(probe_duration_seconds{job=\"proxy-probe\",kind=\"ha\",pool=\"ha-general\"}) > 90))",
           "legendFormat": "{{protocol}}",
           "refId": "A",
           "instant": true,
@@ -412,7 +412,7 @@
             "type": "prometheus",
             "uid": "${prometheus_source}"
           },
-          "expr": "max by (protocol) (time() - timestamp(probe_success{job=\"proxy-probe\",kind=\"ha\"}))",
+          "expr": "max by (protocol) (time() - timestamp(probe_success{job=\"proxy-probe\",kind=\"ha\",pool=\"ha-general\"}))",
           "legendFormat": "{{protocol}}",
           "refId": "A",
           "instant": true,
@@ -482,7 +482,7 @@
             "type": "prometheus",
             "uid": "${prometheus_source}"
           },
-          "expr": "max by (protocol) (avg_over_time(probe_success{job=\"proxy-probe\",kind=\"ha\"}[24h]))",
+          "expr": "max by (protocol) (avg_over_time(probe_success{job=\"proxy-probe\",kind=\"ha\",pool=\"ha-general\"}[24h]))",
           "legendFormat": "{{protocol}}",
           "refId": "A",
           "instant": true,
@@ -548,7 +548,566 @@
             "type": "prometheus",
             "uid": "${prometheus_source}"
           },
-          "expr": "min by (protocol) (clamp_max(count_over_time(probe_success{job=\"proxy-probe\",kind=\"ha\"}[24h]) / 2880, 1))",
+          "expr": "min by (protocol) (clamp_max(count_over_time(probe_success{job=\"proxy-probe\",kind=\"ha\",pool=\"ha-general\"}[24h]) / 2880, 1))",
+          "legendFormat": "{{protocol}}",
+          "refId": "A",
+          "instant": true,
+          "range": false
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "mappings": [],
+          "color": {
+            "mode": "thresholds"
+          },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "orange",
+                "value": null
+              },
+              {
+                "color": "text",
+                "value": 0.99
+              }
+            ]
+          },
+          "noValue": "Unknown",
+          "unit": "percentunit",
+          "decimals": 1
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "colorMode": "value",
+        "graphMode": "none",
+        "justifyMode": "auto",
+        "textMode": "value_and_name",
+        "orientation": "auto",
+        "wideLayout": true,
+        "showPercentChange": false
+      }
+    },
+    {
+      "type": "row",
+      "title": "HA entry ha-private",
+      "id": 9,
+      "collapsed": false,
+      "gridPos": {
+        "h": 1,
+        "w": 24,
+        "x": 0,
+        "y": 5
+      },
+      "panels": []
+    },
+    {
+      "type": "stat",
+      "title": "ha-private \u00b7 HTTP",
+      "id": 10,
+      "description": "A request through ha-private's HTTP port returned 204 within 8 s. Unknown: no result in the last 90 s.",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${prometheus_source}"
+      },
+      "gridPos": {
+        "h": 4,
+        "w": 4,
+        "x": 0,
+        "y": 6
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${prometheus_source}"
+          },
+          "expr": "(max by (protocol) (probe_success{job=\"proxy-probe\",kind=\"ha\",pool=\"ha-private\",protocol=\"http\"} unless on (instance) (time() - timestamp(probe_success{job=\"proxy-probe\",kind=\"ha\",pool=\"ha-private\",protocol=\"http\"}) > 90))) or (max by (protocol) (max_over_time(up{job=\"proxy-probe\",kind=\"ha\",pool=\"ha-private\",protocol=\"http\"}[1d])) * 0 - 1)",
+          "legendFormat": "HTTP",
+          "refId": "A",
+          "instant": true,
+          "range": false
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "mappings": [
+            {
+              "type": "value",
+              "options": {
+                "1": {
+                  "text": "Passing",
+                  "color": "green",
+                  "index": 0
+                },
+                "0": {
+                  "text": "Failing",
+                  "color": "red",
+                  "index": 1
+                },
+                "-1": {
+                  "text": "Unknown",
+                  "color": "#808080",
+                  "index": 2
+                }
+              }
+            },
+            {
+              "type": "special",
+              "options": {
+                "match": "null",
+                "result": {
+                  "text": "Unknown",
+                  "color": "#808080",
+                  "index": 3
+                }
+              }
+            }
+          ],
+          "color": {
+            "mode": "thresholds"
+          },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "text",
+                "value": null
+              }
+            ]
+          },
+          "noValue": "Unknown"
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "colorMode": "background",
+        "graphMode": "none",
+        "justifyMode": "auto",
+        "textMode": "value_and_name",
+        "orientation": "auto",
+        "wideLayout": true,
+        "showPercentChange": false
+      }
+    },
+    {
+      "type": "stat",
+      "title": "ha-private \u00b7 SOCKS5",
+      "id": 11,
+      "description": "A request through ha-private's SOCKS5 port returned 204 within 8 s. Unknown: no result in the last 90 s.",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${prometheus_source}"
+      },
+      "gridPos": {
+        "h": 4,
+        "w": 4,
+        "x": 4,
+        "y": 6
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${prometheus_source}"
+          },
+          "expr": "(max by (protocol) (probe_success{job=\"proxy-probe\",kind=\"ha\",pool=\"ha-private\",protocol=\"socks\"} unless on (instance) (time() - timestamp(probe_success{job=\"proxy-probe\",kind=\"ha\",pool=\"ha-private\",protocol=\"socks\"}) > 90))) or (max by (protocol) (max_over_time(up{job=\"proxy-probe\",kind=\"ha\",pool=\"ha-private\",protocol=\"socks\"}[1d])) * 0 - 1)",
+          "legendFormat": "SOCKS5",
+          "refId": "A",
+          "instant": true,
+          "range": false
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "mappings": [
+            {
+              "type": "value",
+              "options": {
+                "1": {
+                  "text": "Passing",
+                  "color": "green",
+                  "index": 0
+                },
+                "0": {
+                  "text": "Failing",
+                  "color": "red",
+                  "index": 1
+                },
+                "-1": {
+                  "text": "Unknown",
+                  "color": "#808080",
+                  "index": 2
+                }
+              }
+            },
+            {
+              "type": "special",
+              "options": {
+                "match": "null",
+                "result": {
+                  "text": "Unknown",
+                  "color": "#808080",
+                  "index": 3
+                }
+              }
+            }
+          ],
+          "color": {
+            "mode": "thresholds"
+          },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "text",
+                "value": null
+              }
+            ]
+          },
+          "noValue": "Unknown"
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "colorMode": "background",
+        "graphMode": "none",
+        "justifyMode": "auto",
+        "textMode": "value_and_name",
+        "orientation": "auto",
+        "wideLayout": true,
+        "showPercentChange": false
+      }
+    },
+    {
+      "type": "stat",
+      "title": "Proxies passing",
+      "id": 12,
+      "description": "Proxies ha-private balances over, every public and private proxy, whose own SOCKS5 port passes the probe, and the proxies configured. Proxies are not necessarily independent failure domains.",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${prometheus_source}"
+      },
+      "gridPos": {
+        "h": 4,
+        "w": 4,
+        "x": 8,
+        "y": 6
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${prometheus_source}"
+          },
+          "expr": "count(((max by (entry) (probe_success{job=\"proxy-probe\",kind=\"raw\",pool=~\"ha-general|ha-private\",protocol=\"socks\"} unless on (instance) (time() - timestamp(probe_success{job=\"proxy-probe\",kind=\"raw\",pool=~\"ha-general|ha-private\",protocol=\"socks\"}) > 90))) or (max by (entry) (max_over_time(up{job=\"proxy-probe\",kind=\"raw\",pool=~\"ha-general|ha-private\",protocol=\"socks\"}[1d])) * 0 - 1)) == 1) or vector(0)",
+          "legendFormat": "passing",
+          "refId": "A",
+          "instant": true,
+          "range": false
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${prometheus_source}"
+          },
+          "expr": "count(max by (entry) (max_over_time(up{job=\"proxy-probe\",kind=\"raw\",pool=~\"ha-general|ha-private\",protocol=\"socks\"}[1d])))",
+          "legendFormat": "configured",
+          "refId": "B",
+          "instant": true,
+          "range": false
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "mappings": [],
+          "color": {
+            "mode": "thresholds"
+          },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "red",
+                "value": null
+              },
+              {
+                "color": "orange",
+                "value": 1
+              },
+              {
+                "color": "green",
+                "value": 2
+              }
+            ]
+          },
+          "noValue": "Unknown"
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "colorMode": "value",
+        "graphMode": "none",
+        "justifyMode": "auto",
+        "textMode": "value_and_name",
+        "orientation": "auto",
+        "wideLayout": true,
+        "showPercentChange": false
+      }
+    },
+    {
+      "type": "stat",
+      "title": "Probe duration",
+      "id": 13,
+      "description": "Time of the last probe through ha-private.",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${prometheus_source}"
+      },
+      "gridPos": {
+        "h": 4,
+        "w": 3,
+        "x": 12,
+        "y": 6
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${prometheus_source}"
+          },
+          "expr": "max by (protocol) (probe_duration_seconds{job=\"proxy-probe\",kind=\"ha\",pool=\"ha-private\"} unless on (instance) (time() - timestamp(probe_duration_seconds{job=\"proxy-probe\",kind=\"ha\",pool=\"ha-private\"}) > 90))",
+          "legendFormat": "{{protocol}}",
+          "refId": "A",
+          "instant": true,
+          "range": false
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "mappings": [],
+          "color": {
+            "mode": "thresholds"
+          },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "text",
+                "value": null
+              }
+            ]
+          },
+          "noValue": "Unknown",
+          "unit": "s"
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "colorMode": "none",
+        "graphMode": "none",
+        "justifyMode": "auto",
+        "textMode": "value_and_name",
+        "orientation": "auto",
+        "wideLayout": true,
+        "showPercentChange": false
+      }
+    },
+    {
+      "type": "stat",
+      "title": "Last check",
+      "id": 14,
+      "description": "Age of the latest probe result. Older than 90 s: the status shows Unknown.",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${prometheus_source}"
+      },
+      "gridPos": {
+        "h": 4,
+        "w": 3,
+        "x": 15,
+        "y": 6
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${prometheus_source}"
+          },
+          "expr": "max by (protocol) (time() - timestamp(probe_success{job=\"proxy-probe\",kind=\"ha\",pool=\"ha-private\"}))",
+          "legendFormat": "{{protocol}}",
+          "refId": "A",
+          "instant": true,
+          "range": false
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "mappings": [],
+          "color": {
+            "mode": "thresholds"
+          },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "#808080",
+                "value": 90
+              }
+            ]
+          },
+          "noValue": "Unknown",
+          "unit": "s",
+          "decimals": 0
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "colorMode": "value",
+        "graphMode": "none",
+        "justifyMode": "auto",
+        "textMode": "value_and_name",
+        "orientation": "auto",
+        "wideLayout": true,
+        "showPercentChange": false
+      }
+    },
+    {
+      "type": "stat",
+      "title": "Probe success rate 24h",
+      "id": 15,
+      "description": "Share of the probes taken in the last 24 h that passed. Times without probes count neither way: see coverage.",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${prometheus_source}"
+      },
+      "gridPos": {
+        "h": 4,
+        "w": 3,
+        "x": 18,
+        "y": 6
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${prometheus_source}"
+          },
+          "expr": "max by (protocol) (avg_over_time(probe_success{job=\"proxy-probe\",kind=\"ha\",pool=\"ha-private\"}[24h]))",
+          "legendFormat": "{{protocol}}",
+          "refId": "A",
+          "instant": true,
+          "range": false
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "mappings": [],
+          "color": {
+            "mode": "thresholds"
+          },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "text",
+                "value": null
+              }
+            ]
+          },
+          "noValue": "Unknown",
+          "unit": "percentunit",
+          "decimals": 2
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "colorMode": "none",
+        "graphMode": "none",
+        "justifyMode": "auto",
+        "textMode": "value_and_name",
+        "orientation": "auto",
+        "wideLayout": true,
+        "showPercentChange": false
+      }
+    },
+    {
+      "type": "stat",
+      "title": "Coverage 24h",
+      "id": 16,
+      "description": "Probes taken in the last 24 h, out of the 2880 a 30 s interval gives.",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${prometheus_source}"
+      },
+      "gridPos": {
+        "h": 4,
+        "w": 3,
+        "x": 21,
+        "y": 6
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${prometheus_source}"
+          },
+          "expr": "min by (protocol) (clamp_max(count_over_time(probe_success{job=\"proxy-probe\",kind=\"ha\",pool=\"ha-private\"}[24h]) / 2880, 1))",
           "legendFormat": "{{protocol}}",
           "refId": "A",
           "instant": true,
@@ -600,30 +1159,30 @@
     {
       "type": "row",
       "title": "Proxies",
-      "id": 9,
+      "id": 17,
       "collapsed": false,
       "gridPos": {
         "h": 1,
         "w": 24,
         "x": 0,
-        "y": 5
+        "y": 10
       },
       "panels": []
     },
     {
       "type": "table",
       "title": "Proxies",
-      "id": 10,
+      "id": 18,
       "datasource": {
         "type": "prometheus",
         "uid": "${prometheus_source}"
       },
-      "description": "Each xray proxy, probed through its own ports and never through the HA entry. Pool: ha-general proxies carry the HA entry's traffic; none: probed only. Xray API and traffic come from the proxy's exporter and do not show whether requests get through.",
+      "description": "Each xray proxy, probed through its own ports and never through the HA entry. Pool: ha-general proxies carry the traffic of ha-general and ha-private; ha-private proxies only ha-private's; none: probed only. Access: Private means the proxy's own entry accepts only admin accounts. Xray API and traffic come from the proxy's exporter and do not show whether requests get through.",
       "gridPos": {
         "h": 11,
         "w": 24,
         "x": 0,
-        "y": 6
+        "y": 11
       },
       "targets": [
         {
@@ -631,7 +1190,7 @@
             "type": "prometheus",
             "uid": "${prometheus_source}"
           },
-          "expr": "(max by (entry, pool) (probe_success{job=\"proxy-probe\",kind=\"raw\",protocol=\"http\"} unless on (instance) (time() - timestamp(probe_success{job=\"proxy-probe\",kind=\"raw\",protocol=\"http\"}) > 90))) or (max by (entry, pool) (max_over_time(up{job=\"proxy-probe\",kind=\"raw\",protocol=\"http\"}[1d])) * 0 - 1)",
+          "expr": "(max by (entry, pool, access) (probe_success{job=\"proxy-probe\",kind=\"raw\",protocol=\"http\"} unless on (instance) (time() - timestamp(probe_success{job=\"proxy-probe\",kind=\"raw\",protocol=\"http\"}) > 90))) or (max by (entry, pool, access) (max_over_time(up{job=\"proxy-probe\",kind=\"raw\",protocol=\"http\"}[1d])) * 0 - 1)",
           "legendFormat": "",
           "refId": "A",
           "instant": true,
@@ -785,21 +1344,23 @@
               "Value #I": "Xray API",
               "Value #J": "Traffic 24h",
               "entry": "Proxy",
-              "pool": "Pool"
+              "pool": "Pool",
+              "access": "Access"
             },
             "indexByName": {
               "entry": 0,
-              "pool": 1,
-              "Value #A": 2,
-              "Value #B": 3,
-              "Value #C": 4,
-              "Value #D": 5,
-              "Value #E": 6,
-              "Value #F": 7,
-              "Value #G": 8,
-              "Value #H": 9,
-              "Value #I": 10,
-              "Value #J": 11
+              "access": 1,
+              "pool": 2,
+              "Value #A": 3,
+              "Value #B": 4,
+              "Value #C": 5,
+              "Value #D": 6,
+              "Value #E": 7,
+              "Value #F": 8,
+              "Value #G": 9,
+              "Value #H": 10,
+              "Value #I": 11,
+              "Value #J": 12
             }
           }
         },
@@ -808,8 +1369,8 @@
           "options": {
             "sort": [
               {
-                "field": "Pool",
-                "desc": false
+                "field": "Access",
+                "desc": true
               }
             ]
           }
@@ -843,6 +1404,32 @@
               {
                 "id": "custom.width",
                 "value": 330
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Access"
+            },
+            "properties": [
+              {
+                "id": "mappings",
+                "value": [
+                  {
+                    "type": "value",
+                    "options": {
+                      "public": {
+                        "text": "Public",
+                        "index": 0
+                      },
+                      "private": {
+                        "text": "Private",
+                        "index": 1
+                      }
+                    }
+                  }
+                ]
               }
             ]
           },
@@ -1095,20 +1682,20 @@
     {
       "type": "row",
       "title": "History",
-      "id": 11,
+      "id": 19,
       "collapsed": false,
       "gridPos": {
         "h": 1,
         "w": 24,
         "x": 0,
-        "y": 17
+        "y": 22
       },
       "panels": []
     },
     {
       "type": "state-timeline",
       "title": "Probe results",
-      "id": 12,
+      "id": 20,
       "datasource": {
         "type": "prometheus",
         "uid": "${prometheus_source}"
@@ -1118,7 +1705,7 @@
         "h": 12,
         "w": 24,
         "x": 0,
-        "y": 18
+        "y": 23
       },
       "targets": [
         {
@@ -1206,7 +1793,7 @@
     {
       "type": "timeseries",
       "title": "Probe duration",
-      "id": 13,
+      "id": 21,
       "datasource": {
         "type": "prometheus",
         "uid": "${prometheus_source}"
@@ -1216,7 +1803,7 @@
         "h": 9,
         "w": 12,
         "x": 0,
-        "y": 30
+        "y": 35
       },
       "targets": [
         {
@@ -1264,7 +1851,7 @@
     {
       "type": "timeseries",
       "title": "Probe success rate (1 h)",
-      "id": 14,
+      "id": 22,
       "datasource": {
         "type": "prometheus",
         "uid": "${prometheus_source}"
@@ -1274,7 +1861,7 @@
         "h": 9,
         "w": 12,
         "x": 12,
-        "y": 30
+        "y": 35
       },
       "targets": [
         {
@@ -1324,7 +1911,7 @@
     {
       "type": "timeseries",
       "title": "Probe results per 5 min (10 expected)",
-      "id": 15,
+      "id": 23,
       "datasource": {
         "type": "prometheus",
         "uid": "${prometheus_source}"
@@ -1334,7 +1921,7 @@
         "h": 9,
         "w": 12,
         "x": 0,
-        "y": 39
+        "y": 44
       },
       "targets": [
         {
@@ -1381,17 +1968,17 @@
     {
       "type": "timeseries",
       "title": "HA entry traffic by proxy",
-      "id": 16,
+      "id": 24,
       "datasource": {
         "type": "prometheus",
         "uid": "${prometheus_source}"
       },
-      "description": "Bytes per second the HA entry sends and receives through each pool proxy, from xray-ha's own counters: client traffic on the proxy its connections use, plus Xray's own small probe fetches through every proxy.",
+      "description": "Bytes per second the HA entry sends and receives through each proxy, ha-general and ha-private together, from xray-ha's own counters: client traffic on the proxy its connections use, plus Xray's own small probe fetches through every proxy.",
       "gridPos": {
         "h": 9,
         "w": 12,
         "x": 12,
-        "y": 39
+        "y": 44
       },
       "targets": [
         {

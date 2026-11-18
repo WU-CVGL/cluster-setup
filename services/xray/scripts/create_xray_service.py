@@ -32,7 +32,7 @@ except ImportError:  # 没有 PyYAML 时使用基于正则的简单解析
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 from XrayConfigHandler import DEFAULT_API_PORT, DEFAULT_HTTP_PORT, DEFAULT_SOCKS_PORT, XrayConfigHandler
-from proxy_accounts import Accounts, accounts_lock
+from proxy_accounts import PUBLIC_PROXIES_FILE, Accounts, accounts_lock, public_proxies
 
 
 # 容器内固定端口 (现有 compose 服务和 exporter 都依赖这些值)
@@ -200,6 +200,7 @@ class XrayServiceCreator:
         self.xray_dir = self.base_dir / "xray"
         self.docker_compose_file = self.base_dir / "docker-compose.yml"
         self.prometheus_file = self.base_dir / "prometheus" / "prometheus.yml"
+        self.public_proxies_file = self.base_dir / PUBLIC_PROXIES_FILE
 
     def check_port_available(self, port: int) -> Tuple[bool, Optional[str]]:
         """
@@ -215,18 +216,27 @@ class XrayServiceCreator:
         owner = host_port_owners(services).get(port)
         return owner is None, owner
 
-    def raw_inbound_users(self) -> Optional[List[Tuple[str, str]]]:
+    def raw_inbound_users(self, private: bool) -> Optional[List[Tuple[str, str]]]:
         """
-        proxy-accounts/accounts.json 中 raw_auth 为 true 时返回所有账号 (代理入站要求的账号，
-        与 proxy_accounts.py render 写入的相同)，否则返回 None (入站不要求认证)
+        新代理入站要求的账号，与 proxy_accounts.py render 写入的相同 (Accounts.proxy_users)：
+        私有代理始终要求账号 (启用的管理员账号、svc-ha、svc-monitor)；公共代理在 raw_auth 为 true 时
+        要求所有启用的账号，否则返回 None (入站不要求认证)
         """
         accounts = Accounts(self.base_dir)
-        if not accounts.raw_auth:
-            return None
-        users = accounts.pairs()
-        if not users:
+        if private:
+            missing = [name for name in ("svc-ha", "svc-monitor") if name not in accounts.accounts]
+            if missing:
+                raise ValueError(f"私有代理要求账号，但 {accounts.path} 中没有 {', '.join(missing)}")
+        users = accounts.proxy_users(private)
+        if users is not None and not users:
             raise ValueError(f"raw-auth 已开启，但 {accounts.path} 中没有账号")
         return users
+
+    def render_public_proxies(self, text: str, service_name: str) -> str:
+        """返回把 service_name 加到 xray/public-proxies.txt 末尾之后的内容 (不写文件)"""
+        if text and not text.endswith("\n"):
+            text += "\n"
+        return text + service_name + "\n"
 
     def generate_xray_config(
         self,
@@ -500,12 +510,14 @@ class XrayServiceCreator:
         share_url: str,
         service_name: str,
         http_port: int,
-        socks_port: int
+        socks_port: int,
+        *,
+        private: bool
     ) -> None:
         """
         创建完整的 xray 服务
 
-        先校验参数、生成并检查全部三个文件的新内容，全部通过后才写入；
+        先校验参数、生成并检查全部文件的新内容，全部通过后才写入；
         写入过程中出错时恢复已写入的文件。
         从读取账号到写完配置和其他文件都持有 proxy-accounts/.lock (与 proxy_accounts.py 和 portal 的 applier
         相同)：同时进行的 disable、remove 或 render 要么在读取账号之前完成，要么等新代理写完后再 render 它。
@@ -515,13 +527,18 @@ class XrayServiceCreator:
             service_name: 简短的服务名称（如: jp-osaka-xuqi）
             http_port: HTTP 代理端口
             socks_port: SOCKS5 代理端口
+            private: 必须明确给出，没有默认值。True: 私有代理 (只有管理员账号可用，始终要求账号)；
+                False: 公共代理，加入 xray/public-proxies.txt
         """
+        if not isinstance(private, bool):
+            raise ValueError("必须明确指定代理类型: --public 或 --private")
         with accounts_lock(self.base_dir):
-            self._create_service(share_url, service_name, http_port, socks_port)
+            self._create_service(share_url, service_name, http_port, socks_port, private)
 
-    def _create_service(self, share_url: str, service_name: str, http_port: int, socks_port: int) -> None:
+    def _create_service(self, share_url: str, service_name: str, http_port: int, socks_port: int,
+                        private: bool) -> None:
         """create_service 的内容，在 proxy-accounts/.lock 中执行"""
-        print(f"正在创建 xray 服务: {service_name}")
+        print(f"正在创建 xray 服务: {service_name} ({'私有，只有管理员账号可用' if private else '公共'})")
         print(f"HTTP 端口: {http_port}, SOCKS5 端口: {socks_port}")
 
         # 检查参数
@@ -534,6 +551,12 @@ class XrayServiceCreator:
             raise FileNotFoundError(f"找不到 prometheus.yml: {self.prometheus_file}")
         compose_text = self._read_text(self.docker_compose_file)
         prometheus_text = self._read_text(self.prometheus_file)
+        if not self.public_proxies_file.exists():
+            raise FileNotFoundError(f"找不到 {PUBLIC_PROXIES_FILE}: {self.public_proxies_file}")
+        public_text = self._read_text(self.public_proxies_file)
+        listed = service_name in public_proxies(self.base_dir)
+        if private and listed:
+            raise ValueError(f"{service_name} 已列在 {PUBLIC_PROXIES_FILE} 中 (公共代理)，不能创建为私有代理")
         if yaml is None:
             print("⚠  未安装 PyYAML，使用简单的正则解析 docker-compose.yml")
         services = compose_services(compose_text)
@@ -555,10 +578,12 @@ class XrayServiceCreator:
 
         print("✓ 端口检查通过")
 
-        # raw-auth 开启时，新代理的入站要求所有代理账号 (见 proxy_accounts.py)
-        inbound_users = self.raw_inbound_users()
+        # 私有代理始终要求账号；公共代理在 raw-auth 开启时要求所有代理账号 (见 proxy_accounts.py)
+        inbound_users = self.raw_inbound_users(private)
         if inbound_users is not None:
-            print(f"✓ raw-auth 已开启: 入站要求 {len(inbound_users)} 个代理账号")
+            reason = "私有代理" if private else "raw-auth 已开启"
+            print(f"✓ {reason}: 入站要求 {len(inbound_users)} 个代理账号")
+        new_public_text = None if private or listed else self.render_public_proxies(public_text, service_name)
 
         # 解析分享 URL
         print("正在解析分享 URL...")
@@ -610,6 +635,12 @@ class XrayServiceCreator:
                 written_files.append((self.prometheus_file, prometheus_text))
                 self._write_text(self.prometheus_file, new_prometheus_text)
                 print("✓ 已更新 prometheus.yml")
+
+            # 公共代理: 加入 xray/public-proxies.txt
+            if new_public_text is not None:
+                written_files.append((self.public_proxies_file, public_text))
+                self._write_text(self.public_proxies_file, new_public_text)
+                print(f"✓ 已加入 {PUBLIC_PROXIES_FILE}")
         except BaseException:
             print("❌ 写入失败，正在恢复已修改的文件...", file=sys.stderr)
             for path, original in reversed(written_files):
@@ -628,6 +659,8 @@ class XrayServiceCreator:
         print(f"  1. 检查配置文件: {config_file}")
         print(f"  2. 启动服务: docker compose up -d xray-{service_name} xray-{service_name}-exporter")
         print("  3. 重新加载 Prometheus 配置: docker compose kill -s SIGHUP prometheus")
+        if private:
+            print("     私有代理：只有管理员账号可用，入站始终要求账号；只有 ha-private 能经过它")
         login = "<user>:<password>@" if inbound_users is not None else ""
         print(f"  4. 验证代理: curl -x http://{login}localhost:{http_port} -I https://www.google.com")
         socks = f"-x socks5h://{login}localhost:{socks_port}" if login else f"--socks5-hostname localhost:{socks_port}"
@@ -640,8 +673,8 @@ def main():
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""
 示例:
-  %(prog)s vmess://... jp-tokyo 56889 56089
-  %(prog)s vless://... us-east 41889 41089
+  %(prog)s vmess://... jp-tokyo 56889 56089 --private
+  %(prog)s vless://... us-east 41889 41089 --public
         """
     )
 
@@ -667,6 +700,16 @@ def main():
         help='SOCKS5 代理端口'
     )
 
+    access = parser.add_mutually_exclusive_group(required=True)
+    access.add_argument(
+        '--public', dest='private', action='store_false',
+        help='公共代理: 所有用户可用，加入 xray/public-proxies.txt'
+    )
+    access.add_argument(
+        '--private', dest='private', action='store_true',
+        help='私有代理：只有管理员账号可用，入站始终要求账号'
+    )
+
     parser.add_argument(
         '--base-dir',
         type=str,
@@ -682,7 +725,8 @@ def main():
             args.share_url,
             args.service_name,
             args.http_port,
-            args.socks_port
+            args.socks_port,
+            private=args.private
         )
     except Exception as e:
         print(f"❌ 错误: {e}", file=sys.stderr)

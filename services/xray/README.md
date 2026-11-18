@@ -27,14 +27,19 @@ The `config/config.json` files are gitignored; they only exist on the supplement
 
 See [scripts/README.md](scripts/README.md) (in Chinese):
 
-- `scripts/create_xray_service.py <share_url> <name> <http_port> <socks_port>`: parses a vmess/vless/trojan/ss
-  share URL, writes `xray/<name>/config/config.json`, and adds `xray-<name>` + `xray-<name>-exporter` to
-  `docker-compose.yml` and the exporter target to `prometheus/prometheus.yml`. With `proxy_accounts.py raw-auth on`,
-  the new proxy requires every proxy account from the start. Afterwards run
+- `scripts/create_xray_service.py <share_url> <name> <http_port> <socks_port> --public|--private`: parses a
+  vmess/vless/trojan/ss share URL, writes `xray/<name>/config/config.json`, and adds `xray-<name>` +
+  `xray-<name>-exporter` to `docker-compose.yml` and the exporter target to `prometheus/prometheus.yml`. The class
+  is required: `--public` adds the proxy to `public-proxies.txt`; `--private` leaves it unlisted, so its own
+  entry accepts only admin accounts from the start ([docs/00](../../docs/00_Network_Proxy.md#classify-a-new-proxy)).
+  A public proxy requires every proxy account from the start with `proxy_accounts.py raw-auth on`. Afterwards run
   `docker compose up -d xray-<name> xray-<name>-exporter` and `docker compose kill -s SIGHUP prometheus`.
-- `scripts/proxy_accounts.py add|rotate|remove|enable|disable|list|status|raw-auth|render`: keeps the proxy
+- `public-proxies.txt`: the public proxies. Every proxy not listed is private: its own entry accepts only admin
+  accounts, and only the HA entry `ha-private` reaches it.
+- `scripts/proxy_accounts.py add|rotate|remove|enable|disable|admin|list|status|raw-auth|render`: keeps the proxy
   accounts in `services/proxy-accounts/accounts.json` (not in git) and renders every config that holds them: the
-  HA entry's, the probes' and, with `raw-auth on`, the inbounds of every `xray/<name>/config/config.json`
+  HA entry's, the probes', the private proxies' inbounds (admin accounts, always) and, with `raw-auth on`, the public
+  proxies' inbounds
   ([docs/00](../../docs/00_Network_Proxy.md#accounts)). The portal's changes go through
   [`proxy-portal/applier`](../proxy-portal/applier/README.md).
 - `scripts/vless_to_config.py`: prints a standalone config for one `vless://` URL. Add `--stats-api` when the

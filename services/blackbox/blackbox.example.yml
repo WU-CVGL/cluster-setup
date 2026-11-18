@@ -1,11 +1,12 @@
 # End-to-end checks through each proxy entry, scraped by the proxy-probe job of
 # services/prometheus/prometheus.yml (docs/00_Network_Proxy.md#proxy-availability).
 # One module per entry and protocol, named <entry>_<http|socks>; the job passes the probe URL.
-# A raw entry is the xray-<entry> service itself, never the HA entry, so a proxy that fails
+# A proxy's entry is the xray-<proxy> service itself, never the HA entry, so a proxy that fails
 # shows as failed even while the HA entry carries on through another proxy.
 # blackbox_exporter reads blackbox/config/blackbox.yml, which xray/scripts/proxy_accounts.py renders
-# from this file: it puts the svc-monitor account into every proxy_url through xray-ha, and into
-# the proxies' ones when they require accounts. svc-monitor:PASSWORD below is a placeholder.
+# from this file: it puts the svc-monitor account into every proxy_url through xray-ha (ha-general on
+# 8889/1089, ha-private on 8890/1090) and the private proxies, and into the public proxies' ones when they
+# require accounts (raw auth). svc-monitor:PASSWORD below is a placeholder.
 modules:
   ha-general_http:
     prober: http
@@ -22,6 +23,26 @@ modules:
     timeout: 8s
     http:
       proxy_url: socks5://svc-monitor:PASSWORD@xray-ha:1089
+      skip_resolve_phase_with_proxy: true
+      follow_redirects: false
+      valid_status_codes:
+      - 204
+      preferred_ip_protocol: ip4
+  ha-private_http:
+    prober: http
+    timeout: 8s
+    http:
+      proxy_url: http://svc-monitor:PASSWORD@xray-ha:8890
+      skip_resolve_phase_with_proxy: true
+      follow_redirects: false
+      valid_status_codes:
+      - 204
+      preferred_ip_protocol: ip4
+  ha-private_socks:
+    prober: http
+    timeout: 8s
+    http:
+      proxy_url: socks5://svc-monitor:PASSWORD@xray-ha:1090
       skip_resolve_phase_with_proxy: true
       follow_redirects: false
       valid_status_codes:
@@ -111,7 +132,7 @@ modules:
     prober: http
     timeout: 8s
     http:
-      proxy_url: http://xray-jpty1-bwh-2tb:8889
+      proxy_url: http://svc-monitor:PASSWORD@xray-jpty1-bwh-2tb:8889
       skip_resolve_phase_with_proxy: true
       follow_redirects: false
       valid_status_codes:
@@ -121,7 +142,7 @@ modules:
     prober: http
     timeout: 8s
     http:
-      proxy_url: socks5://xray-jpty1-bwh-2tb:1089
+      proxy_url: socks5://svc-monitor:PASSWORD@xray-jpty1-bwh-2tb:1089
       skip_resolve_phase_with_proxy: true
       follow_redirects: false
       valid_status_codes:
@@ -131,7 +152,7 @@ modules:
     prober: http
     timeout: 8s
     http:
-      proxy_url: http://xray-miyaip-uk-01_relay_jpty1-bwh-2tb:8889
+      proxy_url: http://svc-monitor:PASSWORD@xray-miyaip-uk-01_relay_jpty1-bwh-2tb:8889
       skip_resolve_phase_with_proxy: true
       follow_redirects: false
       valid_status_codes:
@@ -141,7 +162,7 @@ modules:
     prober: http
     timeout: 8s
     http:
-      proxy_url: socks5://xray-miyaip-uk-01_relay_jpty1-bwh-2tb:1089
+      proxy_url: socks5://svc-monitor:PASSWORD@xray-miyaip-uk-01_relay_jpty1-bwh-2tb:1089
       skip_resolve_phase_with_proxy: true
       follow_redirects: false
       valid_status_codes:
@@ -151,7 +172,7 @@ modules:
     prober: http
     timeout: 8s
     http:
-      proxy_url: http://xray-miyaip-uk-01_relay_usca5-bwh-sla-2tb:8889
+      proxy_url: http://svc-monitor:PASSWORD@xray-miyaip-uk-01_relay_usca5-bwh-sla-2tb:8889
       skip_resolve_phase_with_proxy: true
       follow_redirects: false
       valid_status_codes:
@@ -161,7 +182,7 @@ modules:
     prober: http
     timeout: 8s
     http:
-      proxy_url: socks5://xray-miyaip-uk-01_relay_usca5-bwh-sla-2tb:1089
+      proxy_url: socks5://svc-monitor:PASSWORD@xray-miyaip-uk-01_relay_usca5-bwh-sla-2tb:1089
       skip_resolve_phase_with_proxy: true
       follow_redirects: false
       valid_status_codes:
@@ -171,7 +192,7 @@ modules:
     prober: http
     timeout: 8s
     http:
-      proxy_url: http://xray-miyaip-jp-01_relay_usca5-bwh-sla-2tb:8889
+      proxy_url: http://svc-monitor:PASSWORD@xray-miyaip-jp-01_relay_usca5-bwh-sla-2tb:8889
       skip_resolve_phase_with_proxy: true
       follow_redirects: false
       valid_status_codes:
@@ -181,7 +202,7 @@ modules:
     prober: http
     timeout: 8s
     http:
-      proxy_url: socks5://xray-miyaip-jp-01_relay_usca5-bwh-sla-2tb:1089
+      proxy_url: socks5://svc-monitor:PASSWORD@xray-miyaip-jp-01_relay_usca5-bwh-sla-2tb:1089
       skip_resolve_phase_with_proxy: true
       follow_redirects: false
       valid_status_codes:
@@ -191,7 +212,7 @@ modules:
     prober: http
     timeout: 8s
     http:
-      proxy_url: http://xray-miyaip-jp-01_relay_jpty1-bwh-2tb:8889
+      proxy_url: http://svc-monitor:PASSWORD@xray-miyaip-jp-01_relay_jpty1-bwh-2tb:8889
       skip_resolve_phase_with_proxy: true
       follow_redirects: false
       valid_status_codes:
@@ -201,7 +222,7 @@ modules:
     prober: http
     timeout: 8s
     http:
-      proxy_url: socks5://xray-miyaip-jp-01_relay_jpty1-bwh-2tb:1089
+      proxy_url: socks5://svc-monitor:PASSWORD@xray-miyaip-jp-01_relay_jpty1-bwh-2tb:1089
       skip_resolve_phase_with_proxy: true
       follow_redirects: false
       valid_status_codes:

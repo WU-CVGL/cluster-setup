@@ -11,7 +11,7 @@
 
 ```bash
 cd /home/cvgladmin/ws/cluster-setup/services
-python3 xray/scripts/create_xray_service.py <share_url> <service_name> <http_port> <socks_port>
+python3 xray/scripts/create_xray_service.py <share_url> <service_name> <http_port> <socks_port> --public|--private
 ```
 
 ### 参数说明
@@ -20,6 +20,12 @@ python3 xray/scripts/create_xray_service.py <share_url> <service_name> <http_por
 - `service_name`: 简短的服务名称（如: jp-tokyo, us-east）。只能包含小写字母、数字、`-`、`_`，并以字母或数字开头
 - `http_port`: HTTP 代理的主机端口（容器内固定使用 8889）
 - `socks_port`: SOCKS5 代理的主机端口（容器内固定使用 1089）
+- `--public` 或 `--private`（必须二选一，没有默认值）：
+  - `--public`：公共代理，所有用户可用，脚本把它加入 `xray/public-proxies.txt`
+  - `--private`：私有代理，只有管理员账号可用；入站始终要求账号（启用的管理员账号、`svc-ha`、`svc-monitor`），
+    要求账号文件中已有 `svc-ha` 和 `svc-monitor`。名称已列在 `public-proxies.txt` 中时拒绝
+  - 没有列在 `xray/public-proxies.txt` 中的代理都是私有代理，所以漏掉分类的代理只对管理员账号开放
+    （[docs/00](../../../docs/00_Network_Proxy.md#classify-a-new-proxy)）
 - `--base-dir`: 服务根目录（默认为脚本所在的 `services/`；可指向一个副本先试运行）
 
 ### 示例
@@ -30,14 +36,16 @@ python3 xray/scripts/create_xray_service.py \
   "vmess://eyJ2IjoiMiIsInBzIjoi..." \
   jp-tokyo \
   56889 \
-  56089
+  56089 \
+  --private
 
 # 创建美国东部服务，HTTP 端口 41889，SOCKS5 端口 41089
 python3 xray/scripts/create_xray_service.py \
   "vless://uuid@example.com:443?security=tls&sni=example.com#US-East" \
   us-east \
   41889 \
-  41089
+  41089 \
+  --public
 ```
 
 现有服务的主机端口一般成对使用 `<x>089`（SOCKS5）和 `<x>889`（HTTP），见 `docker-compose.yml`。
@@ -99,13 +107,16 @@ ss -ltn | grep ":<port> "
 - 在 `xray/<service_name>/config/config.json` 创建配置文件（并创建 `xray/<service_name>/log/`）
 - 在 `docker-compose.yml` 中最后一个 xray exporter 服务之后添加 xray 服务和 exporter 服务
 - 在 `prometheus/prometheus.yml` 的 v2ray job 中添加 exporter 目标（第一组 targets，`proxy_role: raw`；`xray-ha-exporter` 在另一组）
+- `--public` 时把服务名加到 `xray/public-proxies.txt` 末尾
 
-脚本不会把新代理加入 HA 入口的代理池，也不会为它添加端到端探测：探测需要手动在 `blackbox/blackbox.example.yml`
-中添加 `<service_name>_http` 和 `<service_name>_socks` 两个 module，并在 `prometheus.yml` 的 `proxy-probe`
-job 中添加这两个目标（`pool: none`），然后运行 `proxy_accounts.py render` 并
+脚本不会把新代理加入 HA 入口的代理池（公共代理：`xray-ha/config.example.json` 中的 `pool-<service_name>` 出站；
+私有代理：`private-<service_name>` 出站，只有 `ha-private` 使用），也不会为它添加端到端探测：探测需要手动在
+`blackbox/blackbox.example.yml` 中添加 `<service_name>_http` 和 `<service_name>_socks` 两个 module（私有代理的
+`proxy_url` 带 `svc-monitor:PASSWORD@`），并在 `prometheus.yml` 的 `proxy-probe` job 中添加这两个目标
+（公共代理 `pool: ha-general`、`access: public`；私有代理 `pool: ha-private`、`access: private`），然后运行 `proxy_accounts.py render` 并
 `docker compose kill -s SIGHUP blackbox-exporter`，见 [docs/00](../../../docs/00_Network_Proxy.md#proxy-availability)。
 
-三个文件的新内容都先在内存中生成并检查（安装了 PyYAML 时还会确认除新增内容外文件没有其他变化），
+所有文件的新内容都先在内存中生成并检查（安装了 PyYAML 时还会确认除新增内容外文件没有其他变化），
 全部通过后才写入。写入过程中出错时，已写入的文件会被恢复，新建的目录会被删除。
 
 ## 创建后的步骤
@@ -155,7 +166,7 @@ python3 xray/scripts/vless_to_config.py "vless://..." -o /tmp/config.json
 
 ## 代理账号: proxy_accounts.py
 
-HA 入口（以及开启后的各代理自身入口）要求代理账号。账号保存在一个文件 `services/proxy-accounts/accounts.json`
+HA 入口、私有代理自身入口（始终）以及开启 raw auth 后的公共代理自身入口要求代理账号。账号保存在一个文件 `services/proxy-accounts/accounts.json`
 （权限 `0600`，被 gitignore）；所有含密码的配置都由 `render` 从这个文件生成，不手动维护第二份密码
 （用法和上线顺序见 [docs/00](../../../docs/00_Network_Proxy.md#accounts)）：
 
@@ -166,44 +177,54 @@ python3 xray/scripts/proxy_accounts.py rotate <name> [--show]   # 换密码
 python3 xray/scripts/proxy_accounts.py remove <name>
 python3 xray/scripts/proxy_accounts.py disable <name>           # 保留账号和密码，所有要求账号的入口拒绝它
 python3 xray/scripts/proxy_accounts.py enable <name>
-python3 xray/scripts/proxy_accounts.py list                     # 只输出账号名
-python3 xray/scripts/proxy_accounts.py status [--json]          # 账号、类型、是否启用、raw auth、上次应用的文件哈希；不含密码
-python3 xray/scripts/proxy_accounts.py raw-auth [on|off]        # 代理自身入口是否要求账号，默认 off
+python3 xray/scripts/proxy_accounts.py admin <name> on|off      # 管理员可以使用 ha-private 和私有代理
+python3 xray/scripts/proxy_accounts.py list                     # 账号名，管理员标为 admin
+python3 xray/scripts/proxy_accounts.py status [--json]          # 账号、类型、是否启用、是否管理员、代理的类别、raw auth、上次应用的文件哈希；不含密码
+python3 xray/scripts/proxy_accounts.py raw-auth [on|off]        # 公共代理自身入口是否要求账号，默认 off
 python3 xray/scripts/proxy_accounts.py render
 ```
 
 - 账号名：集群用户名，小写字母、数字、`.`、`_`、`-`，以字母或数字开头，最长 64 个字符。`svc-` 开头的是服务账号，
   只能是 `svc-ha`（HA 入口登录代理）、`svc-monitor`（探测）和 `svc-docker-<node>`（节点的 Docker daemon）。
-  `svc-ha` 和 `svc-monitor` 不能禁用或删除
-- 文件格式（version 2）：`{"version": 2, "raw_auth": bool, "accounts": {name: {"password": str, "enabled": bool}}}`。
-  没有 `version` 的旧文件（`{name: password}`）照常读取，所有账号视为启用，下次修改时写成 version 2
-- 禁用的账号不出现在任何生成的配置中。`raw-auth off` 时只有 HA 入口要求账号，所以禁用的账号只在 HA 入口被拒绝，
-  仍可直接使用代理自身入口
+  `svc-ha` 和 `svc-monitor` 不能禁用或删除；服务账号不能是管理员
+- 文件格式（version 3）：`{"version": 3, "raw_auth": bool, "accounts": {name: {"password": str, "enabled": bool, "admin": bool}}}`。
+  version 2 的文件（没有 `admin`）照常读取，没有管理员；没有 `version` 的旧文件（`{name: password}`）照常读取，
+  所有账号视为启用，没有管理员。下次修改时都写成 version 3
+- 代理的类别：`xray/public-proxies.txt` 列出公共代理，其余都是私有代理（文件缺失时报错）
+- 禁用的账号不出现在任何生成的配置中。`raw-auth off` 时公共代理自身入口不要求账号，所以禁用的账号在 HA 入口
+  （`ha-general`、`ha-private`）和私有代理被拒绝，仍可直接使用公共代理自身入口
 - 修改账号文件和 `render` 的命令持有排他锁 `proxy-accounts/.lock`；门户的 applier
   （[proxy-portal/applier](../../proxy-portal/applier/README.md)）在一次应用的全过程持有同一把锁
 - `render` 写入任何文件之前删除 applier 的记录 `proxy-accounts/applied.json`：手动重启不会被记录，所以之后门户的下一个请求
   重启并验证所有服务；`status` 中的 `unapplied_changes` 在此之前为 `null`（未知）
 - `render` 先在内存中生成全部文件并检查，再逐个原子替换（同目录临时文件 + rename，权限 `0600`），内容未变的文件不写：
-  - `xray-ha/config/config.json`：`xray-ha/config.example.json` 的 HTTP 和 SOCKS5 入站换成除 `svc-ha` 外的所有账号
-    （SOCKS5 `auth: password`）；`raw-auth on` 时 `pool-*` 出站以 `svc-ha` 登录代理
-  - `blackbox/config/blackbox.yml`：`blackbox/blackbox.example.yml` 中经过 `xray-ha` 的 `proxy_url` 带上 `svc-monitor`
-    （percent-encode）；`raw-auth on` 时各代理的 `proxy_url` 也带上
-  - `xray/*/config/config.json`：`raw-auth on` 时入站要求所有账号（含 `svc-ha`），`off` 时带账号的入站恢复为无认证，
-    其他文件不动。
+  - `xray-ha/config/config.json`：`xray-ha/config.example.json` 中 `ha-general` 的 HTTP 和 SOCKS5 入站
+    （`http_IN`、`socks_IN`）换成除 `svc-ha` 外的所有启用账号，`ha-private` 的入站（`ha-private_http_IN`、`ha-private_socks_IN`）
+    换成启用的管理员账号和 `svc-monitor`（SOCKS5 `auth: password`）；`private-*` 出站始终、`pool-*` 出站在
+    `raw-auth on` 时以 `svc-ha` 登录代理。写入前检查 `ha-general` 不能到达任何私有代理：`pool-*` 出站只能指向
+    公共代理，`ha-general` 只选择 `pool-*`，每个入站只按 `inboundTag` 路由到自己的 balancer，第一个出站是 blackhole；
+    入站只有这四个和 API 的 dokodemo-door（`api`，只路由到 API），出站只有 blackhole、`pool-*` 和 `private-*`，
+    且不带 `proxySettings`、`streamSettings` 等可以串联到其他出站的设置
+  - `blackbox/config/blackbox.yml`：`blackbox/blackbox.example.yml` 中经过 `xray-ha` 和私有代理的 `proxy_url` 带上
+    `svc-monitor`（percent-encode）；`raw-auth on` 时公共代理的 `proxy_url` 也带上
+  - `xray/*/config/config.json`：私有代理的入站始终要求启用的管理员账号、`svc-ha` 和 `svc-monitor`；公共代理在
+    `raw-auth on` 时要求所有启用的账号（含 `svc-ha`），`off` 时带账号的入站恢复为无认证，其他文件不动。
     修改用的是 `XrayConfigHandler.set_inbound_users`，`build_xray_config(..., inbound_users=...)` 也用它；
     不传 `inbound_users` 时 HTTP/SOCKS5 入站不要求认证（SOCKS5 `auth: noauth`）。账号只写在 `users` 中，
     旧字段名 `accounts` 总是删除：两者同时存在时 Xray 用 `accounts`，留下的 `accounts: []` 会关闭 HTTP 认证
 - 账号写在入站的 `users` 中，要求代理运行 `docker-compose.yml` 中固定的镜像（与 `xray-ha` 相同的版本和 digest，
   `create_xray_service.py` 也写这个镜像）：旧版本（如 1.8.24）不读 HTTP 的 `users`，入站不认证。容器保留创建时的镜像，
   换镜像后用 `docker compose up -d` 重新创建代理，`docker compose restart` 不会换
-- 缺少 `svc-monitor`（`raw-auth on` 时还有 `svc-ha`）或某个代理配置没有 HTTP/SOCKS5 入站时，`render` 报错，不写任何文件
-- 之后重启 `xray-ha`（`raw-auth on` 时连同所有代理一起），并 `docker compose kill -s SIGHUP blackbox-exporter`；
-  `raw-auth on` 之前，在每个代理上确认不带账号和带已撤销密码的请求得到 `407`
-  （[docs/00](../../../docs/00_Network_Proxy.md#accounts-on-the-proxies)）
+- 缺少 `svc-monitor` 或 `svc-ha`、某个需要账号的代理配置没有 HTTP/SOCKS5 入站，或 HA 示例配置没有通过上面的检查时，
+  `render` 报错，不写任何文件
+- 之后重启 `xray-ha` 和 `render` 写入了配置的代理（管理员变化时是私有代理，`raw-auth on` 时连同所有代理一起），
+  并 `docker compose kill -s SIGHUP blackbox-exporter`；部署私有代理和 `raw-auth on` 之前，在每个相关代理上确认
+  不带账号和带已撤销密码的请求得到 `407`（[docs/00](../../../docs/00_Network_Proxy.md#accounts-on-the-proxies)）
 
-`raw-auth on` 时，`create_xray_service.py` 新建的代理在创建时就要求所有账号（配置文件权限 `0600`）；账号文件中没有账号时拒绝创建。
-`create_xray_service.py` 从读取账号到写完新代理的文件都持有 `proxy-accounts/.lock`，同时进行的账号修改和 `render`
-等它写完，之后的 `render` 也覆盖新代理。
+`create_xray_service.py --private` 新建的代理在创建时就要求管理员和服务账号；`raw-auth on` 时，`--public` 新建的代理
+在创建时就要求所有账号（配置文件权限 `0600`）；账号文件中没有所需账号时拒绝创建。
+`create_xray_service.py` 从读取账号到写完新代理的文件（含 `xray/public-proxies.txt`）都持有 `proxy-accounts/.lock`，
+同时进行的账号修改和 `render` 等它写完，之后的 `render` 也覆盖新代理。
 
 ## 测试
 

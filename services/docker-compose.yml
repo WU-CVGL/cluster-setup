@@ -386,13 +386,16 @@ services:
     expose:
       - 9115
 
-  # The HA proxy entry (docs/00_Network_Proxy.md#the-ha-entry): HTTP on 30889, SOCKS5 on 30089.
+  # The HA proxy entries (docs/00_Network_Proxy.md#the-ha-entry): ha-general, HTTP on 30889 and
+  # SOCKS5 on 30089, over the public proxies; ha-private, for admins, HTTP on 31889 and SOCKS5 on 31089,
+  # over every proxy (docs/00_Network_Proxy.md#private-entries).
   # Its config is xray-ha/config/config.json, not in git: xray-ha/config.example.json with the proxy
-  # accounts, rendered by xray/scripts/proxy_accounts.py. Both ports require an account.
-  # It forwards each new connection to one of the ha-general proxies of that config, the
-  # one with the lowest probe latency among those that pass Xray's own probe, and fails closed
-  # when none does. It has no route of its own to the internet or to China: each proxy's xray
-  # service decides that. The ports are below the Linux ephemeral range (32768-60999).
+  # accounts, rendered by xray/scripts/proxy_accounts.py. Every port requires an account.
+  # Each entry forwards each new connection to one of its proxies, the one with the lowest probe
+  # latency among those that pass Xray's own probe, and fails closed when none does. It has no
+  # route of its own to the internet or to China: each proxy's xray service decides that.
+  # The ports are below the Linux ephemeral range (32768-60999); a new port needs
+  # `docker compose up -d xray-ha`, a restart does not publish it.
   xray-ha:
     image: teddysun/xray:26.11.9@sha256:b3e117b834878d1e12f91e7b16270db104c2f0e5f0effbc0ece9088c473b5393
     restart: unless-stopped
@@ -401,8 +404,10 @@ services:
     networks:
       - grafana_monitor
     ports:
-      - 30089:1089
-      - 30889:8889
+      - 30089:1089     # ha-general SOCKS5
+      - 30889:8889     # ha-general HTTP
+      - 31089:1090     # ha-private SOCKS5
+      - 31889:8890     # ha-private HTTP
     volumes:
       - ./xray-ha/config:/etc/xray:ro
     expose:
