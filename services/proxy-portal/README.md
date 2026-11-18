@@ -40,11 +40,12 @@ On the supplementary services VM, with the [applier](applier/README.md#install) 
     sudo install -d -o 3089 -g 3089 -m 700 /var/lib/proxy-portal/data
     ```
 
-2. Build and start it. It publishes no port: nginx reaches it as `proxy-portal:8000` on the Compose network `proxy_portal`, which only nginx and the portal join. It reaches Prometheus and the master over `proxy_portal_upstream`, which only it and Prometheus join. It is on no network a proxy is on: the proxies send private addresses out directly, so a portal on `grafana_monitor` could be reached through a proxy. So no client can bypass nginx, its limits and the headers the portal trusts. Prometheus joins `proxy_portal_upstream` when it is recreated: `docker compose up -d prometheus`.
+2. Build and start it. It publishes no port: nginx reaches it as `proxy-portal:8000` on the Compose network `proxy_portal`, which only nginx and the portal join. It reaches Prometheus and the master over `proxy_portal_upstream`, which only it and Prometheus join. It is on no network a proxy is on: the proxies send private addresses out directly, so a portal on `grafana_monitor` could be reached through a proxy. So no client can bypass nginx, its limits and the headers the portal trusts. Prometheus joins `proxy_portal_upstream` only when it is recreated, so the commands recreate it first; without it every status is Unknown.
 
     ```sh
     cd ~/ws/cluster-setup/services
     docker compose build proxy-portal
+    docker compose up -d prometheus     # joins proxy_portal_upstream
     docker compose up -d proxy-portal
     docker compose ps proxy-portal   # healthy within a minute
     ```
