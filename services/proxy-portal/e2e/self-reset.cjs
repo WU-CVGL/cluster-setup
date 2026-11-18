@@ -43,10 +43,11 @@ os.write(fd, json.dumps({'id': '${id}', 'username': '${user}', 'password': '${pa
   const runs = [
     { lang: 'en', user: 'alice', viewport: { width: 1280, height: 900 }, device: 'desktop', locale: 'en-US', header: 'en-US,en;q=0.9',
       t: { button: 'Reset proxy password', pending: 'Pending', applying: 'Applying', applied: 'Applied', warning: 'will not be shown again', copied: 'Copied',
-        state: "The reset's state could not be read. Reload the page to see it." } },
+        state: "The reset's state could not be read. Reload the page to see it.",
+        failed: 'The reset could not be started. Nothing changed.' } },
     { lang: 'zh', user: 'carol', viewport: { width: 390, height: 844 }, device: 'phone', locale: 'zh-CN', header: 'zh-CN,zh;q=0.9',
       t: { button: '重置代理密码', pending: '等待中', applying: '应用中', applied: '已应用', warning: '不会再次显示', copied: '已复制',
-        state: '无法读取重置的状态，请刷新页面查看。' } },
+        state: '无法读取重置的状态，请刷新页面查看。', failed: '无法开始重置，没有任何变更。' } },
   ];
   for (const run of runs) {
     const tag = `${run.lang}/${run.device}`;
@@ -54,7 +55,7 @@ os.write(fd, json.dumps({'id': '${id}', 'username': '${user}', 'password': '${pa
       extraHTTPHeaders: { 'Accept-Language': run.header } });
     await context.grantPermissions(['clipboard-read', 'clipboard-write'], { origin: new URL(base).origin });
     const page = await context.newPage();
-    page.on('console', m => { if (m.type() === 'error' && !/\b(409|502)\b/.test(m.text())) problems.push(`${tag} console: ${m.text()}`); });
+    page.on('console', m => { if (m.type() === 'error' && !/\b(403|409|502)\b/.test(m.text())) problems.push(`${tag} console: ${m.text()}`); });
     page.on('pageerror', e => problems.push(`${tag} page error: ${e.message}`));
     await page.goto(base + '/signin?next=/access', { waitUntil: 'networkidle' });
     await page.fill('#username', run.user);
@@ -73,6 +74,7 @@ os.write(fd, json.dumps({'id': '${id}', 'username': '${user}', 'password': '${pa
         overflow: document.documentElement.scrollWidth - document.documentElement.clientWidth };
     });
 
+    const requestsBefore = fs.readdirSync(path.join(spool, 'requests')).length;
     // open, focus inside, Tab and Shift+Tab stay inside, Esc closes and focus returns to the button
     await opener.click();
     let s = await state();
@@ -88,10 +90,26 @@ os.write(fd, json.dumps({'id': '${id}', 'username': '${user}', 'password': '${pa
     s = await state();
     check(`${tag}: Esc closes and returns focus to the button`, !s.open && s.focus === 'reset-open', s);
 
-    // confirm: a request file for the user's own account
+    // a create answered with an error page: refused before the portal (403) says nothing changed; a 502 that it
+    // cannot tell apart from a request written says the state could not be read
     await opener.click();
+    const createError = page.locator('[data-step=confirm] .reset-error');
+    for (const [status, text] of [[403, run.t.failed], [502, run.t.state]]) {
+      await page.route('**/api/me/reset', r => r.fulfill({ status, contentType: 'text/html', body: `<html>${status}</html>` }));
+      const answered = page.waitForResponse(r => r.url().endsWith('/api/me/reset') && r.status() === status);
+      await page.click('[data-action=confirm]');
+      await answered;
+      await createError.waitFor({ state: 'visible', timeout: 10000 });
+      await page.locator('[data-action=confirm]:not([disabled])').waitFor({ timeout: 10000 });
+      check(`${tag}: a create answered ${status} without JSON`, (await createError.textContent()) === text, await createError.textContent());
+      await page.unroute('**/api/me/reset');
+    }
+    check(`${tag}: no request file from those`, fs.readdirSync(path.join(spool, 'requests')).length === requestsBefore, fs.readdirSync(path.join(spool, 'requests')));
+
+    // confirm: a request file for the user's own account
     const [response] = await Promise.all([
-      page.waitForResponse(r => r.url().endsWith('/api/me/reset') && r.request().method() === 'POST'),
+      page.waitForResponse(r => r.url().endsWith('/api/me/reset') && r.request().method() === 'POST'
+        && (r.headers()['content-type'] || '').includes('json')),  // not the error pages above
       page.click('[data-action=confirm]')]);
     const created = await response.json();
     const id = created.id;

@@ -139,6 +139,25 @@ class CaptureTest(PortalTransactionTestCase):
         self.assertTrue(any("not read within 15 seconds" in line for line in self.capture.lines))
         self.assertEqual(self.master.tokens, {})
 
+    def test_anything_raised_keeps_the_previous_list(self):
+        self.sign_in("carol")
+        before = self.listed()
+        real = upstream.request_json
+
+        def broken(url, *args, **kwargs):
+            if "/api/v1/users" in url:
+                raise RuntimeError("v2.public.not-logged")
+            return real(url, *args, **kwargs)
+
+        with mock.patch.object(master, "request_json", side_effect=broken):
+            client = https_client()
+            self.assertEqual(self.sign_in("carol", client=client).status_code, 302)
+        self.assertIs(client.session["is_determined_admin"], True)
+        self.assertEqual(self.listed(), before)
+        self.assertTrue(any("user list at an admin sign-in: RuntimeError;" in line for line in self.capture.lines))
+        self.assertNotIn("v2.public.", "\n".join(self.capture.lines))  # the type only, never the message
+        self.assertEqual(self.master.tokens, {})
+
     def test_unreachable_keeps_the_previous_list(self):
         self.sign_in("carol")
         before = self.listed()
