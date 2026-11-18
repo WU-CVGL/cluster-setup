@@ -25,8 +25,9 @@ msgstr "账号名无效：只能包含小写字母、数字、'.'、'_' 和 '-'�
 msgid "%(name)s can only be changed outside the portal."
 msgstr "%(name)s 只能在门户之外修改。"
 
-msgid "The accounts status is unavailable, so no change can be requested."
-msgstr "账号状态不可用，暂时无法提交变更。"
+msgid ""
+"Account information is unavailable right now, so no change can be requested."
+msgstr "账号信息暂时不可用，无法提交变更。"
 
 #, python-format
 msgid "The account %(name)s exists."
@@ -41,6 +42,24 @@ msgstr "服务账号不能成为管理员账号。"
 
 msgid "The request could not be saved. Nothing changed."
 msgstr "无法保存请求。没有任何变更。"
+
+#, python-format
+msgid ""
+"Applying restarts the Auto-switching Proxy and every public proxy but "
+"%(open)s. Established connections through them drop, and new ones fail for a "
+"few seconds."
+msgstr "应用时会重启自动切换代理和除 %(open)s 以外的所有公共代理。经过它们的已建立连接会断开，新连接会有几秒失败。"
+
+msgid ""
+"Applying restarts the Auto-switching Proxy and every public proxy. "
+"Established connections through them drop, and new ones fail for a few "
+"seconds."
+msgstr "应用时会重启自动切换代理和所有公共代理。经过它们的已建立连接会断开，新连接会有几秒失败。"
+
+msgid ""
+"Applying restarts the Auto-switching Proxy. Established connections through "
+"it drop, and new ones fail for a few seconds."
+msgstr "应用时会重启自动切换代理。经过它的已建立连接会断开，新连接会有几秒失败。"
 
 #, python-format
 msgid "both auto-switching proxies and every proxy but %(open)s"
@@ -137,7 +156,7 @@ msgstr "自动切换代理可用"
 #, python-format
 msgid "Auto-switching Proxy available; its %(n)d public proxy is passing"
 msgid_plural "Auto-switching Proxy available; all %(n)d public proxies passing"
-msgstr[0] "自动切换代理可用；%(n)d 个公共代理全部正常"
+msgstr[0] "自动切换代理可用；公共代理正常（共 %(n)d 个）"
 
 msgid "Auto-switching Proxy answering, but no public proxy passes its probe"
 msgstr "自动切换代理有响应，但没有公共代理通过探测"
@@ -227,6 +246,10 @@ msgctxt "request stage"
 msgid "Interrupted"
 msgstr "已中断"
 
+#, python-format
+msgid "%(first)s %(second)s"
+msgstr "%(first)s%(second)s"
+
 msgid "Waiting to be applied: the old access still works."
 msgstr "等待应用：原有访问仍然有效。"
 
@@ -240,9 +263,9 @@ msgid ""
 msgstr "%(n)d 分钟后仍未开始：应用账号变更的服务可能没有运行。"
 
 msgid ""
-"Being applied; the affected proxies restart. The revoke is not confirmed "
-"yet: the old access may still work."
-msgstr "正在应用，受影响的代理会重启。撤销尚未确认：原有访问可能仍然有效。"
+"Being applied; the affected proxies restart. Until the change is confirmed, "
+"the old access may still work."
+msgstr "正在应用，受影响的代理会重启。变更确认之前，原有访问可能仍然有效。"
 
 msgid "Being applied; the affected proxies restart."
 msgstr "正在应用，受影响的代理会重启。"
@@ -272,17 +295,17 @@ msgstr "已生效：旧密码已被拒绝（已验证）。新密码尚未确认
 
 msgid ""
 "Live, but not confirmed yet: no proxy answered the new login in time (the "
-"proxies or the check target may be down)."
-msgstr "已生效，但尚未确认：超时内没有代理响应新的登录（代理或检查目标可能不可用）。"
+"proxies may be down)."
+msgstr "已生效，但尚未确认：超时内没有代理响应新的登录（代理可能不可用）。"
 
 msgid "The request was refused. Nothing changed."
 msgstr "请求被拒绝。没有任何变更。"
 
 msgid ""
-"Failed, and the rollback did not finish: the affected proxies may be down or "
-"in a mixed state. Check the log of the proxy-apply service (journalctl -u "
-"proxy-apply)."
-msgstr "失败，且回滚未完成：受影响的代理可能不可用或处于混合状态。请查看 proxy-apply 服务的日志 (journalctl -u proxy-apply)。"
+"Failed, and the previous settings could not be fully restored: the affected "
+"proxies may be down or in a mixed state. Check the log of the proxy-apply "
+"service (journalctl -u proxy-apply)."
+msgstr "失败，且未能完全恢复之前的配置：受影响的代理可能不可用或处于混合状态。请查看 proxy-apply 服务的日志 (journalctl -u proxy-apply)。"
 
 msgid ""
 "Failed; the previous state is back: the account is unchanged and the old "
@@ -312,9 +335,9 @@ msgid ""
 msgstr "该密码已显示过一次，门户不会保存它。如需新密码，请再申请一次新密码。"
 
 msgid ""
-"The one-time password expired: results are deleted after 10 minutes. For a "
-"new one, request a new password."
-msgstr "一次性密码已过期：结果会在 10 分钟后删除。如需新密码，请再申请一次新密码。"
+"The one-time password expired: it is kept for 10 minutes only. For a new "
+"one, request a new password."
+msgstr "一次性密码已过期：它只保留 10 分钟。如需新密码，请再申请一次新密码。"
 
 msgid ""
 "No password was handed out for this request. For a new one, request a new "
@@ -322,9 +345,9 @@ msgid ""
 msgstr "这个请求没有提供密码。如需新密码，请再申请一次新密码。"
 
 msgid ""
-"The one-time result could not be read and was deleted. For a new one, "
+"The one-time password could not be read and was deleted. For a new one, "
 "request a new password."
-msgstr "无法读取一次性结果，已将其删除。如需新密码，请再申请一次新密码。"
+msgstr "无法读取一次性密码，已将其删除。如需新密码，请再申请一次新密码。"
 
 msgid "No password: the change was not applied."
 msgstr "没有密码：变更未应用。"
@@ -450,9 +473,9 @@ msgid_plural ""
 msgstr[0] "每小时最多可以重置 %(n)d 次密码，请稍后再试。"
 
 msgid ""
-"Failed, and the rollback did not finish: the proxies may be down. Tell an "
-"admin."
-msgstr "失败，且回滚未完成：代理可能不可用。请告知管理员。"
+"Failed, and the previous settings could not be fully restored: the proxies "
+"may be down. Tell an admin."
+msgstr "失败，且未能完全恢复之前的配置：代理可能不可用。请告知管理员。"
 
 msgid "The account was removed: this password no longer works."
 msgstr "该账号已被删除：此密码已失效。"
@@ -468,18 +491,27 @@ msgid ""
 msgstr "该密码已显示过一次，门户不会保存它。如需新密码，请再次重置。"
 
 msgid ""
-"The one-time password expired: results are deleted after 10 minutes. To get "
-"a new one, reset it again."
-msgstr "一次性密码已过期：结果会在 10 分钟后删除。如需新密码，请再次重置。"
+"The one-time password expired: it is kept for 10 minutes only. To get a new "
+"one, reset it again."
+msgstr "一次性密码已过期：它只保留 10 分钟。如需新密码，请再次重置。"
 
 msgid ""
 "No password was handed out for this reset. To get a new one, reset it again."
 msgstr "此次重置没有发放密码。如需新密码，请再次重置。"
 
 msgid ""
-"The one-time result could not be read and was deleted. To get a new one, "
+"The one-time password could not be read and was deleted. To get a new one, "
 "reset it again."
-msgstr "无法读取一次性结果，已将其删除。如需新密码，请再次重置。"
+msgstr "无法读取一次性密码，已将其删除。如需新密码，请再次重置。"
+
+msgid "Something went wrong"
+msgstr "出错了"
+
+msgid "The portal could not show this page. Try again later."
+msgstr "门户无法显示此页面，请稍后再试。"
+
+msgid "Go to the status page"
+msgstr "前往服务状态页"
 
 msgid "96 hours ago"
 msgstr "96 小时前"
@@ -507,6 +539,12 @@ msgstr "24 小时成功率"
 
 msgid "Last check"
 msgstr "最近检查"
+
+msgid "Auto-switching Proxy"
+msgstr "自动切换代理"
+
+msgid "Private Auto-switching Proxy"
+msgstr "私有自动切换代理"
 
 msgid "Over the public proxies, for every proxy account"
 msgstr "在公共代理之间切换，所有代理账号可用"
@@ -664,12 +702,6 @@ msgid ""
 "ports on both networks: the private network from the nodes, the campus "
 "network from the login node."
 msgstr "每个账号都可以使用自动切换代理和公共代理；管理员账号还可以使用私有自动切换代理和私有代理。两个网络的端口相同：节点上用内网地址，登录节点上用校园网地址。"
-
-msgid "Auto-switching Proxy"
-msgstr "自动切换代理"
-
-msgid "Private Auto-switching Proxy"
-msgstr "私有自动切换代理"
 
 msgid "Private"
 msgstr "私有"
@@ -989,10 +1021,8 @@ msgid ""
 "not be live."
 msgstr "有一项在门户之外做的账号变更尚未应用：它可能尚未生效。"
 
-msgid ""
-"No apply is recorded since the last account change made outside the portal: "
-"it may not be live yet."
-msgstr "自上次在门户之外做账号变更以来，没有记录到应用：它可能尚未生效。"
+msgid "An account change made outside the portal may not be applied yet."
+msgstr "门户之外的一项账号变更可能尚未应用。"
 
 msgid ""
 "Every change restarts the affected proxies: established connections through "
@@ -1029,8 +1059,8 @@ msgstr "全部"
 msgid "No proxy account"
 msgstr "无代理账号"
 
-msgid "Private access"
-msgstr "私有访问"
+msgid "Admin account"
+msgstr "管理员账号"
 
 msgid "Inactive in Determined, proxy access on"
 msgstr "Determined 中已停用但代理访问开启"
@@ -1077,9 +1107,6 @@ msgstr "关闭"
 msgid "Off, except at public proxies"
 msgstr "已关闭（公共代理除外）"
 
-msgid "Admin account"
-msgstr "管理员账号"
-
 msgid "Changed outside the portal only"
 msgstr "只能在门户之外修改"
 
@@ -1095,7 +1122,7 @@ msgstr "服务账号"
 msgid ""
 "The accounts of the auto-switching proxies, the monitoring and the nodes' "
 "Docker daemons: never a person's account, never an admin account."
-msgstr "自动切换代理、监控和各节点 Docker 守护进程使用的账号：不属于任何个人，也不能成为管理员账号。"
+msgstr "两个自动切换代理、监控和各节点 Docker 守护进程使用的账号：不属于任何个人，也不能成为管理员账号。"
 
 msgid "Proxy access"
 msgstr "代理访问"
@@ -1206,7 +1233,7 @@ msgid ""
 "Whether requests get through the auto-switching proxies and each proxy, from "
 "probes every 30 seconds. The status of a proxy is not whether your account "
 "may use it: see My access."
-msgstr "根据每 30 秒一次的探测，显示请求能否通过自动切换代理和各个代理。代理的状态不代表你的账号可以使用它：请看“我的接入”。"
+msgstr "根据每 30 秒一次的探测，显示请求能否通过两个自动切换代理和各个代理。代理的状态不代表你的账号可以使用它：请看“我的接入”。"
 
 msgid "Monitoring data is unavailable, so every status is unknown."
 msgstr "监控数据不可用，所有状态均为未知。"
@@ -1282,7 +1309,7 @@ msgid ""
 "An auto-switching proxy chooses a passing proxy for each new connection, "
 "within about 15 seconds of a proxy failing. Open downloads, SSH sessions and "
 "WebSockets stay on their proxy and break with it; the client has to retry."
-msgstr "代理故障后约 15 秒内，自动切换代理会为新连接选择正常的代理。已建立的下载、SSH 会话和 WebSocket 留在原代理上，会随之中断，需要客户端重试。"
+msgstr "代理故障后约 15 秒内，每个自动切换代理都会为新连接选择正常的代理。已建立的下载、SSH 会话和 WebSocket 留在原代理上，会随之中断，需要客户端重试。"
 
 msgid ""
 "No probe result in the last 90 seconds. An older result is never shown in "
@@ -1298,7 +1325,7 @@ msgid ""
 "to: the auto-switching proxies, and a proxy's own address when it requires "
 "an account. Traffic through a proxy's own address without an account is "
 "counted under no user."
-msgstr "账号 %(name)s 的观测流量，按你连接的地址计数：自动切换代理，以及需要账号时代理自己的地址。不带账号经代理自己的地址产生的流量不计入任何用户。"
+msgstr "账号 %(name)s 的观测流量，按你连接的地址计数：各自动切换代理，以及需要账号时代理自己的地址。不带账号经代理自己的地址产生的流量不计入任何用户。"
 
 msgid "Usage data is unavailable right now. Try again later."
 msgstr "流量数据暂时不可用，请稍后再试。"
@@ -1385,11 +1412,23 @@ msgstr "%(n)d 天前"
 
 msgctxt "service account"
 msgid "Auto-switching proxies"
-msgstr "自动切换代理"
+msgstr "两个自动切换代理"
 
 msgctxt "service account"
 msgid "Monitoring"
 msgstr "监控"
+
+msgid "The page expired"
+msgstr "页面已过期"
+
+msgid "Reload the page and try again."
+msgstr "请刷新页面后重试。"
+
+msgid "Page not found"
+msgstr "页面不存在"
+
+msgid "There is no page at this address."
+msgstr "此地址没有页面。"
 
 msgid "Degraded"
 msgstr "部分异常"
@@ -1398,8 +1437,8 @@ msgid "no probe results"
 msgstr "没有探测结果"
 
 #, python-format
-msgid "success %(rate)s, coverage %(coverage)s"
-msgstr "成功率 %(rate)s，覆盖率 %(coverage)s"
+msgid "success %(rate)s, probed %(coverage)s of the time"
+msgstr "成功率 %(rate)s，探测覆盖 %(coverage)s 的时间"
 
 msgid "The reset could not be started. Nothing changed."
 msgstr "无法开始重置，没有任何变更。"
@@ -1412,6 +1451,9 @@ msgstr "无法连接门户，请重试。"
 
 msgid "Getting the password…"
 msgstr "正在获取密码…"
+
+msgid "You are signed out. Sign in again to continue."
+msgstr "你已退出登录，请重新登录后继续。"
 
 msgid "Enter your Determined username and password."
 msgstr "请输入 Determined 用户名和密码。"

@@ -1,0 +1,9 @@
+{% load i18n %}{% get_current_language as LANGUAGE_CODE %}<!doctype html>
+<html lang="{% if LANGUAGE_CODE == 'zh-hans' %}zh-Hans{% else %}en{% endif %}">
+<head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>{% translate "Something went wrong" %}</title></head>
+<body>
+<h1>{% translate "Something went wrong" %}</h1>
+<p>{% translate "The portal could not show this page. Try again later." %}</p>
+<p><a href="/">{% translate "Go to the status page" %}</a></p>
+</body>
+</html>

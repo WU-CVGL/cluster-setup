@@ -140,6 +140,24 @@ class CaptureTest(PortalTransactionTestCase):
         self.assertTrue(any("not read within 15 seconds" in line for line in self.capture.lines))
         self.assertEqual(self.master.tokens, {})
 
+    def test_a_complete_list_that_arrives_too_late_is_dropped(self):
+        """One page with every user, answered only after the time is up: the list is not taken."""
+        self.sign_in("carol")
+        before = self.listed()
+        self.master.users["frank"] = ("pw-frank", False, True)  # would show if the late list were taken
+        self.master.events.clear()
+        clock = types.SimpleNamespace(monotonic=itertools.count(0, 10).__next__)  # the answer comes 10 s later
+        client = https_client()
+        with mock.patch.object(master, "time", clock), \
+                mock.patch.object(master, "request_json", wraps=upstream.request_json) as call:
+            self.assertEqual(self.sign_in("carol", client=client).status_code, 302)
+        self.assertIs(client.session["is_determined_admin"], True)
+        self.assertEqual(len([c for c in call.call_args_list if "/api/v1/users" in c.args[0]]), 1)
+        self.assertEqual([kind for kind, _ in self.master.events], ["login", "users", "logout"])
+        self.assertEqual(self.listed(), before)
+        self.assertTrue(any("not read within 15 seconds" in line for line in self.capture.lines))
+        self.assertEqual(self.master.tokens, {})
+
     def test_a_list_written_slowly_stops_at_the_time_limit(self):
         """A real server writing one valid page a byte at a time: the sign-in ends at the limit with the old list."""
         self.sign_in("carol")
@@ -284,7 +302,8 @@ class UsersPageTest(PortalTestCase):
         self.assertEqual(rows["alice"]["actions"], [])
         self.assertEqual(rows["frank"]["actions"], [])
         self.assertEqual(data["service_accounts"], [])
-        self.assertContains(self.client.get("/admin/users"), "The accounts status is unavailable")
+        self.assertContains(self.client.get("/admin/users"),
+                            "Account information is unavailable right now, so no change can be requested.")
 
     def test_actions_create_request_files(self):
         cases = (("add", "frank", None), ("rotate", "alice", "alice"), ("disable", "alice", "alice"),

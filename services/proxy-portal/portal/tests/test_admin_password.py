@@ -247,7 +247,7 @@ class PasswordTest(PortalTransactionTestCase):
                 os.mkfifo(path)
             response = self.client.post(f"/admin/requests/{request_id}/password")
             self.assertNotContains(response, SENTINEL)
-            self.assertContains(response, "could not be read and was deleted")
+            self.assertContains(response, "The one-time password could not be read and was deleted.")
             self.assertFalse(os.path.lexists(path), kind)
             self.assertEqual(AccountRequest.objects.get(id=request_id).result_state, "unreadable")
 

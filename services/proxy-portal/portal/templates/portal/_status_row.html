@@ -1,6 +1,6 @@
-{% load i18n portal %}{% if ha %}{% with p="entries."|add:row.name %}
+{% load i18n portal %}{% if row.name == 'ha-general' %}{% translate "Auto-switching Proxy" as label %}{% elif row.name == 'ha-private' %}{% translate "Private Auto-switching Proxy" as label %}{% endif %}{% if ha %}{% with p="entries."|add:row.name %}
 <tr class="row-main" data-row="{{ row.name }}">
-  <th scope="row"><span class="proxy-name">{{ row.name }}</span><div class="row-desc">{% if row.name == 'ha-general' %}{% translate "Over the public proxies, for every proxy account" %}{% else %}{% translate "Over every proxy, public and private, for admin accounts" %}{% endif %} · <span data-live-entry-count="{{ row.name }}">{% blocktranslate with passing=row.proxies.passing|default_if_none:"—" configured=row.proxies.configured|default_if_none:"—" %}{{ passing }} of {{ configured }} proxies passing{% endblocktranslate %}</span></div></th>
+  <th scope="row"><span class="proxy-name">{% if label %}{{ label }} <code>{{ row.name }}</code>{% else %}{{ row.name }}{% endif %}</span><div class="row-desc">{% if row.name == 'ha-general' %}{% translate "Over the public proxies, for every proxy account" %}{% else %}{% translate "Over every proxy, public and private, for admin accounts" %}{% endif %} · <span data-live-entry-count="{{ row.name }}">{% blocktranslate with passing=row.proxies.passing|default_if_none:"—" configured=row.proxies.configured|default_if_none:"—" %}{{ passing }} of {{ configured }} proxies passing{% endblocktranslate %}</span></div></th>
   {% include "portal/_status_cells.html" with http_age=p|add:".protocols.http.last_check_age_seconds" socks_age=p|add:".protocols.socks.last_check_age_seconds" %}
 </tr>{% endwith %}{% else %}{% with p="proxy:"|add:row.name %}
 <tr class="row-main" data-row="{{ row.name }}">
@@ -8,6 +8,6 @@
   {% include "portal/_status_cells.html" with http_age=p|add:".last_check_age_seconds" socks_age=p|add:".last_check_age_seconds" %}
 </tr>{% endwith %}{% endif %}
 {% with items=data.bar_items|get:row.name %}<tr class="row-bars"><td colspan="7">
-  <ol class="bars" data-panel="bars" data-value="hours" aria-label="{% blocktranslate with name=row.name %}{{ name }}, last 96 hours{% endblocktranslate %}">{% for b in items.hours %}<li class="bar {{ b.state }}" aria-label="{{ b.label }}"{% if forloop.last %} tabindex="0"{% endif %}></li>{% endfor %}</ol>
-  <ol class="bars days" data-panel="bars" data-value="days" hidden aria-label="{% blocktranslate with name=row.name %}{{ name }}, last 30 days{% endblocktranslate %}">{% for b in items.days %}<li class="bar {{ b.state }}" aria-label="{{ b.label }}"{% if forloop.last %} tabindex="0"{% endif %}></li>{% endfor %}</ol>
+  <ol class="bars" data-panel="bars" data-value="hours" aria-label="{% blocktranslate with name=label|default:row.name %}{{ name }}, last 96 hours{% endblocktranslate %}">{% for b in items.hours %}<li class="bar {{ b.state }}" aria-label="{{ b.label }}"{% if forloop.last %} tabindex="0"{% endif %}></li>{% endfor %}</ol>
+  <ol class="bars days" data-panel="bars" data-value="days" hidden aria-label="{% blocktranslate with name=label|default:row.name %}{{ name }}, last 30 days{% endblocktranslate %}">{% for b in items.days %}<li class="bar {{ b.state }}" aria-label="{{ b.label }}"{% if forloop.last %} tabindex="0"{% endif %}></li>{% endfor %}</ol>
 </td></tr>{% endwith %}

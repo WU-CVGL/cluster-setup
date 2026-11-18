@@ -58,7 +58,7 @@ def check(op, username, status):
     if username in PROTECTED:
         raise Refused(_("%(name)s can only be changed outside the portal.") % {"name": username}, 403)
     if not status.available:
-        raise Refused(_("The accounts status is unavailable, so no change can be requested."), 503)
+        raise Refused(_("Account information is unavailable right now, so no change can be requested."), 503)
     row = next((r for r in status.all_accounts if r.name == username), None)
     if row is not None and row.protected:
         raise Refused(_("%(name)s can only be changed outside the portal.") % {"name": username}, 403)
@@ -98,11 +98,22 @@ def submit(op, username, requested_by, self_service=False):
     return row
 
 
-def restart_text(op, row, status):
-    """What applying op restarts, for an account row (a status.AccountRow, or None for a new account)."""
+def restart_text(op, row, status, own=False):
+    """What applying op restarts, for an account row (a status.AccountRow, or None for a new account). own: for the
+    account's user, who sees only the proxies they may use: a user without an admin account uses one auto-switching
+    proxy. The open proxies never restart: they take no accounts."""
+    open_proxies = ", ".join(status.open_proxies)
+    if own and not (row is not None and row.admin):
+        if status.raw_auth and status.open_proxies:
+            return _("Applying restarts the Auto-switching Proxy and every public proxy but %(open)s. Established "
+                     "connections through them drop, and new ones fail for a few seconds.") % {"open": open_proxies}
+        if status.raw_auth:
+            return _("Applying restarts the Auto-switching Proxy and every public proxy. Established connections "
+                     "through them drop, and new ones fail for a few seconds.")
+        return _("Applying restarts the Auto-switching Proxy. Established connections through it drop, and new ones "
+                 "fail for a few seconds.")
     if status.raw_auth and status.open_proxies:
-        services = _("both auto-switching proxies and every proxy but %(open)s") % {
-            "open": ", ".join(status.open_proxies)}
+        services = _("both auto-switching proxies and every proxy but %(open)s") % {"open": open_proxies}
     elif status.raw_auth:
         services = _("both auto-switching proxies and every proxy")
     elif op in ("admin-on", "admin-off") or (row is not None and row.admin):

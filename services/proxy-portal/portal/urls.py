@@ -16,6 +16,9 @@ class RequestId:
 
 register_converter(RequestId, "rid")
 
+# 500 is Django's own view with the standalone templates/500.html, which needs no request
+handler404 = views.not_found
+
 urlpatterns = [
     path("", views.status_page, name="status"),
     path("access", views.access_page, name="access"),

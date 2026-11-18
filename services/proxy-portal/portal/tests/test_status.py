@@ -275,6 +275,16 @@ class StatusTest(PortalTestCase):
         api = self.client.get("/api/status").json()
         self.assertEqual(rows, ["ha-general", "ha-private"] + [proxy["name"] for proxy in api["proxies"]])
         self.assertEqual(page.count('<tr class="row-bars">'), len(rows))
+        # the auto-switching proxies by the names the headline and My access use, with their identifiers
+        for lang, general, private, sep in ((None, "Auto-switching Proxy", "Private Auto-switching Proxy", ", "),
+                                            ("zh-CN", "自动切换代理", "私有自动切换代理", "，")):
+            text = self.client.get("/", **({"HTTP_ACCEPT_LANGUAGE": lang} if lang else {})).content.decode()
+            names = dict(re.findall(r'<tr class="row-main" data-row="([^"]+)">\s*<th scope="row"><span '
+                                    r'class="proxy-name">(.*?)</span><div', text))
+            self.assertEqual(names["ha-general"], f'{general} <code>ha-general</code>', lang)
+            self.assertEqual(names["ha-private"], f'{private} <code>ha-private</code>', lang)
+            self.assertIn(f'aria-label="{general}{sep}', text)  # the bars of the row
+            self.assertIn(f'aria-label="{private}{sep}', text)
         # the switch: rendered with 96 hours chosen, hidden until the script shows it and applies a kept choice
         switch = re.search(r'<div class="seg" data-switch="bars"[^>]*>(.*?)</div>', page, re.S)
         self.assertIn('data-default="hours" data-store="portal.status.bars" hidden', switch.group(0))
@@ -301,19 +311,19 @@ class StatusTest(PortalTestCase):
         labels = re.findall(r'<li class="bar (\w+)" aria-label="([^"]+)"', general)
         hours, days = labels[:96], labels[96:]
         # in local time (Asia/Shanghai): the last hour ends at 16:00, the last day at 16:00 too
-        self.assertEqual(hours[-1], ("ok", "2025-11-19 15:00–16:00 · Passing · success 99.95 %, coverage 99 %"))
+        self.assertEqual(hours[-1], ("ok", "2025-11-19 15:00–16:00 · Passing · success 99.95 %, probed 99 % of the time"))
         self.assertEqual(hours[14], ("unknown", "2025-11-16 06:00–07:00 · Unknown · no probe results"))
         self.assertEqual(hours[20][0], "unknown")
-        self.assertIn("· Unknown · success 100.00 %, coverage 18 %", hours[20][1])
+        self.assertIn("· Unknown · success 100.00 %, probed 18 % of the time", hours[20][1])
         self.assertEqual(hours[8][0], "bad")
         self.assertIn("· Failing · success 82.00 %", hours[8][1])
         self.assertIn("· Degraded · success 95.50 %", hours[25][1])
         self.assertEqual(days[-1], ("ok", "2025-11-18 16:00 – 2025-11-19 16:00 · Passing · success 99.95 %, "
-                                          "coverage 99 %"))
+                                          "probed 99 % of the time"))
         zh = self.client.get("/", HTTP_ACCEPT_LANGUAGE="zh-CN").content.decode()
         self.assertIn("自动切换高可用代理", zh)
         self.assertIn("96 小时", zh)
-        self.assertRegex(zh, r'aria-label="[0-9 :–-]+ · 正常 · 成功率 99.95 %，覆盖率 99 %"')
+        self.assertRegex(zh, r'aria-label="[0-9 :–-]+ · 正常 · 成功率 99.95 %，探测覆盖 99 % 的时间"')
 
     def test_stale_result_is_unknown(self):
         self.prometheus.answers[GENERAL["last_check"]] = vector(({"protocol": "http"}, 95), ({"protocol": "socks"}, 5))

@@ -43,6 +43,19 @@ def portal_context(request):
     }
 
 
+def _error(request, title, text, status):
+    return render(request, "portal/error.html", {"title": title, "text": text}, status=status)
+
+
+def csrf_failure(request, reason=""):
+    """A form or request whose CSRF token no longer matches: usually a page left open across a sign-in elsewhere."""
+    return _error(request, _("The page expired"), _("Reload the page and try again."), 403)
+
+
+def not_found(request, exception=None):
+    return _error(request, _("Page not found"), _("There is no page at this address."), 404)
+
+
 def incidents():
     since = timezone.now() - datetime.timedelta(days=30)
     shown = Incident.objects.prefetch_related("updates")
@@ -73,8 +86,8 @@ def _bar_items(bars, name):
                 f"{dateformat.format(begin, 'Y-m-d H:i')} – {dateformat.format(end, 'Y-m-d H:i')}")
         rate, coverage = row["success_rate"][i], row["coverage"][i]
         detail = (_("no probe results") if rate is None else
-                  _("success %(rate)s, coverage %(coverage)s") % {"rate": percent(rate, 2),
-                                                                   "coverage": percent(coverage, 0)})
+                  _("success %(rate)s, probed %(coverage)s of the time") % {"rate": percent(rate, 2),
+                                                                                "coverage": percent(coverage, 0)})
         items.append({"state": state, "label": f"{when} · {texts[state]} · {detail}"})
     return items
 
@@ -172,7 +185,9 @@ def access_page(request):
                                                       "state": _("The reset's state could not be read. Reload the "
                                                                  "page to see it."),
                                                       "network": _("The portal could not be reached. Try again."),
-                                                      "collecting": _("Getting the password…")}})
+                                                      "collecting": _("Getting the password…"),
+                                                      "signin": _("You are signed out. Sign in again to "
+                                                                  "continue.")}})
 
 
 @require_GET

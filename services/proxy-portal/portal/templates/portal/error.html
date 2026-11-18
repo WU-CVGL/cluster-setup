@@ -1,0 +1,9 @@
+{% extends "portal/base.html" %}{% load i18n %}
+{% block title %}{{ title }}{% endblock %}
+{% block content %}
+<div class="hero-head"><div>
+  <h1>{{ title }}</h1>
+  <p class="sub">{{ text }}</p>
+  <p><a href="{% url 'status' %}">{% translate "Go to the status page" %}</a></p>
+</div></div>
+{% endblock %}

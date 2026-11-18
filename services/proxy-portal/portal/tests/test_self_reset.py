@@ -4,6 +4,7 @@ import datetime
 import json
 import logging
 import os
+from unittest import mock
 
 from django.conf import settings
 from django.db import connection
@@ -149,6 +150,15 @@ class SelfResetTest(SelfResetMixin, PortalTestCase):
             self.assertNotContains(client.get("/access"), "reset-open")
         self.assertEqual(self.files(), [])
 
+    def test_a_refused_change_says_why(self):
+        """The dialog shows an error answer's text only with a reason: the portal's own translated refusal."""
+        with mock.patch("portal.spool.write_request", side_effect=OSError("disk full")):
+            response = self.reset(HTTP_ACCEPT_LANGUAGE="zh-CN")
+        self.assertEqual(response.status_code, 503)
+        self.assertEqual(response.json()["reason"], "refused")
+        self.assertNotIn("Nothing changed", response.json()["error"])
+        self.assertEqual(self.files(), [])
+
     def test_status_unavailable(self):
         self.status_file.unlink()
         self.assertEqual(self.reset().status_code, 503)
@@ -159,18 +169,25 @@ class SelfResetTest(SelfResetMixin, PortalTestCase):
         self.assertContains(page, 'id="reset-open" hidden>Reset proxy password</button>')
         self.assertContains(page, '<dialog class="modal" id="reset-dialog"')
         self.assertContains(page, "The old password stops working: update every client that uses it.")
-        self.assertContains(page, "Applying restarts both auto-switching proxies. Established connections through them "
-                                  "drop")
+        # alice is not an admin account: only the auto-switching proxy she may use is named
+        self.assertContains(page, "Applying restarts the Auto-switching Proxy. Established connections through it "
+                                  "drop, and new ones fail for a few seconds.")
         self.assertNotContains(page, "private proxies. Established")
+        self.assertNotContains(page, "both auto-switching proxies")
         texts = json.loads(page.content.decode().split('<script id="reset-texts" type="application/json">')[1]
                            .split("</script>")[0])
         self.assertEqual(texts, {"failed": "The reset could not be started. Nothing changed.",
                                  "state": "The reset's state could not be read. Reload the page to see it.",
                                  "network": "The portal could not be reached. Try again.",
-                                 "collecting": "Getting the password…"})
+                                 "collecting": "Getting the password…",
+                                 "signin": "You are signed out. Sign in again to continue."})
         carol = https_client()
         self.sign_in("carol", client=carol)  # an admin account: the private proxies restart too
         self.assertContains(carol.get("/access"), "both auto-switching proxies and the private proxies")
+        self.write_status(lambda d: d.update(raw_auth=True))  # every proxy but the open ones restarts
+        self.assertContains(self.client.get("/access"), "Applying restarts the Auto-switching Proxy and every public "
+                                                        "proxy but us-west-racknerd-12tb, usca1-bwh-megaboxpro-2tb. "
+                                                        "Established connections through them drop")
 
     def test_my_access_shows_the_applied_state_only(self):
         request_id = self.reset().json()["id"]
@@ -255,6 +272,9 @@ class SelfResetTest(SelfResetMixin, PortalTestCase):
         data = self.client.get(f"/api/me/reset/{request_id}", HTTP_ACCEPT_LANGUAGE="zh-CN").json()
         self.assertEqual(data["state_label"], "等待中")
         self.assertNotIn("Waiting", data["text"])
+        texts = json.loads(page.content.decode().split('<script id="reset-texts" type="application/json">')[1]
+                           .split("</script>")[0])
+        self.assertEqual(texts["signin"], "你已退出登录，请重新登录后继续。")
 
 
 class SelfResetCsrfTest(SelfResetMixin, PortalTestCase):
@@ -353,8 +373,8 @@ class SelfResetPasswordTest(SelfResetMixin, PortalTransactionTestCase):
         request_id = self.reset().json()["id"]
         self.status(request_id, "failed", stage="restart", error="xray-ha: exit 1", restored=False)
         data = self.client.get(f"/api/me/reset/{request_id}").json()
-        self.assertEqual(data["text"], "Failed, and the rollback did not finish: the proxies may be down. Tell an "
-                                       "admin.")
+        self.assertEqual(data["text"], "Failed, and the previous settings could not be fully restored: the proxies "
+                                       "may be down. Tell an admin.")
         self.assertNotIn("journalctl", json.dumps(data))
         admin = https_client()
         self.sign_in("carol", client=admin)
@@ -365,3 +385,5 @@ class SelfResetPasswordTest(SelfResetMixin, PortalTransactionTestCase):
         os.unlink(self.status(request_id))
         response = self.client.post(f"/api/me/reset/{request_id}/password")
         self.assertEqual(response.json()["password"], "expired")
+        self.assertEqual(response.json()["password_text"], "The one-time password expired: it is kept for 10 minutes "
+                                                           "only. To get a new one, reset it again.")

@@ -3,15 +3,22 @@ import json
 import re
 from html.parser import HTMLParser
 
-from portal import lifecycle
+from django.test import RequestFactory
+from django.utils import translation
+from django.views.defaults import server_error
+
+from portal import lifecycle, self_reset
 from portal.models import AccountRequest
 
-from .base import PortalTestCase
+from .base import PortalTestCase, https_client
 
 EN = re.compile(r"svc-ha|svc-monitor|[Dd]efault proxy|\bpool\b|\bentry\b|\bentries\b|\bHA\b|[Rr]aw auth|applier|spool|\brender|"
                 r"precheck|status\.json|accounts file|supplementary|Prometheus|[Ff]ailover|\bVM\b|xray-ha|"
-                r"proxy_accounts\.py|high-availability|admin-only")
-ZH = re.compile(r"默认代理|入口|执行器|代理池|池内|故障切换|虚拟机|账号文件|队列目录|高可用|仅管理员账号")
+                r"proxy_accounts\.py|high-availability|admin-only|\b[Rr]evoke\b|[Rr]ollback|coverage|check target|"
+                r"accounts status|\bapply is\b|one-time result|results are deleted|CSRF|DEBUG|Private access|"
+                r"Not Found|Server Error")
+ZH = re.compile(r"默认代理|入口|执行器|代理池|池内|故障切换|虚拟机|账号文件|队列目录|高可用|仅管理员账号|撤销|回滚|覆盖率|"
+                r"检查目标|账号状态|一次性结果|结果会在|私有访问|没有记录到应用|CSRF|DEBUG")
 TITLE_ZH = "自动切换高可用代理"  # the section title, the owner's wording
 
 
@@ -48,13 +55,15 @@ def visible(html):
 
 
 class WordingTest(PortalTestCase):
-    def check(self, path, client=None, **headers):
-        response = (client or self.client).get(path, **headers)
-        self.assertEqual(response.status_code, 200, path)
-        text = visible(response.content.decode())
-        zh = "zh" in headers.get("HTTP_ACCEPT_LANGUAGE", "")
+    def check(self, path, client=None, status=200, method="get", **headers):
+        response = getattr(client or self.client, method)(path, **headers)
+        self.assertEqual(response.status_code, status, path)
+        return self.plain(response.content.decode(), path, "zh" in headers.get("HTTP_ACCEPT_LANGUAGE", ""))
+
+    def plain(self, html, where, zh):
+        text = visible(html)
         found = (ZH if zh else EN).findall(text.replace(TITLE_ZH, ""))
-        self.assertEqual(found, [], f"{path} ({'zh' if zh else 'en'})")
+        self.assertEqual(found, [], f"{where} ({'zh' if zh else 'en'})")
         return text
 
     def pages(self, **headers):
@@ -118,3 +127,38 @@ class WordingTest(PortalTestCase):
         # a stage or service this portal does not know is shown as it is
         self.assertEqual(lifecycle.stage_label("later-stage"), "later-stage")
         self.assertEqual(lifecycle.restarted_names("other xray-ha"), "other, ha-general, ha-private")
+
+    def test_error_pages(self):
+        """A stale form, an unknown address and a server error: plain words in the page's language."""
+        for headers, expired, missing, broken, lang in (
+                ({}, "The page expired", "Page not found", "Something went wrong", 'lang="en"'),
+                ({"HTTP_ACCEPT_LANGUAGE": "zh-CN"}, "页面已过期", "页面不存在", "出错了", 'lang="zh-Hans"')):
+            stale = https_client(enforce_csrf_checks=True)
+            response = stale.post("/signin", {"username": "alice", "password": "x"}, **headers)
+            self.assertEqual(response.status_code, 403)
+            self.assertIn(lang, response.content.decode())
+            self.assertIn(expired, self.plain(response.content.decode(), "csrf", bool(headers)))
+            text = self.check("/no-such-page", status=404, **headers)
+            self.assertIn(missing, text)
+            with translation.override("zh-hans" if headers else "en"):
+                html = server_error(RequestFactory().get("/")).content.decode()
+            self.assertIn(lang, html)
+            self.assertIn(broken, self.plain(html, "500", bool(headers)))
+
+    def test_reset_dialog_texts(self):
+        """What a user's own reset says in each state, as the dialog shows it."""
+        self.sign_in("alice")
+        for headers in ({}, {"HTTP_ACCEPT_LANGUAGE": "zh-CN"}):
+            AccountRequest.objects.all().delete()
+            request_id = self.client.post("/api/me/reset", **headers).json()["id"]
+            row = AccountRequest.objects.get(id=request_id)
+            for state, stage, restored, password in (("applying", "", None, ""), ("failed", "restart", False, ""),
+                                                     ("failed", "verify", True, ""), ("applied", "", None, "expired"),
+                                                     ("applied", "", None, "unreadable")):
+                AccountRequest.objects.filter(id=request_id).update(state=state, stage=stage, restored=restored)
+                row.refresh_from_db()
+                with translation.override("zh-hans" if headers else "en"):
+                    data = self_reset.as_json(row, "alice")
+                    if password:
+                        data["password_text"] = self_reset.password_text(password, row)
+                self.plain(" ".join(v for v in (data["text"], data["password_text"]) if v), state, bool(headers))
