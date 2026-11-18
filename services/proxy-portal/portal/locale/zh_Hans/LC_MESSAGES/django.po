@@ -1382,3 +1382,7 @@ msgstr "除 %(open)s 自己的入口外，所有入口都拒绝它；这些入�
 #, python-format
 msgid "Raw auth (accounts on the public proxies' own entries) is on: every entry requires an enabled account, except the own entries of %(open)s, which need none."
 msgstr "公共代理入口认证 (raw auth) 已开启：除 %(open)s 自己的入口外，所有入口都需要已启用的账号；这些入口无需账号。"
+
+#, python-format
+msgid "No account needed at the own entries of %(open)s, also once raw auth is on."
+msgstr "%(open)s 自己的入口无需账号，开启后也是如此。"

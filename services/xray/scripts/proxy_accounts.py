@@ -703,6 +703,9 @@ def main(argv: Optional[List[str]] = None) -> int:
             accounts = Accounts(args.base_dir)
             if args.command in ("add", "rotate", "remove", "enable", "disable", "admin"):
                 name = validate_name(args.name)
+                # read before anything is saved: a bad list fails the command with nothing changed
+                open_ = open_proxies(accounts.base_dir, public_proxies(accounts.base_dir)) \
+                    if args.command == "disable" and accounts.raw_auth else set()
                 if args.command == "add" and name in accounts.accounts:
                     raise AccountsError(f"account {name!r} exists; use rotate")
                 if args.command == "remove":
@@ -721,7 +724,7 @@ def main(argv: Optional[List[str]] = None) -> int:
                 note = ""
                 if args.command == "disable" and not accounts.raw_auth:
                     note = " (raw auth is off: the public proxies' own entries still accept it)"
-                elif args.command == "disable" and open_proxies(accounts.base_dir, public_proxies(accounts.base_dir)):
+                elif args.command == "disable" and open_:
                     note = " (the open proxies' own entries still accept it)"
                 what = f"admin {args.state}" if args.command == "admin" else args.command
                 print(f"{what}: {name}{note}; run render, then restart the proxies whose configs it writes",

@@ -43,7 +43,7 @@ The default proxy of the cluster is `xray-usca5-bwh-sla-1tb`:
 | HTTP | `http://192.168.233.8:59889` | `http://10.0.1.68:59889` |
 | SOCKS5 | `192.168.233.8:59880` | `10.0.1.68:59880` |
 
-Four proxies are public, open to every user: `xray-usca5-bwh-sla-1tb`, `xray-usca1-bwh-megaboxpro-2tb`, `xray-usca6-bwh-1tb` and `xray-us-west-racknerd-12tb`. They work the same way, on other ports. The other proxies are private, for admin accounts only ([Private entries](#private-entries)). To list the services, on the VM:
+Four proxies are public, for every user: `xray-usca5-bwh-sla-1tb`, `xray-usca1-bwh-megaboxpro-2tb`, `xray-usca6-bwh-1tb` and `xray-us-west-racknerd-12tb`. They work the same way, on other ports. The other proxies are private, for admin accounts only ([Private entries](#private-entries)). To list the services, on the VM:
 
 ```sh
 cd ~/ws/cluster-setup/services

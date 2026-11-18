@@ -952,6 +952,15 @@ class OpenProxiesTest(_Base):
         self.assertIn(f"refused at every entry but the open proxies' own entries ({self.OPEN})", out)
         self.assertIn("the open proxies' own entries still accept it", run(self.base, "disable", "alice")[2])
 
+    def test_disable_with_a_bad_list_changes_nothing(self):
+        run(self.base, "raw-auth", "on")
+        before = (self.base / pa.ACCOUNTS_FILE).read_text()
+        (self.base / pa.OPEN_PROXIES_FILE).write_text(f"{PRIVATE}\n")
+        code, _, err = run(self.base, "disable", "alice")
+        self.assertEqual(code, 1)
+        self.assertIn("never be open", err)
+        self.assertEqual((self.base / pa.ACCOUNTS_FILE).read_text(), before)
+
 
 class ProxiesTest(unittest.TestCase):
     def setUp(self):

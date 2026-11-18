@@ -90,8 +90,12 @@ def raw_auth_text(status):
     if status.raw_auth:
         return _("Raw auth is on: every entry, the public proxies' own entries included, refuses an account whose "
                  "proxy access is off.")
-    return _("Raw auth is off: proxy access off stops only ha-general, ha-private and the private proxies. A "
+    text = _("Raw auth is off: proxy access off stops only ha-general, ha-private and the private proxies. A "
              "public proxy's own entry needs no account, so it still works for that user.")
+    if status.open_proxies:
+        text += " " + _("No account needed at the own entries of %(open)s, also once raw auth is on.") % {
+            "open": ", ".join(status.open_proxies)}
+    return text
 
 
 def _pending_by_account():
