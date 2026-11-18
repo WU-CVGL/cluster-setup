@@ -13,6 +13,7 @@
     - [Docker daemon with an account](#docker-daemon-with-an-account)
     - [Usage](#usage)
     - [Accounts on the proxies](#accounts-on-the-proxies)
+    - [Changes from the portal](#changes-from-the-portal)
   - [Proxy availability](#proxy-availability)
   - [Bootstrap: a temporary proxy on one machine](#bootstrap-a-temporary-proxy-on-one-machine)
   - [Verify a proxy](#verify-a-proxy)
@@ -105,10 +106,12 @@ cd ~/ws/cluster-setup/services
 python3 xray/scripts/proxy_accounts.py add svc-monitor
 python3 xray/scripts/proxy_accounts.py add svc-ha
 python3 xray/scripts/proxy_accounts.py render   # before the first start, or Docker creates the folders as root
-docker compose up -d xray-ha xray-ha-exporter blackbox-exporter
+docker compose up -d $(docker compose config --services | grep '^xray-' | grep -v exporter) xray-ha-exporter blackbox-exporter
 docker compose kill -s SIGHUP prometheus   # reload the probe job
 docker compose restart grafana             # load the new dashboard providers
 ```
+
+The `up -d` line creates `xray-ha` and recreates every proxy on the pinned image: the [portal](#changes-from-the-portal)'s first apply restarts every proxy and refuses one on another image.
 
 The pool is explicit, and [`create_xray_service.py`](../services/xray/scripts/README.md) does not add new proxies to it. To add a proxy, give it a SOCKS outbound whose tag starts with `pool-`, as the others have, and set the `pool` label of its probe targets to `ha-general` in [`prometheus.yml`](../services/prometheus/prometheus.yml).
 
@@ -127,13 +130,16 @@ cd ~/ws/cluster-setup/services
 python3 xray/scripts/proxy_accounts.py add <user> --show      # prints the new password
 python3 xray/scripts/proxy_accounts.py rotate <user> --show   # new password; the old one stops working
 python3 xray/scripts/proxy_accounts.py remove <user>
+python3 xray/scripts/proxy_accounts.py disable <user>         # keeps the account and its password
+python3 xray/scripts/proxy_accounts.py enable <user>
 python3 xray/scripts/proxy_accounts.py list                   # names only
+python3 xray/scripts/proxy_accounts.py status                 # names, kinds, enabled; --json for the portal
 python3 xray/scripts/proxy_accounts.py render
 docker compose restart xray-ha
 docker compose kill -s SIGHUP blackbox-exporter
 ```
 
-Passwords are random and are printed only by `add` and `rotate` with `--show`; give them to the user privately. Xray reads accounts only when it starts, so each change takes effect with the restart of `xray-ha`, which breaks the connections open through it and resets its traffic counters. While the [proxies require accounts](#accounts-on-the-proxies), restart them as well.
+Passwords are random and are printed only by `add` and `rotate` with `--show`; give them to the user privately. A disabled account is left out of every rendered configuration, so every entry that requires accounts refuses it. While the [proxies require no accounts](#accounts-on-the-proxies) (the default), that is only the HA entry: a disabled user can still use a proxy's own entry. `svc-ha` and `svc-monitor` cannot be disabled or removed. The accounts file records for each account whether it is enabled; a file without that record (format version 1) is read with every account enabled and is rewritten with it at the next change. Xray reads accounts only when it starts, so each change takes effect with the restart of `xray-ha`, which breaks the connections open through it and resets its traffic counters. While the [proxies require accounts](#accounts-on-the-proxies), restart them as well.
 
 ### Client settings
 
@@ -217,6 +223,20 @@ By default the proxies' own entries (the *raw* entries, hence `raw-auth`) requir
     ```
 
 While accounts are on, restart the proxies together with `xray-ha` after every account change. A proxy made with `create_xray_service.py` requires the accounts from its creation. `raw-auth off` followed by the same steps turns them off.
+
+### Changes from the portal
+
+The proxy portal does not change accounts itself. It writes a request per change into a spool folder, and the applier, a root systemd service on the VM ([`services/proxy-portal/applier`](../services/proxy-portal/applier/README.md)), applies them. The portal never gets the Docker socket or the accounts file. The accounts file stays the only record of the accounts and whether they are enabled.
+
+- **Install:** the units `proxy-apply.service`, `.path` and `.timer` and the settings file `/etc/default/proxy-apply` are in [`services/system-configurations/etc`](../services/system-configurations/etc). Create the portal's user, install the files, set `PROXY_APPLY_SERVICES_DIR`, run `proxy_apply.py init` and enable the `.path` and `.timer` units; the [applier README](../services/proxy-portal/applier/README.md#install) has the commands.
+- **Spool and permissions:** `/var/lib/proxy-portal/spool`. The portal's user owns `requests/` and `results/` (`0700`); root owns `status/` and `status.json`. A request is accepted only as a regular file owned by the portal's user, at most 4096 bytes. Write each request under a name not ending in `.json`, then rename it to `<id>.json`; every `*.json` entry is read once and removed, valid or not.
+- **Requests:** `{"id": "<id>", "op": "add|rotate|enable|disable|remove", "username": "<account>"}` in `requests/<id>.json`, nothing else; `<id>` is 8 to 64 lowercase letters, digits and `-` (a UUID fits), new for every request. `svc-ha` and `svc-monitor` are refused; admins change them only with `proxy_accounts.py` ([Manage accounts](#manage-accounts)). For `add` and `rotate`, the applier generates the password and writes it once to `results/<id>.json` (mode `0400`, owned by the portal's user), which the portal deletes after showing it.
+- **Statuses** in `status/<id>.json`: `applying` while its batch runs, then `applied` (live and verified), `failed` (not applied; the previous files and services are restored, `restored: false` if the rollback did not finish: the [applier README](../services/proxy-portal/applier/README.md#statuses) has the recovery), or `unconfirmed` (live and every refused login gets 407, but the logins that must pass got no 204 in time, e.g. while the proxies are down).
+- **How:** the applier holds the accounts lock and applies the pending requests in batches, a second request for the same account going into the next batch: it renders in memory, tests every changed Xray config with `xray run -test`, checks that every Xray service it restarts runs the pinned image, replaces the files atomically, restarts the services and verifies through the HA entry that `svc-monitor` passes (204), that each request's account behaves as requested, and that every disabled or removed account, replaced password and a wrong password are refused (407). A wrong answer rolls everything back. After a change made with `proxy_accounts.py` and not restarted, the next request restarts and verifies everything it renders, even one that changes nothing.
+- **Image:** a proxy the applier restarts must run the image pinned in `docker-compose.yml`, the one `xray-ha` uses. The first request, and the first after a change made with `proxy_accounts.py`, restart every running proxy, also with raw auth off, so every proxy must run it. After a change to the image, recreate the proxies with `docker compose up -d` (a restart keeps the old image); until then the applier refuses at `precheck`.
+- **Restart impact:** every change restarts `xray-ha`, and with raw auth on every proxy too. Established connections through them drop, and new ones fail for a few seconds. Requests that arrive together share one restart; each further request for the same account adds one.
+
+While raw auth is off, turning a user's access off in the portal stops it only at the HA entry; the proxies' own entries stay open to them.
 
 ## Proxy availability
 

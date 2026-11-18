@@ -1,0 +1,10 @@
+# Runs proxy-apply.service every 5 minutes: expires one-time results, recovers an interrupted apply.
+[Unit]
+Description=Periodic proxy account apply
+
+[Timer]
+OnBootSec=2min
+OnUnitActiveSec=5min
+
+[Install]
+WantedBy=timers.target

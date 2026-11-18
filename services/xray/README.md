@@ -32,10 +32,11 @@ See [scripts/README.md](scripts/README.md) (in Chinese):
   `docker-compose.yml` and the exporter target to `prometheus/prometheus.yml`. With `proxy_accounts.py raw-auth on`,
   the new proxy requires every proxy account from the start. Afterwards run
   `docker compose up -d xray-<name> xray-<name>-exporter` and `docker compose kill -s SIGHUP prometheus`.
-- `scripts/proxy_accounts.py add|rotate|remove|list|raw-auth|render`: keeps the proxy accounts in
-  `services/proxy-accounts/accounts.json` (not in git) and renders every config that holds them: the HA entry's,
-  the probes' and, with `raw-auth on`, the inbounds of every `xray/<name>/config/config.json`
-  ([docs/00](../../docs/00_Network_Proxy.md#accounts)).
+- `scripts/proxy_accounts.py add|rotate|remove|enable|disable|list|status|raw-auth|render`: keeps the proxy
+  accounts in `services/proxy-accounts/accounts.json` (not in git) and renders every config that holds them: the
+  HA entry's, the probes' and, with `raw-auth on`, the inbounds of every `xray/<name>/config/config.json`
+  ([docs/00](../../docs/00_Network_Proxy.md#accounts)). The portal's changes go through
+  [`proxy-portal/applier`](../proxy-portal/applier/README.md).
 - `scripts/vless_to_config.py`: prints a standalone config for one `vless://` URL. Add `--stats-api` when the
   output replaces an existing `xray/<name>/config/config.json` (the exporter needs the stats API below).
 
