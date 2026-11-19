@@ -20,5 +20,6 @@ COPY portal /app/portal
 COPY --from=build /src/locale /app/portal/locale
 USER 3089:3089
 EXPOSE 8000
-# One worker with threads: the cache of Prometheus results is per process.
-CMD ["sh", "-c", "umask 077 && python manage.py migrate --noinput && exec gunicorn portal.wsgi:application --bind 0.0.0.0:8000 --workers 1 --threads 8 --timeout 60 --access-logfile -"]
+# One worker with threads: the cache of Prometheus results is per process. No control socket: the root filesystem
+# is read-only, and nothing uses gunicornc.
+CMD ["sh", "-c", "umask 077 && python manage.py migrate --noinput && exec gunicorn portal.wsgi:application --bind 0.0.0.0:8000 --workers 1 --threads 8 --timeout 60 --no-control-socket --access-logfile -"]
