@@ -5,7 +5,8 @@ services/prometheus/tests/proxy-status-bars.test.yml runs the status bars' queri
 two series at once, partly probed and empty buckets), proxy-24h-success.test.yml the proxies' 24-hour success
 rates and coverage (a label change inside the 24 hours, two series at once, a partly probed protocol), and
 proxy-live-status.test.yml the proxies' live status and the HA entries' proxy counts (reclassified proxies whose old
-labels were up within the day, a probe without results, a removed probe, unchanged proxies).
+labels were up within the day, a probe without results, a removed probe, unchanged proxies, and proxies moved during a
+reload, when their old and new probes both report, and across a restart).
 """
 
 import re

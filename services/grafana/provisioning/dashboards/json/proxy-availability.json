@@ -275,7 +275,7 @@
             "type": "prometheus",
             "uid": "${prometheus_source}"
           },
-          "expr": "count(max by (entry) (max_over_time(up{job=\"proxy-probe\",kind=\"raw\",pool=\"ha-general\",protocol=\"socks\"}[1d])) unless on (entry) up{job=\"proxy-probe\",kind=\"raw\",pool!~\"ha-general\",protocol=\"socks\"})",
+          "expr": "count(max by (entry) (max_over_time(up{job=\"proxy-probe\",kind=\"raw\",pool=\"ha-general\",protocol=\"socks\"}[1d])) unless on (entry) (up{job=\"proxy-probe\",kind=\"raw\",pool!~\"ha-general\",protocol=\"socks\"} unless on (entry) up{job=\"proxy-probe\",kind=\"raw\",pool=\"ha-general\",protocol=\"socks\"}))",
           "legendFormat": "configured",
           "refId": "B",
           "instant": true,
@@ -834,7 +834,7 @@
             "type": "prometheus",
             "uid": "${prometheus_source}"
           },
-          "expr": "count(max by (entry) (max_over_time(up{job=\"proxy-probe\",kind=\"raw\",pool=~\"ha-general|ha-private\",protocol=\"socks\"}[1d])) unless on (entry) up{job=\"proxy-probe\",kind=\"raw\",pool!~\"ha-general|ha-private\",protocol=\"socks\"})",
+          "expr": "count(max by (entry) (max_over_time(up{job=\"proxy-probe\",kind=\"raw\",pool=~\"ha-general|ha-private\",protocol=\"socks\"}[1d])) unless on (entry) (up{job=\"proxy-probe\",kind=\"raw\",pool!~\"ha-general|ha-private\",protocol=\"socks\"} unless on (entry) up{job=\"proxy-probe\",kind=\"raw\",pool=~\"ha-general|ha-private\",protocol=\"socks\"}))",
           "legendFormat": "configured",
           "refId": "B",
           "instant": true,

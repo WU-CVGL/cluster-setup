@@ -13,7 +13,7 @@ def _status(selector, by, labels=None):
     1 passing, 0 failing, -1 unknown (no result in the last 90 s but a target that was up within a day), one row per
     `by`. With labels, the rows also carry those labels, which can change (a proxy's pool and access when it is
     reclassified): a probe result in the last 90 s counts first, then the labels the target has now, then any it had
-    within the day, so old labels never add a second row.
+    within the day, so old labels add no second row once their probe stops reporting.
     """
     if labels is None:
         return (f"(max by ({by}) (probe_success{{{selector}}} unless on (instance) "
@@ -31,9 +31,10 @@ def _ha(pool):
     pools = "ha-general" if pool == "ha-general" else "ha-general|ha-private"
     proxies = 'pool="ha-general"' if pool == "ha-general" else 'pool=~"ha-general|ha-private"'
     raw = f'job="proxy-probe",kind="raw",{proxies},protocol="socks"'
-    # a proxy probed with another pool now (reclassified) is no longer one of this entry's, though its old labels
-    # were up within the day
-    moved = f'up{{job="proxy-probe",kind="raw",pool!~"{pools}",protocol="socks"}}'
+    # a proxy probed only with another pool now (reclassified) is no longer one of this entry's, though its old labels
+    # were up within the day; while its old and new probes both report, it still counts, as it does as passing
+    moved = (f'(up{{job="proxy-probe",kind="raw",pool!~"{pools}",protocol="socks"}} unless on (entry) '
+             f'up{{{raw}}})')
     return {
         "http": _status(sel + ',protocol="http"', "protocol"),
         "socks": _status(sel + ',protocol="socks"', "protocol"),
