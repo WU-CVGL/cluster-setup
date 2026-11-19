@@ -275,7 +275,7 @@
             "type": "prometheus",
             "uid": "${prometheus_source}"
           },
-          "expr": "count(max by (entry) (max_over_time(up{job=\"proxy-probe\",kind=\"raw\",pool=\"ha-general\",protocol=\"socks\"}[1d])))",
+          "expr": "count(max by (entry) (max_over_time(up{job=\"proxy-probe\",kind=\"raw\",pool=\"ha-general\",protocol=\"socks\"}[1d])) unless on (entry) up{job=\"proxy-probe\",kind=\"raw\",pool!~\"ha-general\",protocol=\"socks\"})",
           "legendFormat": "configured",
           "refId": "B",
           "instant": true,
@@ -834,7 +834,7 @@
             "type": "prometheus",
             "uid": "${prometheus_source}"
           },
-          "expr": "count(max by (entry) (max_over_time(up{job=\"proxy-probe\",kind=\"raw\",pool=~\"ha-general|ha-private\",protocol=\"socks\"}[1d])))",
+          "expr": "count(max by (entry) (max_over_time(up{job=\"proxy-probe\",kind=\"raw\",pool=~\"ha-general|ha-private\",protocol=\"socks\"}[1d])) unless on (entry) up{job=\"proxy-probe\",kind=\"raw\",pool!~\"ha-general|ha-private\",protocol=\"socks\"})",
           "legendFormat": "configured",
           "refId": "B",
           "instant": true,
@@ -1190,7 +1190,7 @@
             "type": "prometheus",
             "uid": "${prometheus_source}"
           },
-          "expr": "(max by (entry, pool, access) (probe_success{job=\"proxy-probe\",kind=\"raw\",protocol=\"http\"} unless on (instance) (time() - timestamp(probe_success{job=\"proxy-probe\",kind=\"raw\",protocol=\"http\"}) > 90))) or (max by (entry, pool, access) (max_over_time(up{job=\"proxy-probe\",kind=\"raw\",protocol=\"http\"}[1d])) * 0 - 1)",
+          "expr": "(max by (entry, pool, access) (probe_success{job=\"proxy-probe\",kind=\"raw\",protocol=\"http\"} unless on (instance) (time() - timestamp(probe_success{job=\"proxy-probe\",kind=\"raw\",protocol=\"http\"}) > 90))) or on (entry) (max by (entry, pool, access) (up{job=\"proxy-probe\",kind=\"raw\",protocol=\"http\"}) * 0 - 1) or on (entry) (max by (entry, pool, access) (max_over_time(up{job=\"proxy-probe\",kind=\"raw\",protocol=\"http\"}[1d])) * 0 - 1)",
           "legendFormat": "",
           "refId": "A",
           "instant": true,

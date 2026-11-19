@@ -1,0 +1,166 @@
+# The live status of the proxies and the proxy counts of the HA entries (services/proxy-portal/portal/queries.py
+# STATUS, the same as the Proxy Availability dashboard's Proxies table and Proxies passing panels; the portal's tests
+# check that the expressions below are those). A probe result older than 90 s is not current; a target that was up
+# within the day but has no current result is unknown (-1). A proxy reclassified between public and private (or taken
+# out of the HA entries, pool none) gets new pool and access labels, and its old labels keep samples within the day:
+# it still has one row, its current result with its new labels, and it no longer counts for an entry it left.
+rule_files: []
+evaluation_interval: 30s
+tests:
+  - name: reclassified proxies, a removed probe, and unchanged proxies
+    interval: 30s
+    input_series:
+      # p1: public until 6 h, private since, passing
+      - series: 'up{job="proxy-probe",instance="p1_http",entry="p1",protocol="http",kind="raw",pool="ha-general",access="public"}'
+        values: '1x719 stale'
+      - series: 'probe_success{job="proxy-probe",instance="p1_http",entry="p1",protocol="http",kind="raw",pool="ha-general",access="public"}'
+        values: '1x719 stale'
+      - series: 'up{job="proxy-probe",instance="p1_socks",entry="p1",protocol="socks",kind="raw",pool="ha-general",access="public"}'
+        values: '1x719 stale'
+      - series: 'probe_success{job="proxy-probe",instance="p1_socks",entry="p1",protocol="socks",kind="raw",pool="ha-general",access="public"}'
+        values: '1x719 stale'
+      - series: 'up{job="proxy-probe",instance="p1_http",entry="p1",protocol="http",kind="raw",pool="ha-private",access="private"}'
+        values: '_x720 1x240'
+      - series: 'probe_success{job="proxy-probe",instance="p1_http",entry="p1",protocol="http",kind="raw",pool="ha-private",access="private"}'
+        values: '_x720 1x240'
+      - series: 'up{job="proxy-probe",instance="p1_socks",entry="p1",protocol="socks",kind="raw",pool="ha-private",access="private"}'
+        values: '_x720 1x240'
+      - series: 'probe_success{job="proxy-probe",instance="p1_socks",entry="p1",protocol="socks",kind="raw",pool="ha-private",access="private"}'
+        values: '_x720 1x240'
+      # p2: public, passing all along
+      - series: 'up{job="proxy-probe",instance="p2_http",entry="p2",protocol="http",kind="raw",pool="ha-general",access="public"}'
+        values: '1x960'
+      - series: 'probe_success{job="proxy-probe",instance="p2_http",entry="p2",protocol="http",kind="raw",pool="ha-general",access="public"}'
+        values: '1x960'
+      - series: 'up{job="proxy-probe",instance="p2_socks",entry="p2",protocol="socks",kind="raw",pool="ha-general",access="public"}'
+        values: '1x960'
+      - series: 'probe_success{job="proxy-probe",instance="p2_socks",entry="p2",protocol="socks",kind="raw",pool="ha-general",access="public"}'
+        values: '1x960'
+      # p3: public until 6 h, private since, but the probe of its new labels gets no result
+      - series: 'up{job="proxy-probe",instance="p3_http",entry="p3",protocol="http",kind="raw",pool="ha-general",access="public"}'
+        values: '1x719 stale'
+      - series: 'probe_success{job="proxy-probe",instance="p3_http",entry="p3",protocol="http",kind="raw",pool="ha-general",access="public"}'
+        values: '1x719 stale'
+      - series: 'up{job="proxy-probe",instance="p3_socks",entry="p3",protocol="socks",kind="raw",pool="ha-general",access="public"}'
+        values: '1x719 stale'
+      - series: 'probe_success{job="proxy-probe",instance="p3_socks",entry="p3",protocol="socks",kind="raw",pool="ha-general",access="public"}'
+        values: '1x719 stale'
+      - series: 'up{job="proxy-probe",instance="p3_http",entry="p3",protocol="http",kind="raw",pool="ha-private",access="private"}'
+        values: '_x720 0x240'
+      - series: 'up{job="proxy-probe",instance="p3_socks",entry="p3",protocol="socks",kind="raw",pool="ha-private",access="private"}'
+        values: '_x720 0x240'
+      # p4: private, its probes removed at 6 h
+      - series: 'up{job="proxy-probe",instance="p4_http",entry="p4",protocol="http",kind="raw",pool="ha-private",access="private"}'
+        values: '1x719 stale'
+      - series: 'probe_success{job="proxy-probe",instance="p4_http",entry="p4",protocol="http",kind="raw",pool="ha-private",access="private"}'
+        values: '1x719 stale'
+      - series: 'up{job="proxy-probe",instance="p4_socks",entry="p4",protocol="socks",kind="raw",pool="ha-private",access="private"}'
+        values: '1x719 stale'
+      - series: 'probe_success{job="proxy-probe",instance="p4_socks",entry="p4",protocol="socks",kind="raw",pool="ha-private",access="private"}'
+        values: '1x719 stale'
+      # p5: public, failing all along
+      - series: 'up{job="proxy-probe",instance="p5_http",entry="p5",protocol="http",kind="raw",pool="ha-general",access="public"}'
+        values: '1x960'
+      - series: 'probe_success{job="proxy-probe",instance="p5_http",entry="p5",protocol="http",kind="raw",pool="ha-general",access="public"}'
+        values: '0x960'
+      - series: 'up{job="proxy-probe",instance="p5_socks",entry="p5",protocol="socks",kind="raw",pool="ha-general",access="public"}'
+        values: '1x960'
+      - series: 'probe_success{job="proxy-probe",instance="p5_socks",entry="p5",protocol="socks",kind="raw",pool="ha-general",access="public"}'
+        values: '0x960'
+      # p6: private until 6 h, then out of the HA entries (pool none), passing
+      - series: 'up{job="proxy-probe",instance="p6_http",entry="p6",protocol="http",kind="raw",pool="ha-private",access="private"}'
+        values: '1x719 stale'
+      - series: 'probe_success{job="proxy-probe",instance="p6_http",entry="p6",protocol="http",kind="raw",pool="ha-private",access="private"}'
+        values: '1x719 stale'
+      - series: 'up{job="proxy-probe",instance="p6_socks",entry="p6",protocol="socks",kind="raw",pool="ha-private",access="private"}'
+        values: '1x719 stale'
+      - series: 'probe_success{job="proxy-probe",instance="p6_socks",entry="p6",protocol="socks",kind="raw",pool="ha-private",access="private"}'
+        values: '1x719 stale'
+      - series: 'up{job="proxy-probe",instance="p6_http",entry="p6",protocol="http",kind="raw",pool="none",access="private"}'
+        values: '_x720 1x240'
+      - series: 'probe_success{job="proxy-probe",instance="p6_http",entry="p6",protocol="http",kind="raw",pool="none",access="private"}'
+        values: '_x720 1x240'
+      - series: 'up{job="proxy-probe",instance="p6_socks",entry="p6",protocol="socks",kind="raw",pool="none",access="private"}'
+        values: '_x720 1x240'
+      - series: 'probe_success{job="proxy-probe",instance="p6_socks",entry="p6",protocol="socks",kind="raw",pool="none",access="private"}'
+        values: '_x720 1x240'
+    promql_expr_test:
+      # before the change, at 5 h: the old labels
+      - expr: '(max by (entry, pool, access) (probe_success{job="proxy-probe",kind="raw",protocol="http"} unless on (instance) (time() - timestamp(probe_success{job="proxy-probe",kind="raw",protocol="http"}) > 90))) or on (entry) (max by (entry, pool, access) (up{job="proxy-probe",kind="raw",protocol="http"}) * 0 - 1) or on (entry) (max by (entry, pool, access) (max_over_time(up{job="proxy-probe",kind="raw",protocol="http"}[1d])) * 0 - 1)'
+        eval_time: 5h
+        exp_samples:
+          - labels: '{entry="p1",pool="ha-general",access="public"}'
+            value: 1
+          - labels: '{entry="p2",pool="ha-general",access="public"}'
+            value: 1
+          - labels: '{entry="p3",pool="ha-general",access="public"}'
+            value: 1
+          - labels: '{entry="p4",pool="ha-private",access="private"}'
+            value: 1
+          - labels: '{entry="p5",pool="ha-general",access="public"}'
+            value: 0
+          - labels: '{entry="p6",pool="ha-private",access="private"}'
+            value: 1
+      # at 8 h: one row per proxy, with its new labels
+      - expr: '(max by (entry, pool, access) (probe_success{job="proxy-probe",kind="raw",protocol="http"} unless on (instance) (time() - timestamp(probe_success{job="proxy-probe",kind="raw",protocol="http"}) > 90))) or on (entry) (max by (entry, pool, access) (up{job="proxy-probe",kind="raw",protocol="http"}) * 0 - 1) or on (entry) (max by (entry, pool, access) (max_over_time(up{job="proxy-probe",kind="raw",protocol="http"}[1d])) * 0 - 1)'
+        eval_time: 8h
+        exp_samples:
+          - labels: '{entry="p1",pool="ha-private",access="private"}'
+            value: 1
+          - labels: '{entry="p2",pool="ha-general",access="public"}'
+            value: 1
+          - labels: '{entry="p3",pool="ha-private",access="private"}'
+            value: -1
+          - labels: '{entry="p4",pool="ha-private",access="private"}'
+            value: -1
+          - labels: '{entry="p5",pool="ha-general",access="public"}'
+            value: 0
+          - labels: '{entry="p6",pool="none",access="private"}'
+            value: 1
+      - expr: '(max by (entry) (probe_success{job="proxy-probe",kind="raw",protocol="socks"} unless on (instance) (time() - timestamp(probe_success{job="proxy-probe",kind="raw",protocol="socks"}) > 90))) or (max by (entry) (max_over_time(up{job="proxy-probe",kind="raw",protocol="socks"}[1d])) * 0 - 1)'
+        eval_time: 8h
+        exp_samples:
+          - labels: '{entry="p1"}'
+            value: 1
+          - labels: '{entry="p2"}'
+            value: 1
+          - labels: '{entry="p3"}'
+            value: -1
+          - labels: '{entry="p4"}'
+            value: -1
+          - labels: '{entry="p5"}'
+            value: 0
+          - labels: '{entry="p6"}'
+            value: 1
+      # ha-general: p2 and p5 (p1 and p3 left it); ha-private: all but p6 (p4 unknown, its probes up within the day)
+      - expr: 'count(((max by (entry) (probe_success{job="proxy-probe",kind="raw",pool="ha-general",protocol="socks"} unless on (instance) (time() - timestamp(probe_success{job="proxy-probe",kind="raw",pool="ha-general",protocol="socks"}) > 90))) or (max by (entry) (max_over_time(up{job="proxy-probe",kind="raw",pool="ha-general",protocol="socks"}[1d])) * 0 - 1)) == 1) or vector(0)'
+        eval_time: 8h
+        exp_samples:
+          - labels: '{}'
+            value: 1
+      - expr: 'count(max by (entry) (max_over_time(up{job="proxy-probe",kind="raw",pool="ha-general",protocol="socks"}[1d])) unless on (entry) up{job="proxy-probe",kind="raw",pool!~"ha-general",protocol="socks"})'
+        eval_time: 8h
+        exp_samples:
+          - labels: '{}'
+            value: 2
+      - expr: 'count(((max by (entry) (probe_success{job="proxy-probe",kind="raw",pool=~"ha-general|ha-private",protocol="socks"} unless on (instance) (time() - timestamp(probe_success{job="proxy-probe",kind="raw",pool=~"ha-general|ha-private",protocol="socks"}) > 90))) or (max by (entry) (max_over_time(up{job="proxy-probe",kind="raw",pool=~"ha-general|ha-private",protocol="socks"}[1d])) * 0 - 1)) == 1) or vector(0)'
+        eval_time: 8h
+        exp_samples:
+          - labels: '{}'
+            value: 2
+      - expr: 'count(max by (entry) (max_over_time(up{job="proxy-probe",kind="raw",pool=~"ha-general|ha-private",protocol="socks"}[1d])) unless on (entry) up{job="proxy-probe",kind="raw",pool!~"ha-general|ha-private",protocol="socks"})'
+        eval_time: 8h
+        exp_samples:
+          - labels: '{}'
+            value: 5
+      # before the change, at 5 h
+      - expr: 'count(max by (entry) (max_over_time(up{job="proxy-probe",kind="raw",pool="ha-general",protocol="socks"}[1d])) unless on (entry) up{job="proxy-probe",kind="raw",pool!~"ha-general",protocol="socks"})'
+        eval_time: 5h
+        exp_samples:
+          - labels: '{}'
+            value: 4
+      - expr: 'count(max by (entry) (max_over_time(up{job="proxy-probe",kind="raw",pool=~"ha-general|ha-private",protocol="socks"}[1d])) unless on (entry) up{job="proxy-probe",kind="raw",pool!~"ha-general|ha-private",protocol="socks"})'
+        eval_time: 5h
+        exp_samples:
+          - labels: '{}'
+            value: 6

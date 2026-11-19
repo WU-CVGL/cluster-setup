@@ -40,6 +40,26 @@ def _by(rows, label):
     return {labels.get(label, ""): value for labels, value in rows}
 
 
+def _one_per_entry(rows):
+    """
+    The status rows by entry, one each: should an entry have two (a reclassified proxy's old and new probe labels), a
+    result (0 or 1) wins over unknown (-1 or none), then the lower value, then the labels in order, whatever the row
+    order.
+    """
+    if rows is None:
+        return None
+
+    def rank(row):
+        labels, value = row
+        unknown = value is None or value < 0
+        return unknown, 0 if unknown else value, sorted(labels.items())
+
+    found = {}
+    for labels, value in sorted(rows, key=rank):
+        found.setdefault(labels.get("entry", ""), (labels, value))
+    return found
+
+
 def _scalar(rows):
     if not rows:
         return None
@@ -67,11 +87,12 @@ def collect(at):
             "rate_24h": _by(r["rate_24h"], "protocol"), "coverage_24h": _by(r["coverage_24h"], "protocol"),
         }
     r = {key: results[("proxies", key)] for key in queries.STATUS["proxies"]}
+    http, socks = _one_per_entry(r["http"]), _one_per_entry(r["socks"])
     proxies = {}
-    for labels, value in r["http"] or []:
-        proxies.setdefault(labels.get("entry", ""), {})["labels"] = {"pool": labels.get("pool"),
-                                                                      "access": labels.get("access")}
-    proxies_data = {"http": _by(r["http"], "entry"), "socks": _by(r["socks"], "entry"),
+    for name, (labels, _) in (http or {}).items():
+        proxies.setdefault(name, {})["labels"] = {"pool": labels.get("pool"), "access": labels.get("access")}
+    proxies_data = {"http": None if http is None else {name: value for name, (_, value) in http.items()},
+                    "socks": None if socks is None else {name: value for name, (_, value) in socks.items()},
                     "duration_http": _by(r["duration_http"], "entry"),
                     "duration_socks": _by(r["duration_socks"], "entry"),
                     "last_check": _by(r["last_check"], "entry"),

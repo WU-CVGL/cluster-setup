@@ -8,22 +8,37 @@ every user, and the portal picks the session's username from the result.
 PROBE_STALE = "90"  # seconds, as in the dashboards
 
 
-def _status(selector, by):
-    """1 passing, 0 failing, -1 unknown (no result in the last 90 s but a target that was up within a day)."""
-    return (f"(max by ({by}) (probe_success{{{selector}}} unless on (instance) "
-            f"(time() - timestamp(probe_success{{{selector}}}) > {PROBE_STALE}))) or "
-            f"(max by ({by}) (max_over_time(up{{{selector}}}[1d])) * 0 - 1)")
+def _status(selector, by, labels=None):
+    """
+    1 passing, 0 failing, -1 unknown (no result in the last 90 s but a target that was up within a day), one row per
+    `by`. With labels, the rows also carry those labels, which can change (a proxy's pool and access when it is
+    reclassified): a probe result in the last 90 s counts first, then the labels the target has now, then any it had
+    within the day, so old labels never add a second row.
+    """
+    if labels is None:
+        return (f"(max by ({by}) (probe_success{{{selector}}} unless on (instance) "
+                f"(time() - timestamp(probe_success{{{selector}}}) > {PROBE_STALE}))) or "
+                f"(max by ({by}) (max_over_time(up{{{selector}}}[1d])) * 0 - 1)")
+    keep = f"{by}, {labels}"
+    return (f"(max by ({keep}) (probe_success{{{selector}}} unless on (instance) "
+            f"(time() - timestamp(probe_success{{{selector}}}) > {PROBE_STALE}))) or on ({by}) "
+            f"(max by ({keep}) (up{{{selector}}}) * 0 - 1) or on ({by}) "
+            f"(max by ({keep}) (max_over_time(up{{{selector}}}[1d])) * 0 - 1)")
 
 
 def _ha(pool):
     sel = f'job="proxy-probe",kind="ha",pool="{pool}"'
+    pools = "ha-general" if pool == "ha-general" else "ha-general|ha-private"
     proxies = 'pool="ha-general"' if pool == "ha-general" else 'pool=~"ha-general|ha-private"'
     raw = f'job="proxy-probe",kind="raw",{proxies},protocol="socks"'
+    # a proxy probed with another pool now (reclassified) is no longer one of this entry's, though its old labels
+    # were up within the day
+    moved = f'up{{job="proxy-probe",kind="raw",pool!~"{pools}",protocol="socks"}}'
     return {
         "http": _status(sel + ',protocol="http"', "protocol"),
         "socks": _status(sel + ',protocol="socks"', "protocol"),
         "proxies_passing": f"count(({_status(raw, 'entry')}) == 1) or vector(0)",
-        "proxies_configured": f"count(max by (entry) (max_over_time(up{{{raw}}}[1d])))",
+        "proxies_configured": f"count(max by (entry) (max_over_time(up{{{raw}}}[1d])) unless on (entry) {moved})",
         "duration": (f"max by (protocol) (probe_duration_seconds{{{sel}}} unless on (instance) "
                      f"(time() - timestamp(probe_duration_seconds{{{sel}}}) > {PROBE_STALE}))"),
         "last_check": f"max by (protocol) (time() - timestamp(probe_success{{{sel}}}))",
@@ -46,7 +61,7 @@ STATUS = {
     "ha-general": _ha("ha-general"),
     "ha-private": _ha("ha-private"),
     "proxies": {
-        "http": _status(_RAW + ',protocol="http"', "entry, pool, access"),
+        "http": _status(_RAW + ',protocol="http"', "entry", "pool, access"),
         "socks": _status(_RAW + ',protocol="socks"', "entry"),
         "duration_http": f'max by (entry) (probe_duration_seconds{{{_RAW},protocol="http"}})',
         "duration_socks": f'max by (entry) (probe_duration_seconds{{{_RAW},protocol="socks"}})',
