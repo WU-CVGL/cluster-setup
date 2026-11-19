@@ -1,7 +1,8 @@
 # The public proxies: their own entries are for every user (with an account once raw auth is on, except the open
 # proxies in open-proxies.txt, which never require one), and the
 # HA entry ha-general balances over them. Every proxy not listed here is private: its own entry always
-# requires an account and accepts only admin accounts (and svc-ha, svc-monitor), and only ha-private reaches it.
+# requires an account and accepts admin accounts, the accounts granted that proxy (proxy_accounts.py grant) and
+# svc-ha, svc-monitor, and only ha-private reaches it.
 # A forgotten proxy is therefore private, never public. One proxy name (xray/<name>/) per line.
 # Read by xray/scripts/proxy_accounts.py and xray/scripts/create_xray_service.py (docs/00_Network_Proxy.md).
 usca5-bwh-sla-1tb

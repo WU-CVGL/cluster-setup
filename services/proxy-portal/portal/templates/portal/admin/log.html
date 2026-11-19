@@ -24,7 +24,7 @@
     <tr>
       <td>{{ row.requested_at|date:"Y-m-d H:i:s" }}</td>
       <td>{{ row.requested_by }}</td>
-      <td>{{ row.op|op_label }}</td>
+      <td>{{ row.op|op_label }}{% if row.proxy %} · <code>{{ row.proxy }}</code>{% endif %}</td>
       <td class="mono">{{ row.username }}</td>
       <td>{% include "portal/admin/_state.html" with level=level %}</td>
       <td class="wrap wide small">{{ text }}{% if row.stage %} ({{ row.stage|stage_label }}){% endif %}{% if row.status_at %}<div class="tiny">{{ row.status_at|date:"Y-m-d H:i:s" }}</div>{% endif %}</td>

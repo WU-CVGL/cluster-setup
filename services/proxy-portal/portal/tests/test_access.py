@@ -33,7 +33,7 @@ class AccessTest(PortalTestCase):
 
     def test_regular_account(self):
         view = self.get("alice")
-        self.assertEqual(view["account"], {"name": "alice", "enabled": True, "admin": False})
+        self.assertEqual(view["account"], {"name": "alice", "enabled": True, "admin": False, "proxies": []})
         self.assertEqual([e["id"] for e in view["entries"]], ["ha-general"] + PUBLIC)
         general = view["entries"][0]
         self.assertTrue(general["usable"])
@@ -79,7 +79,7 @@ class AccessTest(PortalTestCase):
 
     def test_disabled_account_raw_auth_off(self):
         view = self.get("bob")
-        self.assertEqual(view["account"], {"name": "bob", "enabled": False, "admin": False})
+        self.assertEqual(view["account"], {"name": "bob", "enabled": False, "admin": False, "proxies": []})
         usable = {e["id"]: e["usable"] for e in view["entries"]}
         self.assertFalse(usable["ha-general"])
         self.assertTrue(all(usable[name] for name in PUBLIC))  # raw auth off: anyone

@@ -39,10 +39,16 @@ def _dir(name):
     return os.open(str(settings.SPOOL_DIR / name), os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW | os.O_CLOEXEC)
 
 
-def write_request(request_id, op, username):
-    """Write requests/<id>.json atomically: exclusive create of .<id>.tmp, fsync, rename. Raises OSError."""
+def write_request(request_id, op, username, proxy=None):
+    """
+    Write requests/<id>.json atomically: exclusive create of .<id>.tmp, fsync, rename. Raises OSError. proxy: the
+    private proxy of a grant or revoke, the only requests that carry one.
+    """
     assert ID_RE.fullmatch(request_id)
-    data = json.dumps({"id": request_id, "op": op, "username": username}).encode("utf-8")
+    request = {"id": request_id, "op": op, "username": username}
+    if proxy is not None:
+        request["proxy"] = proxy
+    data = json.dumps(request).encode("utf-8")
     dfd = _dir("requests")
     tmp = f".{request_id}.tmp"
     try:

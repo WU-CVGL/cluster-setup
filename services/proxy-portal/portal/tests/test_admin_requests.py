@@ -151,10 +151,13 @@ class RequestFileTest(PortalTestCase):
         self.assertEqual(requests_in(self.spool), [])
 
     def test_destructive_ops_need_confirmation(self):
+        self.write_status(lambda d: next(a for a in d["accounts"] if a["name"] == "alice").update(
+            proxies=["jpty1-bwh-2tb"]))
         for op in accounts.DESTRUCTIVE:
             self.assertEqual(self.post(op, "alice").status_code, 400, op)
             self.assertEqual(self.post(op, "alice", confirm="bob").status_code, 400, op)
-            page = self.client.post(f"/admin/accounts/{op}", {"username": "alice", "confirm": "alic"})
+            proxy = {"proxy": "jpty1-bwh-2tb"} if op in accounts.GRANT_OPS else {}
+            page = self.client.post(f"/admin/accounts/{op}", dict({"username": "alice", "confirm": "alic"}, **proxy))
             self.assertEqual(page.status_code, 400, op)
             self.assertContains(page, "Type the account name to confirm.", status_code=400)
         self.assertEqual(requests_in(self.spool), [])
@@ -194,9 +197,9 @@ class AccountsListTest(PortalTestCase):
         data = self.client.get("/api/admin/accounts").json()
         rows = {a["name"]: a for a in data["accounts"]}
         self.assertEqual(rows["svc-ha"], {"name": "svc-ha", "kind": "service", "enabled": True, "admin": False,
-                                          "protected": True, "actions": [], "pending": None})
-        self.assertEqual(rows["alice"]["actions"], ["rotate", "disable", "admin-on", "remove"])
-        self.assertEqual(rows["bob"]["actions"], ["rotate", "enable", "admin-on", "remove"])
+                                          "protected": True, "proxies": [], "actions": [], "pending": None})
+        self.assertEqual(rows["alice"]["actions"], ["rotate", "disable", "admin-on", "grant", "remove"])
+        self.assertEqual(rows["bob"]["actions"], ["rotate", "enable", "admin-on", "grant", "remove"])
         self.assertEqual(rows["carol"]["actions"], ["rotate", "disable", "admin-off", "remove"])
         self.assertEqual(rows["svc-docker-cvgl-node01"]["actions"], ["rotate", "disable", "remove"])
         self.assertIs(data["raw_auth"], False)

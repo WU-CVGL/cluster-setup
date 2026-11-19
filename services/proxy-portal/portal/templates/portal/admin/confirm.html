@@ -10,9 +10,22 @@
 {% if error and not effect %}
 <div class="notice bad" role="alert"><p>{{ error }}</p></div>
 <div class="form-actions"><a class="btn" href="{% url 'admin_users' %}">{% translate "Back to the users" %}</a></div>
+{% elif choices %}
+<form class="card card-pad" method="get" action="{% url 'admin_confirm' op %}">
+  <input type="hidden" name="username" value="{{ username }}">
+  <div class="notice"><p>{% if op == 'grant' %}{% blocktranslate with name=username %}Choose the private proxy to give {{ name }}, to use at its own address. The private proxies it was given before stay as they are.{% endblocktranslate %}{% else %}{% blocktranslate with name=username %}Choose the private proxy to take back from {{ name }}.{% endblocktranslate %}{% endif %}</p></div>
+  <div class="field"><label for="proxy">{% translate "Private proxy" %}</label>
+    <select class="input mono" id="proxy" name="proxy" required>{% for p in choices %}<option value="{{ p }}">{{ p }}</option>{% endfor %}</select></div>
+  <div class="form-actions">
+    <button class="btn primary" type="submit">{% translate "Continue" %}</button>
+    <a class="btn" href="{% url 'admin_users' %}">{% translate "Cancel" %}</a>
+  </div>
+</form>
 {% else %}
 <form class="card card-pad" method="post" action="{% url 'admin_confirm' op %}">{% csrf_token %}
   <input type="hidden" name="username" value="{{ username }}">
+  {% if proxy %}<input type="hidden" name="proxy" value="{{ proxy }}">
+  <dl class="kv"><dt>{% translate "Private proxy" %}</dt><dd class="mono">{{ proxy }}</dd></dl>{% endif %}
   {% if error %}<div class="notice bad" role="alert"><p>{{ error }}</p></div>{% endif %}
   <div class="notice{% if destructive %} warn{% endif %}">
     <p>{{ effect }}</p>

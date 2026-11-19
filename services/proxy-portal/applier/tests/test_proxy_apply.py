@@ -34,6 +34,9 @@ IMAGE_ID = "sha256:" + "1" * 64      # the local image ID of IMAGE
 OLD_IMAGE_ID = "sha256:" + "2" * 64  # a container created from an older image
 PROXY = "usca5-bwh-sla-1tb"      # a public proxy (xray/public-proxies.txt)
 PRIVATE = "jpty1-bwh-2tb"        # a private proxy
+OTHER = "miyaip-uk-01_relay_jpty1-bwh-2tb"  # another private proxy (GrantTest)
+# the host ports the fake Compose file publishes the proxies' HTTP inbounds on
+HTTP_PORTS = {PROXY: (None, 59889), PRIVATE: (None, 55889), OTHER: ("127.0.0.1", 54889)}
 
 
 class Crash(BaseException):
@@ -60,6 +63,7 @@ class FakeDocker:
         self.ha_users = {}       # ha-general
         self.ha_private_users = {}   # ha-private
         self.private_users = {}  # the private proxy's own entry
+        self.proxy_users = {}    # every proxy's own entry, by Compose service
         self.load()
 
     @staticmethod
@@ -73,6 +77,8 @@ class FakeDocker:
         self.ha_users = self.users(self.base / pa.HA_CONFIG, "http_IN")
         self.ha_private_users = self.users(self.base / pa.HA_CONFIG, "ha-private_http_IN")
         self.private_users = self.users(self.base / "xray" / PRIVATE / "config" / "config.json", "http_IN")
+        self.proxy_users = {"xray-" + path.parent.parent.name: self.users(path, "http_IN")
+                            for path in self.base.glob(pa.RAW_CONFIG_GLOB)}
 
     def __call__(self, argv, input_text, timeout):
         argv = list(argv)
@@ -93,9 +99,19 @@ class FakeDocker:
         if args[:3] == ["ps", "--services", "--status"]:
             return 0, "\n".join(sorted(self.running)) + "\n", ""
         if args == ["config", "--format", "json"]:
-            return 0, json.dumps({"services": {"xray-ha": {"image": self.image}, "xray-" + PROXY: {"image": self.proxy_image},
-                                               "xray-" + PRIVATE: {"image": self.proxy_image},
-                                               "blackbox-exporter": {"image": "prom/blackbox-exporter"}}}), ""
+            services = {"xray-ha": {"image": self.image}, "xray-" + PROXY: {"image": self.proxy_image},
+                        "xray-" + PRIVATE: {"image": self.proxy_image},
+                        "blackbox-exporter": {"image": "prom/blackbox-exporter"}}
+            for service in self.SERVICES:
+                if service.startswith("xray-") and not service.endswith("exporter") and service != "xray-ha":
+                    services.setdefault(service, {"image": self.proxy_image})
+            for proxy, (host, port) in HTTP_PORTS.items():
+                if "xray-" + proxy in services and port is not None:
+                    services["xray-" + proxy]["ports"] = [
+                        dict({"mode": "ingress", "target": 1089, "published": str(port - 800), "protocol": "tcp"}),
+                        dict({"mode": "ingress", "target": 8889, "published": str(port), "protocol": "tcp"},
+                             **({"host_ip": host} if host else {}))]
+            return 0, json.dumps({"services": services}), ""
         if args[:2] == ["ps", "-q"]:
             return 0, (f"cid-{args[2]}\n" if args[2] in self.running else ""), ""
         if args[0] == "restart":
@@ -117,16 +133,23 @@ class FakeDocker:
 
 
 class FakeProbe:
-    """The HA entries: 204 for a login it knows, 407 otherwise; or a down entry, or one without proxies."""
+    """
+    The HA entries and the proxies' own entries: 204 for a login it knows, 407 otherwise; or a down entry, one without
+    proxies, or one whose proxies hang (hang: a known login takes the probe's whole timeout on the test's clock, then
+    gets no answer; a refused one still gets its 407 at once).
+    """
 
     def __init__(self, docker):
         self.docker = docker
-        self.mode = "ok"      # ok | down | silent | noproxies
+        self.mode = "ok"      # ok | down | silent | noproxies | hang | hang-all (every login hangs)
+        self.time = None      # the test's clock ([seconds]), which a hanging probe advances
+        self.timeouts = []    # the timeout of each probe
         self.calls = []       # users
         self.entry_calls = []  # (entry, user)
         self.logins = []      # (user, password) of each probe
 
-    def __call__(self, entry, user, password):
+    def __call__(self, entry, user, password, timeout):
+        self.timeouts.append(timeout)
         self.calls.append(user)
         self.entry_calls.append((entry, user))
         self.logins.append((user, password))
@@ -134,10 +157,18 @@ class FakeProbe:
             return "unreachable", None
         if self.mode == "silent":
             return "noresponse", None
-        users = {"ha-general": self.docker.ha_users, "ha-private": self.docker.ha_private_users}[entry]
+        if self.mode == "hang-all":
+            self.time[0] += timeout
+            return "noresponse", None
+        users = {"ha-general": self.docker.ha_users, "ha-private": self.docker.ha_private_users}.get(entry)
+        if users is None:  # a proxy's own entry, by its Compose service
+            users = self.docker.proxy_users[entry]
         known = users.get(user) == password
         if not known:
             return "status", 407
+        if self.mode == "hang":
+            self.time[0] += timeout
+            return "noresponse", None
         return ("noresponse", None) if self.mode == "noproxies" else ("status", 204)
 
 
@@ -224,7 +255,9 @@ class ParseRequestTest(unittest.TestCase):
 
     def test_valid(self):
         for op in ap.OPS:
-            self.assertEqual(ap.parse_request(self.ok(op=op))["op"], op)
+            request = ap.parse_request(self.ok(op=op, **({"proxy": PRIVATE} if op in ap.GRANT_OPS else {})))
+            self.assertEqual(request["op"], op)
+            self.assertEqual(request.get("proxy"), PRIVATE if op in ap.GRANT_OPS else None)
         self.assertEqual(ap.parse_request(self.ok(username="svc-docker-node01"))["username"], "svc-docker-node01")
 
     def test_invalid(self):
@@ -245,6 +278,13 @@ class ParseRequestTest(unittest.TestCase):
             self.ok(username="a" * 5000),
             b" " * (ap.MAX_REQUEST_BYTES + 1),
             b"[" * 4000, b'{"a": ' * 680,  # deep nesting: RecursionError on Python 3.8 to 3.11
+            # grant and revoke carry exactly one proxy name, and only they do
+            self.ok(op="grant"), self.ok(op="revoke"), self.ok(proxy=PRIVATE), self.ok(op="add", proxy=PRIVATE),
+            self.ok(op="grant", proxy=""), self.ok(op="grant", proxy="../x"), self.ok(op="grant", proxy="a/b"),
+            self.ok(op="grant", proxy="Jp"), self.ok(op="grant", proxy="x" * 129), self.ok(op="grant", proxy=None),
+            self.ok(op="grant", proxy=[PRIVATE]), self.ok(op="revoke", proxy=PRIVATE + "\n"),
+            self.ok(op="grant", proxy=PRIVATE, proxies=[PRIVATE]),
+            self.ok(op="grant", proxy=PRIVATE, username="svc-ha"),
         ]
         for raw in bad:
             with self.assertRaises(ap.RequestError, msg=raw[:80]):
@@ -642,6 +682,357 @@ class AdminTest(_Base):
 
 
 OPEN = "usca1-bwh-megaboxpro-2tb"  # an open proxy (xray/open-proxies.txt)
+
+
+class GrantDocker(FakeDocker):
+    """FakeDocker with a second private proxy, published on 127.0.0.1 only."""
+
+    SERVICES = FakeDocker.SERVICES + ["xray-" + OTHER]
+
+    def __init__(self, base):
+        super().__init__(base)
+        self.containers["xray-" + OTHER] = IMAGE_ID
+
+
+class GrantTest(_Base):
+    """grant and revoke: one private proxy's own entry follows, nothing else restarts; checked at its own address."""
+
+    def setUp(self):
+        super().setUp()
+        self.other = self.base / "xray" / OTHER / "config" / "config.json"
+        self.other.parent.mkdir(parents=True)
+        self.other.write_text(self.proxy.read_text())
+        pa.render(pa.Accounts(self.base))
+        self.mark_applied()  # and restarted
+        self.docker = GrantDocker(self.base)
+        self.probe = FakeProbe(self.docker)
+        self.addresses = {}
+
+    def applier(self):
+        applier = super().applier()
+        applier.addresses = self.addresses
+        return applier
+
+    def grant(self, request_id, op, username, proxy=PRIVATE):
+        return self.request(request_id, op, username, raw=json.dumps(
+            {"id": request_id, "op": op, "username": username, "proxy": proxy}).encode())
+
+    def calls(self, target):
+        return [user for entry, user in self.probe.entry_calls if entry == target]
+
+    def test_grant_and_revoke_restart_only_that_proxy(self):
+        alice = self.passwords()["alice"]
+        ha, public, other = (self.base / pa.HA_CONFIG).read_text(), self.proxy.read_text(), self.other.read_text()
+        self.grant("abcdefgh-1", "grant", "alice")
+        self.assertEqual(self.run_applier(), 0)
+        record = self.status("abcdefgh-1")
+        self.assertEqual((record["status"], record["changed"], record["restarted"], record["proxy"]),
+                         ("applied", True, ["xray-" + PRIVATE], PRIVATE))
+        self.assertEqual(self.docker.restarts(), [["xray-" + PRIVATE]])
+        self.assertEqual(self.docker.tests(), 1)  # that proxy's config only
+        self.assertEqual(pa.Accounts(self.base).grants, {"alice": {PRIVATE}})
+        self.assertEqual(self.docker.private_users.get("alice"), alice)
+        self.assertNotIn("alice", self.docker.ha_private_users)
+        self.assertEqual(((self.base / pa.HA_CONFIG).read_text(), self.proxy.read_text(), self.other.read_text()),
+                         (ha, public, other))
+        # checked at the proxy's own address: alice and svc-monitor pass, a wrong password and bob are refused;
+        # alice is still refused on ha-private
+        self.assertEqual(self.addresses, {"xray-" + PRIVATE: ("127.0.0.1", 55889)})
+        target = "xray-" + PRIVATE
+        self.assertEqual(sorted(set(self.calls(target))), ["alice", "bob", "svc-monitor"])
+        self.assertIn(("bob", self.passwords()["bob"]), self.probe.logins)
+        self.assertIn("alice", self.calls("ha-private"))
+        view = json.loads((self.spool.root / "status.json").read_text())
+        self.assertEqual(next(a for a in view["accounts"] if a["name"] == "alice")["proxies"], [PRIVATE])
+
+        self.probe.entry_calls.clear()
+        self.grant("abcdefgh-2", "revoke", "alice")
+        self.assertEqual(self.run_applier(), 0)
+        record = self.status("abcdefgh-2")
+        self.assertEqual((record["status"], record["restarted"]), ("applied", ["xray-" + PRIVATE]))
+        self.assertNotIn("alice", self.docker.private_users)
+        self.assertIn("alice", self.calls(target))  # her 407 there checked
+        self.assertEqual(pa.Accounts(self.base).grants, {})
+        self.assertEqual(((self.base / pa.HA_CONFIG).read_text(), self.other.read_text()), (ha, other))
+        self.assert_no_leaks()
+
+    def test_the_other_private_proxy_by_its_published_host(self):
+        self.grant("abcdefgh-1", "grant", "alice", OTHER)
+        self.assertEqual(self.run_applier(), 0)
+        self.assertEqual(self.status("abcdefgh-1")["restarted"], ["xray-" + OTHER])
+        self.assertEqual(self.addresses, {"xray-" + OTHER: ("127.0.0.1", 54889)})
+        self.assertIn("alice", self.docker.proxy_users["xray-" + OTHER])
+        self.assertNotIn("alice", self.docker.private_users)
+
+    def test_refused_before_anything_is_written(self):
+        files = self.files()
+        (self.base / pa.OPEN_PROXIES_FILE).write_text(PROXY + "\n")
+        cases = [("abcdefgh-1", "alice", PROXY, "not a private proxy"),          # public and open
+                 ("abcdefgh-2", "bob", "no-such-proxy", "not a private proxy"),  # unknown
+                 ("abcdefgh-3", "boss", PRIVATE, "may use every private proxy already"),
+                 ("abcdefgh-4", "svc-docker-node01", PRIVATE, "service account"),
+                 ("abcdefgh-5", "carol", PRIVATE, "no account")]
+        for request_id, name, proxy, _ in cases:
+            self.grant(request_id, "grant", name, proxy)
+        self.assertEqual(self.run_applier(), 0)
+        for request_id, _, _, error in cases:
+            record = self.status(request_id)
+            self.assertEqual((record["status"], record["stage"]), ("failed", "request"), request_id)
+            self.assertIn(error, record["error"], request_id)
+        self.assertEqual(self.files(), files)
+        self.assertEqual(self.docker.restarts(), [])
+
+    def test_raw_auth_on_restarts_only_that_proxy(self):
+        accounts = pa.Accounts(self.base)
+        accounts.raw_auth = True
+        accounts.save()
+        pa.render(accounts)
+        self.mark_applied()
+        self.docker.load()
+        self.grant("abcdefgh-1", "grant", "alice")
+        self.assertEqual(self.run_applier(), 0)
+        self.assertEqual(self.status("abcdefgh-1")["restarted"], ["xray-" + PRIVATE])
+        # in a batch with another op, the rules of that op: xray-ha and, with raw auth, every proxy
+        self.grant("abcdefgh-2", "revoke", "alice")
+        self.request("abcdefgh-3", "rotate", "bob")
+        self.assertEqual(self.run_applier(), 0)
+        self.assertEqual(self.status("abcdefgh-2")["restarted"],
+                         ["xray-ha", "xray-" + PRIVATE, "xray-" + OTHER, "xray-" + PROXY])
+
+    def test_grant_to_a_disabled_account_restarts_nothing(self):
+        accounts = pa.Accounts(self.base)
+        accounts.set_enabled("bob", False)
+        accounts.save()
+        pa.render(accounts)
+        self.mark_applied()
+        self.docker.load()
+        files = {k: v for k, v in self.files().items() if k != pa.ACCOUNTS_FILE}
+        self.grant("abcdefgh-1", "grant", "bob")
+        self.assertEqual(self.run_applier(), 0)
+        record = self.status("abcdefgh-1")
+        self.assertEqual((record["status"], record["changed"], record["restarted"]), ("applied", True, []))
+        self.assertEqual(self.docker.restarts(), [])  # never a restart without services: that is every service
+        self.assertEqual({k: v for k, v in self.files().items() if k != pa.ACCOUNTS_FILE}, files)
+        self.assertIn("bob", self.calls("xray-" + PRIVATE))  # refused there, checked
+        self.assertEqual(pa.Accounts(self.base).grants, {"bob": {PRIVATE}})
+        self.request("abcdefgh-2", "enable", "bob")  # now it counts: the proxy restarts with xray-ha
+        self.assertEqual(self.run_applier(), 0)
+        self.assertEqual(self.status("abcdefgh-2")["restarted"], ["xray-ha", "xray-" + PRIVATE])
+        self.assertEqual(self.docker.private_users.get("bob"), self.passwords()["bob"])
+
+    def test_changes_to_a_granted_account_reach_its_proxy(self):
+        self.grant("abcdefgh-1", "grant", "alice")
+        self.run_applier()
+        old = self.passwords()["alice"]
+        self.probe.logins.clear()
+        self.request("abcdefgh-2", "rotate", "alice")
+        self.assertEqual(self.run_applier(), 0)
+        self.assertEqual(self.status("abcdefgh-2")["restarted"], ["xray-ha", "xray-" + PRIVATE])
+        new = self.passwords()["alice"]
+        self.assertEqual(self.docker.private_users["alice"], new)
+        self.assertIn(("alice", old), self.probe.logins)  # the old password's 407 checked
+        for op in ("disable", "enable", "remove"):
+            self.request(f"abcdefgh-{op}", op, "alice")
+            self.assertEqual(self.run_applier(), 0)
+            self.assertEqual(self.status(f"abcdefgh-{op}")["restarted"], ["xray-ha", "xray-" + PRIVATE], op)
+            self.assertEqual("alice" in self.docker.private_users, op == "enable", op)
+        self.assertEqual(pa.Accounts(self.base).grants, {})  # removed with the account
+
+    def test_admin_on_and_off_keep_the_grant(self):
+        self.grant("abcdefgh-1", "grant", "alice")
+        self.run_applier()
+        self.request("abcdefgh-2", "admin-on", "alice")
+        self.assertEqual(self.run_applier(), 0)
+        self.assertIn("alice", self.docker.proxy_users["xray-" + OTHER])
+        self.grant("abcdefgh-3", "grant", "alice", OTHER)  # an admin needs no grant
+        self.assertEqual(self.run_applier(), 0)
+        self.assertIn("admin account", self.status("abcdefgh-3")["error"])
+        self.probe.entry_calls.clear()
+        self.request("abcdefgh-4", "admin-off", "alice")
+        self.assertEqual(self.run_applier(), 0)
+        self.assertEqual(self.status("abcdefgh-4")["status"], "applied")
+        self.assertIn("alice", self.docker.private_users)          # still granted
+        self.assertNotIn("alice", self.docker.proxy_users["xray-" + OTHER])
+        self.assertNotIn("alice", self.docker.ha_private_users)
+        self.assertIn("alice", self.calls("xray-" + PRIVATE))      # her 204 there checked
+
+    def test_proxy_that_does_not_follow_rolls_back(self):
+        files = self.files()
+        self.docker.stale = True  # the restart does not load the new config
+        self.grant("abcdefgh-1", "grant", "alice")
+        self.assertEqual(self.run_applier(), 0)
+        record = self.status("abcdefgh-1")
+        self.assertEqual((record["status"], record["stage"], record["restored"]), ("failed", "verify", True))
+        self.assertIn(f"alice on {PRIVATE}: refused with 407", record["error"])
+        self.assertEqual(self.files(), files)
+        self.assertEqual(self.docker.restarts(), [["xray-" + PRIVATE], ["xray-" + PRIVATE]])  # the rollback's
+        self.assertEqual(self.calls("xray-" + PRIVATE)[-1], "svc-monitor")  # checked after the rollback
+        # a revoke that leaves the account in
+        self.docker.stale = False
+        self.grant("abcdefgh-2", "grant", "alice")
+        self.run_applier()
+        self.docker.stale = True
+        self.grant("abcdefgh-3", "revoke", "alice")
+        self.assertEqual(self.run_applier(), 0)
+        record = self.status("abcdefgh-3")
+        self.assertEqual((record["status"], record["stage"]), ("failed", "verify"))
+        self.assertIn(f"alice on {PRIVATE}: expected 407, got 204", record["error"])
+        self.assertEqual(pa.Accounts(self.base).grants, {"alice": {PRIVATE}})
+
+    def test_proxy_not_running_is_unconfirmed(self):
+        self.docker.running.discard("xray-" + PRIVATE)
+        self.grant("abcdefgh-1", "grant", "alice")
+        self.assertEqual(self.run_applier(), 0)
+        record = self.status("abcdefgh-1")
+        self.assertEqual((record["status"], record["restarted"]), ("unconfirmed", []))
+        self.assertIn(f"not checked: {PRIVATE}", record["error"])
+        self.assertEqual(pa.Accounts(self.base).grants, {"alice": {PRIVATE}})  # live: it starts with the grant
+        self.assertEqual(self.docker.restarts(), [])
+
+    def test_proxy_without_a_published_port_is_unconfirmed(self):
+        with mock.patch.dict(HTTP_PORTS, {PRIVATE: (None, None)}):
+            self.grant("abcdefgh-1", "grant", "alice")
+            self.assertEqual(self.run_applier(), 0)
+        record = self.status("abcdefgh-1")
+        self.assertEqual((record["status"], record["restarted"]), ("unconfirmed", ["xray-" + PRIVATE]))
+
+    def test_proxy_upstream_down_is_unconfirmed(self):
+        self.probe.mode = "noproxies"
+        self.grant("abcdefgh-1", "grant", "alice")
+        self.assertEqual(self.run_applier(), 0)
+        record = self.status("abcdefgh-1")
+        self.assertEqual(record["status"], "unconfirmed")
+        self.assertIn(f"alice on {PRIVATE}", record["error"])
+
+    def test_revoke_of_a_proxy_that_is_no_longer_private(self):
+        self.grant("abcdefgh-1", "grant", "alice", OTHER)
+        self.run_applier()
+        shutil.rmtree(self.other.parent.parent)  # the proxy is gone: render refuses until it is revoked
+        self.docker.SERVICES = FakeDocker.SERVICES
+        self.request("abcdefgh-2", "rotate", "bob")
+        self.assertEqual(self.run_applier(), 0)
+        self.assertEqual(self.status("abcdefgh-2")["stage"], "render")
+        self.grant("abcdefgh-3", "revoke", "alice", OTHER)
+        self.assertEqual(self.run_applier(), 0)
+        record = self.status("abcdefgh-3")
+        self.assertEqual(record["status"], "applied")
+        # the old state no longer renders, so the running services are not known to hold it: all restart
+        self.assertEqual(record["restarted"], ["xray-ha", "xray-" + PRIVATE, "xray-" + PROXY, "blackbox-exporter"])
+        self.assertEqual(pa.Accounts(self.base).grants, {})
+
+    def test_noop_grant_checks_and_restarts_nothing(self):
+        self.grant("abcdefgh-1", "grant", "alice")
+        self.run_applier()
+        self.probe.entry_calls.clear()
+        self.grant("abcdefgh-2", "grant", "alice")
+        self.assertEqual(self.run_applier(), 0)
+        record = self.status("abcdefgh-2")
+        self.assertEqual((record["status"], record["changed"], record["restarted"]), ("applied", False, []))
+        self.assertEqual(self.docker.restarts(), [["xray-" + PRIVATE]])
+        self.assertIn("alice", self.calls("xray-" + PRIVATE))
+
+
+class DeadlineTest(_Base):
+    """
+    verify_timeout bounds the whole verification, probe by probe, not only between rounds: with many logins to check
+    and proxies that hang on every login they accept, a run still ends near verify_timeout, far below the 15 minutes
+    proxy-apply.service may run (TimeoutStartSec), with every result written. Each probe takes its whole timeout on
+    the test's clock.
+    """
+
+    SYSTEMD_LIMIT = 900  # seconds: TimeoutStartSec of proxy-apply.service
+    VERIFY_TIMEOUT = 60  # the applier's default
+
+    def setUp(self):
+        super().setUp()
+        self.other = self.base / "xray" / OTHER / "config" / "config.json"
+        self.other.parent.mkdir(parents=True)
+        self.other.write_text(self.proxy.read_text())
+        pa.render(pa.Accounts(self.base))
+        self.mark_applied()
+        self.docker = GrantDocker(self.base)
+        self.probe = FakeProbe(self.docker)
+        self.probe.time = self.time
+
+    def applier(self):
+        applier = super().applier()
+        applier.verify_timeout = self.VERIFY_TIMEOUT
+        return applier
+
+    def accounts(self, names, proxies=()):
+        accounts = pa.Accounts(self.base)
+        for name in names:
+            accounts.accounts[name] = pa.new_password()
+            if proxies:
+                accounts.grants[name] = set(proxies)
+        accounts.save()
+        pa.render(accounts)
+        self.mark_applied()
+        self.docker.load()
+
+    def timed_run(self):
+        start = self.time[0]
+        code = self.run_applier()
+        return code, self.time[0] - start
+
+    def assert_bounded(self, elapsed, verifications=1):
+        # each verification ends at most one probe after its deadline, plus the pause between two rounds
+        self.assertLessEqual(elapsed, verifications * (self.VERIFY_TIMEOUT + ap.PROBE_TIMEOUT + 2))
+        self.assertLess(elapsed, self.SYSTEMD_LIMIT / 4)
+        self.assertTrue(all(0 < t <= ap.PROBE_TIMEOUT for t in self.probe.timeouts), set(self.probe.timeouts))
+
+    def test_many_rotates_of_granted_accounts(self):
+        names = [f"u{i:02d}" for i in range(40)]
+        self.accounts(names, (PRIVATE, OTHER))
+        before = self.passwords()
+        for i, name in enumerate(names):
+            self.request(f"abcdefgh-{i:02d}", "rotate", name)
+        self.probe.mode = "hang"  # every login a proxy accepts hangs: 122 such checks, 976 s at 8 s each
+        code, elapsed = self.timed_run()
+        self.assertEqual(code, 0)
+        self.assert_bounded(elapsed)
+        for i, name in enumerate(names):
+            record = self.status(f"abcdefgh-{i:02d}")
+            self.assertEqual((record["status"], record["stage"], record["result"]), ("unconfirmed", "verify", True))
+            self.assertIn("no 204 for", record["error"])
+            self.assertNotEqual(self.passwords()[name], before[name])  # live
+        self.assertEqual(len(os.listdir(self.spool.results)), 40)    # every new password handed out
+        self.assertFalse((self.base / ap.BACKUP_DIR).exists())        # committed, nothing left to recover
+
+    def test_many_grants_of_one_proxy(self):
+        names = [f"g{i:02d}" for i in range(64)]
+        self.accounts(names)
+        for i, name in enumerate(names):
+            self.request(f"abcdefgh-{i:02d}", "grant", name, raw=json.dumps(
+                {"id": f"abcdefgh-{i:02d}", "op": "grant", "username": name, "proxy": PRIVATE}).encode())
+        self.probe.mode = "hang"  # 131 checks that must pass, 1,048 s at 8 s each
+        code, elapsed = self.timed_run()
+        self.assertEqual(code, 0)
+        self.assert_bounded(elapsed)
+        self.assertEqual({self.status(f"abcdefgh-{i:02d}")["status"] for i in range(64)}, {"unconfirmed"})
+        self.assertEqual(self.status("abcdefgh-00")["restarted"], ["xray-" + PRIVATE])
+        self.assertEqual(pa.Accounts(self.base).grants, {name: {PRIVATE} for name in names})
+
+    def test_refusals_not_confirmed_in_time_roll_back_in_time(self):
+        """
+        Every login hangs, refused ones too: no 407 by the deadline fails and rolls back; the rollback's own check
+        (whose wrong password gets no 407 either) is bounded the same way, and reports the rollback as unfinished.
+        """
+        names = [f"u{i:02d}" for i in range(40)]
+        self.accounts(names, (PRIVATE, OTHER))
+        files = self.files()
+        for i, name in enumerate(names):
+            self.request(f"abcdefgh-{i:02d}", "rotate", name)
+        self.probe.mode = "hang-all"
+        code, elapsed = self.timed_run()
+        self.assertEqual(code, 1)  # a rollback that did not finish
+        self.assert_bounded(elapsed, verifications=2)  # the apply's and the rollback's
+        record = self.status("abcdefgh-00")
+        self.assertEqual((record["status"], record["stage"], record["restored"]), ("failed", "verify", False))
+        self.assertFalse((self.base / pa.APPLIED_FILE).exists())  # the next run restarts and checks everything
+        self.assertTrue(record["error"].endswith("a wrong password on ha-private (-)"), record["error"])  # no 407 in time
+        self.assertEqual(self.files(), files)
+        self.assertEqual(os.listdir(self.spool.results), [])
 
 
 class OpenDocker(FakeDocker):

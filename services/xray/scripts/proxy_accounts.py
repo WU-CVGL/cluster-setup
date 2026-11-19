@@ -8,14 +8,17 @@ Proxy accounts: one protected accounts file, from which every authenticated prox
     proxy_accounts.py disable NAME           keep the account, refuse it at the entries that require accounts
     proxy_accounts.py enable NAME
     proxy_accounts.py admin NAME on|off      admin accounts may use ha-private and the private proxies
-    proxy_accounts.py list                   account names, admins marked, without passwords
+    proxy_accounts.py grant NAME PROXY       NAME may also use the private proxy PROXY at its own entry
+    proxy_accounts.py revoke NAME PROXY      take that back
+    proxy_accounts.py list                   account names, admins and granted private proxies marked, no passwords
     proxy_accounts.py status [--json]        accounts, proxies and their ports, raw auth and the last applied file hash
     proxy_accounts.py raw-auth [on|off]      show or set authentication on the public proxies (off by default)
     proxy_accounts.py render                 write the configs below from the accounts file
 
 Proxies: xray/public-proxies.txt lists the public proxies. Every other proxy (xray/<name>/) is private: for admin
-accounts only. xray/open-proxies.txt lists the open proxies, public proxies whose own entries never require an
-account, also with raw auth; a private proxy is never open.
+accounts, and for the accounts granted that proxy (grant), at its own entry only. xray/open-proxies.txt lists the
+open proxies, public proxies whose own entries never require an account, also with raw auth; a private proxy is never
+open.
 
 The HA entry xray-ha has two entries: ha-general (inbounds http_IN, socks_IN) over the pool-* outbounds, which
 must all lead to public proxies, and ha-private (inbounds ha-private_http_IN, ha-private_socks_IN) over the pool-*
@@ -27,13 +30,18 @@ render writes, relative to services/ (all gitignored, mode 0600, replaced atomic
                                  log in as svc-ha to every proxy that requires accounts
   blackbox/config/blackbox.yml   blackbox/blackbox.example.yml with svc-monitor in the proxy URLs of the HA
                                  entries and the private proxies, and of the public proxies with raw auth
-  xray/*/config/config.json      private proxies: the enabled admins, svc-ha and svc-monitor, always. Public proxies:
+  xray/*/config/config.json      private proxies: the enabled admins, the enabled accounts granted that proxy, svc-ha
+                                 and svc-monitor, always. Public proxies:
                                  with raw auth, every enabled account; without it, and on the open proxies always,
                                  inbounds that carry accounts back to no authentication, other files untouched
 
 Account names are cluster usernames; names starting with svc- are service accounts:
 svc-ha (the HA entry's login to the proxies), svc-monitor (the probes), svc-docker-<node> (a node's Docker daemon).
-svc-ha and svc-monitor cannot be disabled or removed; service accounts are never admins. A disabled account is
+svc-ha and svc-monitor cannot be disabled or removed; service accounts are never admins and are never granted a
+proxy. Only a private proxy that has a config can be granted, and never to an admin account, which may use every
+private proxy already; an account keeps its grants when it becomes an admin, and they count again once it is no
+longer one. A grant to a proxy that is public or has no config any more stops render until it is revoked. Grants never
+change ha-private or ha-general. A disabled account is
 left out of every rendered config: the open proxies' own entries, and with raw auth off every public proxy's own
 entry, require no account, so a disabled account can still use them.
 
@@ -230,7 +238,9 @@ def sha256_text(text: str) -> str:
 class Accounts:
     """
     The accounts file, version 3: {"version": 3, "raw_auth": bool,
-    "accounts": {name: {"password": str, "enabled": bool, "admin": bool}}}.
+    "accounts": {name: {"password": str, "enabled": bool, "admin": bool[, "proxies": [private proxy, ...]]}}}.
+    "proxies", the private proxies granted to the account, is optional and written only when it is not empty: a file
+    without grants is the same as before grants existed.
     Older files are read and written back as version 3 at the next change: version 2 ({"password", "enabled"}
     entries) with no admins, and a file without "version", version 1 ({name: password}), with every account
     enabled and no admins.
@@ -243,6 +253,7 @@ class Accounts:
         self.accounts = {}  # type: Dict[str, str]
         self.disabled = set()  # type: Set[str]
         self.admins = set()  # type: Set[str]
+        self.grants = {}  # type: Dict[str, Set[str]]  # name -> granted private proxies, never empty
         self.loaded_text = None  # type: Optional[str]
         if self.path.exists():
             self.loaded_text = self.path.read_text(encoding="utf-8")
@@ -257,12 +268,13 @@ class Accounts:
         if not isinstance(entries, dict):
             raise AccountsError(f"{ACCOUNTS_FILE}: accounts is not an object")
         keys = {2: {"password", "enabled"}, 3: {"password", "enabled", "admin"}}.get(version)
-        accounts, disabled, admins = {}, set(), set()
+        optional = {"proxies"} if version == 3 else set()
+        accounts, disabled, admins, grants = {}, set(), set(), {}
         for name, entry in entries.items():
             validate_name(name)
             if version == 1 and isinstance(entry, str):
                 accounts[name] = entry
-            elif (keys is not None and isinstance(entry, dict) and set(entry) == keys
+            elif (keys is not None and isinstance(entry, dict) and keys <= set(entry) <= keys | optional
                   and isinstance(entry["password"], str) and isinstance(entry["enabled"], bool)
                   and isinstance(entry.get("admin", False), bool)):
                 accounts[name] = entry["password"]
@@ -270,6 +282,15 @@ class Accounts:
                     disabled.add(name)
                 if entry.get("admin", False):
                     admins.add(name)
+                if "proxies" in entry:
+                    proxies = entry["proxies"]
+                    if not isinstance(proxies, list) or not all(isinstance(p, str) and PROXY_NAME_RE.fullmatch(p)
+                                                                for p in proxies) \
+                            or len(set(proxies)) != len(proxies):
+                        raise AccountsError(f"{ACCOUNTS_FILE}: proxies of {name!r} must be a list of distinct "
+                                            "proxy names")
+                    if proxies:
+                        grants[name] = set(proxies)
             else:
                 raise AccountsError(f"{ACCOUNTS_FILE}: unknown version {version!r} or entry format for {name!r}")
         for name in PROTECTED:
@@ -278,12 +299,18 @@ class Accounts:
         for name in admins:
             if kind(name) == "service":
                 raise AccountsError(f"{ACCOUNTS_FILE}: service account {name} cannot be an admin")
+        for name in grants:
+            if kind(name) == "service":
+                raise AccountsError(f"{ACCOUNTS_FILE}: service account {name} cannot be granted a proxy")
         self.raw_auth = bool(data.get("raw_auth", False))
-        self.accounts, self.disabled, self.admins = accounts, disabled, admins
+        self.accounts, self.disabled, self.admins, self.grants = accounts, disabled, admins, grants
 
     def text(self) -> str:
-        entries = {name: {"password": pw, "enabled": name not in self.disabled, "admin": name in self.admins}
-                   for name, pw in sorted(self.accounts.items())}
+        entries = {}
+        for name, pw in sorted(self.accounts.items()):
+            entries[name] = {"password": pw, "enabled": name not in self.disabled, "admin": name in self.admins}
+            if self.grants.get(name):
+                entries[name]["proxies"] = sorted(self.grants[name])
         data = {"version": ACCOUNTS_VERSION, "raw_auth": self.raw_auth, "accounts": entries}
         return json.dumps(data, indent=2) + "\n"
 
@@ -327,6 +354,38 @@ class Accounts:
         """An enabled admin: may use ha-private and the private proxies."""
         return self.enabled(name) and name in self.admins
 
+    def granted(self, name: str) -> List[str]:
+        """The private proxies granted to an account, sorted; [] when none."""
+        return sorted(self.grants.get(name, ()))
+
+    def grant(self, name: str, proxy: str, private: Set[str]) -> bool:
+        """
+        Grant an account a private proxy, one of private (the private proxies that have a config); returns whether
+        anything changed. Refused for a service account, an admin account and any other proxy name.
+        """
+        self.require(name)
+        if kind(name) == "service":
+            raise AccountsError(f"{name} is a service account and cannot be granted a proxy")
+        if name in self.admins:
+            raise AccountsError(f"{name} is an admin account and may use every private proxy already")
+        if not PROXY_NAME_RE.fullmatch(proxy) or proxy not in private:
+            raise AccountsError(f"{proxy!r} is not a private proxy: only a proxy that has a config (xray/<name>/) "
+                                f"and is not in {PUBLIC_PROXIES_FILE} can be granted")
+        if proxy in self.grants.get(name, ()):
+            return False
+        self.grants.setdefault(name, set()).add(proxy)
+        return True
+
+    def revoke(self, name: str, proxy: str) -> bool:
+        """Take a granted proxy back, whatever it is now; returns whether anything changed."""
+        self.require(name)
+        if proxy not in self.grants.get(name, ()):
+            return False
+        self.grants[name].discard(proxy)
+        if not self.grants[name]:
+            del self.grants[name]
+        return True
+
     def remove(self, name: str) -> None:
         self.require(name)
         if name in PROTECTED:
@@ -334,6 +393,7 @@ class Accounts:
         del self.accounts[name]
         self.disabled.discard(name)
         self.admins.discard(name)
+        self.grants.pop(name, None)
 
     def pairs(self, exclude: Tuple[str, ...] = ()) -> List[Tuple[str, str]]:
         """The enabled accounts, without those in exclude."""
@@ -348,14 +408,21 @@ class Accounts:
         """Who may log in to ha-private: the enabled admins and svc-monitor."""
         return sorted(self.admin_pairs() + [(MONITOR, self.accounts[MONITOR])])
 
-    def proxy_users(self, private: bool, open_: bool = False) -> Optional[List[Tuple[str, str]]]:
+    def grantee_pairs(self, proxy: str) -> List[Tuple[str, str]]:
+        """The enabled accounts granted proxy that are not admins (the admins are there already)."""
+        return [(name, pw) for name, pw in sorted(self.accounts.items())
+                if proxy in self.grants.get(name, ()) and self.enabled(name) and not self.is_admin(name)]
+
+    def proxy_users(self, private: bool, open_: bool = False,
+                    proxy: Optional[str] = None) -> Optional[List[Tuple[str, str]]]:
         """
-        Who may log in to a proxy's own entry: on a private proxy the enabled admins, svc-ha and svc-monitor, always;
-        on an open proxy nobody needs to (None), whatever raw auth says; on another public proxy every enabled account
-        with raw auth, else nobody needs to.
+        Who may log in to a proxy's own entry: on a private proxy the enabled admins, the enabled accounts granted
+        that proxy, svc-ha and svc-monitor, always; on an open proxy nobody needs to (None), whatever raw auth says;
+        on another public proxy every enabled account with raw auth, else nobody needs to.
         """
         if private:
-            return sorted(self.admin_pairs() + [(name, self.accounts[name]) for name in PROTECTED])
+            granted = self.grantee_pairs(proxy) if proxy is not None else []
+            return sorted(self.admin_pairs() + granted + [(name, self.accounts[name]) for name in PROTECTED])
         return self.pairs() if self.raw_auth and not open_ else None
 
 
@@ -429,7 +496,9 @@ def status(accounts: Accounts) -> dict:
         "disabled_refused_at": [GENERAL, HA_PRIVATE, "private-proxies"]
                                + (["public-proxies"] if accounts.raw_auth else []),
         "accounts": [{"name": name, "kind": kind(name), "enabled": accounts.enabled(name),
-                      "admin": name in accounts.admins, "protected": name in PROTECTED}
+                      "admin": name in accounts.admins, "protected": name in PROTECTED,
+                      # the private proxies granted to the account, usable at their own entries while it is enabled
+                      "proxies": accounts.granted(name)}
                      for name in sorted(accounts.accounts)],
         "proxies": [{"name": name, "access": "public" if name in public else "private",
                      # an open proxy's own entry never requires an account
@@ -597,6 +666,21 @@ def has_logins(config: dict) -> bool:
                if i.get("protocol") in ("http", "socks"))
 
 
+def private_proxies(base_dir: Path, public: Optional[Set[str]] = None) -> Set[str]:
+    """The private proxies: those with a config (xray/<name>/config/config.json) not in public-proxies.txt."""
+    public = public_proxies(base_dir) if public is None else public
+    return set(proxy_names(base_dir)) - public
+
+
+def check_grants(accounts: Accounts, private: Set[str]) -> None:
+    """Every granted proxy must be a private proxy with a config; else the grant must be revoked first."""
+    for name in sorted(accounts.grants):
+        stale = sorted(accounts.grants[name] - private)
+        if stale:
+            raise AccountsError(f"{name} is granted {', '.join(stale)}, which is not a private proxy (public, or no "
+                                f"config): revoke it with 'revoke {name} {stale[0]}' first")
+
+
 def render_files(accounts: Accounts) -> List[Tuple[Path, str]]:
     """
     Render every config in memory: the (path, text) of each file that render keeps, changed or not. A proxy
@@ -609,6 +693,7 @@ def render_files(accounts: Accounts) -> List[Tuple[Path, str]]:
             raise AccountsError(f"service account {name} is missing: run 'add {name}' first")
     public = public_proxies(base)
     open_ = open_proxies(base, public)
+    check_grants(accounts, private_proxies(base, public))
     outputs = []  # type: List[Tuple[Path, str]]
     ha = render_ha(json.loads((base / HA_EXAMPLE).read_text(encoding="utf-8")), accounts, public, open_)
     outputs.append((base / HA_CONFIG, json.dumps(ha, indent=4) + "\n"))
@@ -616,7 +701,7 @@ def render_files(accounts: Accounts) -> List[Tuple[Path, str]]:
                     render_blackbox((base / BLACKBOX_EXAMPLE).read_text(encoding="utf-8"), accounts, public)))
     for path in sorted(base.glob(RAW_CONFIG_GLOB)):
         name = path.parent.parent.name
-        raw_users = accounts.proxy_users(private=name not in public, open_=name in open_)
+        raw_users = accounts.proxy_users(private=name not in public, open_=name in open_, proxy=name)
         old_text = path.read_text(encoding="utf-8")
         old = json.loads(old_text)
         if raw_users is None and not has_logins(old):
@@ -690,6 +775,10 @@ def main(argv: Optional[List[str]] = None) -> int:
     p = sub.add_parser("admin")
     p.add_argument("name")
     p.add_argument("state", choices=("on", "off"))
+    for command in ("grant", "revoke"):
+        p = sub.add_parser(command)
+        p.add_argument("name")
+        p.add_argument("proxy", help="a private proxy (xray/<proxy>/)")
     sub.add_parser("list")
     sub.add_parser("status").add_argument("--json", action="store_true", help="machine-readable, for the portal")
     sub.add_parser("raw-auth").add_argument("state", nargs="?", choices=("on", "off"))
@@ -729,6 +818,22 @@ def main(argv: Optional[List[str]] = None) -> int:
                 what = f"admin {args.state}" if args.command == "admin" else args.command
                 print(f"{what}: {name}{note}; run render, then restart the proxies whose configs it writes",
                       file=sys.stderr)
+            elif args.command in ("grant", "revoke"):
+                name = validate_name(args.name)
+                if args.command == "grant":
+                    changed = accounts.grant(name, args.proxy, private_proxies(accounts.base_dir))
+                else:
+                    changed = accounts.revoke(name, args.proxy)
+                if not changed:
+                    print(f"{args.command}: {name} {args.proxy}: no change", file=sys.stderr)
+                    return 0
+                accounts.save()
+                if accounts.enabled(name) and name not in accounts.admins:
+                    then = f"run render, then restart {PROXY_HOST_PREFIX + args.proxy}"
+                else:  # its logins there do not change while it is disabled or an admin
+                    then = "run render; no proxy config changes while the account is " + \
+                        ("disabled" if not accounts.enabled(name) else "an admin")
+                print(f"{args.command}: {name} {args.proxy}; {then}", file=sys.stderr)
             elif args.command == "raw-auth":
                 accounts.raw_auth = args.state == "on"
                 accounts.save()
@@ -749,7 +854,9 @@ def main(argv: Optional[List[str]] = None) -> int:
 def read_command(accounts: Accounts, args: argparse.Namespace) -> int:
     if args.command == "list":
         for name in sorted(accounts.accounts):
-            print(f"{name} admin" if name in accounts.admins else name)
+            granted = accounts.granted(name)
+            print(name + (" admin" if name in accounts.admins else "")
+                  + (f" proxies={','.join(granted)}" if granted else ""))
     elif args.command == "raw-auth":
         print("on" if accounts.raw_auth else "off")
     elif args.json:
@@ -764,7 +871,8 @@ def read_command(accounts: Accounts, args: argparse.Namespace) -> int:
         print(f"raw auth: {'on' if accounts.raw_auth else 'off'}; disabled accounts are refused at {scope}")
         for entry in view["accounts"]:
             state = "enabled" if entry["enabled"] else "disabled"
-            flags = ("  admin" if entry["admin"] else "") + ("  protected" if entry["protected"] else "")
+            flags = ("  admin" if entry["admin"] else "") + ("  protected" if entry["protected"] else "") \
+                + (f"  proxies {','.join(entry['proxies'])}" if entry["proxies"] else "")
             print(f"{entry['name']:<32} {entry['kind']:<8} {state}{flags}")
         for proxy in view["proxies"]:
             access = "private" if proxy["access"] != "public" else "public open" if proxy["open"] else "public"

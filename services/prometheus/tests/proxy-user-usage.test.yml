@@ -1,0 +1,46 @@
+# The users' traffic totals (services/proxy-portal/portal/queries.py USAGE_TOTALS, the same as the Proxy Usage
+# dashboard's User totals; the portal's tests check that the expressions below are those): every proxy's own entry
+# and the HA entry count a user's traffic under the account's name, so a user's total adds them all up, a private
+# proxy granted to the account included; the service accounts' traffic (svc-ha, through which the HA entry reaches
+# the proxies) is left out. Counters grow every 30 s for a whole day.
+rule_files: []
+evaluation_interval: 30s
+tests:
+  - name: a user's traffic at a granted private proxy, through the HA entry and at a public proxy
+    interval: 30s
+    input_series:
+      # alice at the private proxy granted to her, at its own address
+      - series: 'v2ray_traffic_downlink_bytes_total{job="v2ray",instance="xray-jpty1-bwh-2tb-exporter:9550",proxy_role="raw",dimension="user",target="alice"}'
+        values: '0+100x2880'
+      - series: 'v2ray_traffic_uplink_bytes_total{job="v2ray",instance="xray-jpty1-bwh-2tb-exporter:9550",proxy_role="raw",dimension="user",target="alice"}'
+        values: '0+20x2880'
+      # alice through the Auto-switching Proxy
+      - series: 'v2ray_traffic_downlink_bytes_total{job="v2ray",instance="xray-ha-exporter:9550",proxy_role="entry",dimension="user",target="alice"}'
+        values: '0+10x2880'
+      - series: 'v2ray_traffic_uplink_bytes_total{job="v2ray",instance="xray-ha-exporter:9550",proxy_role="entry",dimension="user",target="alice"}'
+        values: '0+2x2880'
+      # the HA entry's own login at a public proxy: not a user's
+      - series: 'v2ray_traffic_downlink_bytes_total{job="v2ray",instance="xray-usca5-bwh-sla-1tb-exporter:9550",proxy_role="raw",dimension="user",target="svc-ha"}'
+        values: '0+1000x2880'
+      - series: 'v2ray_traffic_uplink_bytes_total{job="v2ray",instance="xray-usca5-bwh-sla-1tb-exporter:9550",proxy_role="raw",dimension="user",target="svc-ha"}'
+        values: '0+1000x2880'
+      # bob at a public proxy's own address
+      - series: 'v2ray_traffic_downlink_bytes_total{job="v2ray",instance="xray-usca5-bwh-sla-1tb-exporter:9550",proxy_role="raw",dimension="user",target="bob"}'
+        values: '0+50x2880'
+      - series: 'v2ray_traffic_uplink_bytes_total{job="v2ray",instance="xray-usca5-bwh-sla-1tb-exporter:9550",proxy_role="raw",dimension="user",target="bob"}'
+        values: '0+5x2880'
+    promql_expr_test:
+      - expr: 'sum by (target) (increase(v2ray_traffic_downlink_bytes_total{job="v2ray",dimension="user",target!~"svc-.*"}[24h]))'
+        eval_time: 24h
+        exp_samples:
+          - labels: '{target="alice"}'
+            value: 316800
+          - labels: '{target="bob"}'
+            value: 144000
+      - expr: 'sum by (target) (increase(v2ray_traffic_uplink_bytes_total{job="v2ray",dimension="user",target!~"svc-.*"}[24h]))'
+        eval_time: 24h
+        exp_samples:
+          - labels: '{target="alice"}'
+            value: 63360
+          - labels: '{target="bob"}'
+            value: 14400

@@ -1177,7 +1177,7 @@
         "type": "prometheus",
         "uid": "${prometheus_source}"
       },
-      "description": "Each xray proxy, probed through its own ports and never through the HA entry. Pool: ha-general proxies carry the traffic of ha-general and ha-private; ha-private proxies only ha-private's; none: probed only. Access: Private means the proxy's own entry accepts only admin accounts. Xray API and traffic come from the proxy's exporter and do not show whether requests get through.",
+      "description": "Each xray proxy, probed through its own ports and never through the HA entry. Pool: ha-general proxies carry the traffic of ha-general and ha-private; ha-private proxies only ha-private's; none: probed only. Access: Private means the proxy's own entry accepts only admin accounts and the accounts given that proxy. Xray API and traffic come from the proxy's exporter and do not show whether requests get through.",
       "gridPos": {
         "h": 11,
         "w": 24,

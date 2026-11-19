@@ -69,7 +69,21 @@ def admin_only(kind):
 _restart_text = accounts.restart_text
 
 
-def _effect_text(op, name):
+def _effect_text(op, name, proxy=None, row=None):
+    # a grant or revoke changes this account's access to one private proxy: say just that, with what stays
+    if op == "grant":
+        return _("Gives %(name)s the private proxy %(proxy)s, to use at its own address. The private proxies it was "
+                 "given before stay as they are, and the Private Auto-switching Proxy stays for admin accounts "
+                 "only.") % {"name": name, "proxy": proxy}
+    if op == "revoke" and row is not None and row.admin:
+        return _("Takes the private proxy %(proxy)s back from %(name)s. As an admin account, it still reaches "
+                 "%(proxy)s and every other private proxy.") % {"name": name, "proxy": proxy}
+    if op == "revoke":
+        return _("Takes the private proxy %(proxy)s back from %(name)s: %(proxy)s stops accepting it. The other "
+                 "private proxies it was given stay as they are.") % {"name": name, "proxy": proxy}
+    if op == "admin-off" and row is not None and row.proxies:
+        return _("%(name)s stops being an admin account: the Private Auto-switching Proxy and the private proxies "
+                 "refuse it, except %(proxies)s, which it was given.") % {"name": name, "proxies": names(row.proxies)}
     return {
         "add": _("Creates the proxy account %(name)s with a new random password, which you see once when the change "
                  "is live. It may use the Auto-switching Proxy and the public proxies."),
@@ -120,7 +134,8 @@ def _account_rows(status, query):
         if query and query not in row.name:
             continue
         rows.append({"name": row.name, "kind": row.kind, "enabled": row.enabled, "admin": row.admin,
-                     "protected": row.protected, "actions": accounts.actions(row), "pending": pending.get(row.name)})
+                     "protected": row.protected, "proxies": list(row.proxies),
+                     "actions": accounts.actions(row, status), "pending": pending.get(row.name)})
     return rows
 
 
@@ -163,7 +178,7 @@ def users_view(status, query="", flt=""):
     for name in sorted(set(cluster) | set(user_accounts)):
         user, account = cluster.get(name), user_accounts.get(name)
         if account is not None:
-            actions = accounts.actions(account)
+            actions = accounts.actions(account, status)
         elif status.available and accounts.valid_name(name) and accounts.kind(name) == "user":
             actions = ["add"]
         else:
@@ -173,6 +188,7 @@ def users_view(status, query="", flt=""):
                "account": None if not status.available else "none" if account is None
                else "enabled" if account.enabled else "disabled",
                "private": bool(account and account.admin), "protected": bool(account and account.protected),
+               "proxies": list(account.proxies) if account else [],
                "valid_name": accounts.valid_name(name), "actions": actions, "pending": pending.get(name)}
         for key in USER_FILTERS:
             counts[key] += _user_filter_match(key, row)
@@ -206,11 +222,11 @@ def users_page(request):
     }))
 
 
-def _create(request, op, username):
+def _create(request, op, username, proxy=None):
     """Check, record and write one request. Raises accounts.Refused before anything is written."""
     status = proxy_status.load()
-    accounts.check(op, username, status)
-    return accounts.submit(op, username, session_user(request))
+    accounts.check(op, username, status, proxy)
+    return accounts.submit(op, username, session_user(request), proxy=proxy)
 
 
 @admin_only("page")
@@ -220,23 +236,34 @@ def confirm_page(request, op):
         raise Http404()
     source = request.POST if request.method == "POST" else request.GET
     username = (source.get("username") or "").strip()[:128]
+    proxy = None
+    if op in accounts.GRANT_OPS:  # no other op names a proxy
+        proxy = (source.get("proxy") or "").strip()[:200] or None
     status = proxy_status.load()
     row = next((r for r in status.all_accounts if r.name == username), None)
     context = {"nav": "admin", "subnav": "users", "op": op, "username": username, "row": row, "status": status,
-               "destructive": op in accounts.DESTRUCTIVE, "error": None}
+               "destructive": op in accounts.DESTRUCTIVE, "error": None, "proxy": proxy, "choices": None}
     try:
-        accounts.check(op, username, status)
+        if op in accounts.GRANT_OPS and proxy is None and request.method == "GET":
+            # first the proxy: a grant offers the private proxies the account may not use yet, a revoke those given
+            accounts.check_account(op, username, status)
+            context["choices"] = accounts.proxy_choices(op, row, status)
+            if not context["choices"]:
+                raise accounts.Refused(_("There is no private proxy to choose for %(name)s.") % {"name": username},
+                                       409)
+            return render(request, "portal/admin/confirm.html", context)
+        accounts.check(op, username, status, proxy)
     except accounts.Refused as e:
         context["error"] = str(e)
         return render(request, "portal/admin/confirm.html", context, status=e.status)
-    context.update(effect=_effect_text(op, username), restart=_restart_text(op, row, status),
+    context.update(effect=_effect_text(op, username, proxy, row), restart=_restart_text(op, row, status, proxy=proxy),
                    raw_auth=raw_auth_text(status) if op in ("disable", "enable", "remove") else None)
     if request.method == "POST":
         if op in accounts.DESTRUCTIVE and request.POST.get("confirm", "").strip() != username:
             context["error"] = _("Type the account name to confirm.")
             return render(request, "portal/admin/confirm.html", context, status=400)
         try:
-            created = _create(request, op, username)
+            created = _create(request, op, username, proxy)
         except accounts.Refused as e:
             context["error"] = str(e)
             return render(request, "portal/admin/confirm.html", context, status=e.status)
@@ -372,15 +399,17 @@ def api_requests(request):
             else {k: v for k, v in request.POST.items() if k != "csrfmiddlewaretoken"}
     except (UnicodeDecodeError, ValueError):
         return JsonResponse({"error": "not UTF-8 JSON"}, status=400)
-    if not isinstance(body, dict) or not set(body) <= {"op", "username", "confirm"} \
-            or not all(isinstance(v, str) for v in body.values()):
-        return JsonResponse({"error": "expected an object with op, username and, for rotate, disable, remove and "
-                                      "admin-off, confirm (the account name)"}, status=400)
-    op, username = body.get("op", ""), body.get("username", "")
+    if not isinstance(body, dict) or not set(body) <= {"op", "username", "confirm", "proxy"} \
+            or not all(isinstance(v, str) for v in body.values()) \
+            or ("proxy" in body and body.get("op") not in accounts.GRANT_OPS):
+        return JsonResponse({"error": "expected an object with op, username, for grant and revoke proxy (a private "
+                                      "proxy) and, for rotate, disable, remove, admin-off and revoke, confirm (the "
+                                      "account name)"}, status=400)
+    op, username, proxy = body.get("op", ""), body.get("username", ""), body.get("proxy")
     if op in accounts.DESTRUCTIVE and body.get("confirm") != username:
         return JsonResponse({"error": "confirm must equal the account name for this operation"}, status=400)
     try:
-        row = _create(request, op, username)
+        row = _create(request, op, username, proxy)
     except accounts.Refused as e:
         return JsonResponse({"error": str(e)}, status=e.status)
     return JsonResponse(_request_json(row, session_user(request), proxy_status.load()), status=202)

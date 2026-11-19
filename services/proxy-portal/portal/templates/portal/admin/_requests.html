@@ -7,7 +7,7 @@
     <tr>
       <td>{{ row.requested_at|date:"Y-m-d H:i:s" }}</td>
       <td>{{ row.requested_by }}</td>
-      <td>{{ row.op|op_label }}</td>
+      <td>{{ row.op|op_label }}{% if row.proxy %} · <code>{{ row.proxy }}</code>{% endif %}</td>
       <td class="mono">{{ row.username }}</td>
       <td>{% include "portal/admin/_state.html" with level=row|request_level %}{% if row.state == 'failed' and row.restored is False %} <span class="chip bad">{% translate "Not restored" %}</span>{% endif %}</td>
       <td class="wide">{% if row.stage %}{{ row.stage|stage_label }}{% else %}—{% endif %}</td>

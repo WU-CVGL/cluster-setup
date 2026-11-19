@@ -235,12 +235,13 @@ class UsersPageTest(PortalTestCase):
         rows, data = self.rows()
         self.assertEqual(rows["alice"], {"name": "alice", "listed": True, "active": True, "determined_admin": False,
                                          "account": "enabled", "private": False, "protected": False,
-                                         "valid_name": True, "actions": ["rotate", "disable", "admin-on", "remove"],
+                                         "proxies": [], "valid_name": True,
+                                         "actions": ["rotate", "disable", "admin-on", "grant", "remove"],
                                          "pending": None})
         self.assertEqual((rows["carol"]["determined_admin"], rows["carol"]["private"]), (True, True))
         self.assertEqual(rows["carol"]["actions"], ["rotate", "disable", "admin-off", "remove"])
         self.assertEqual((rows["bob"]["account"], rows["bob"]["actions"]),
-                         ("disabled", ["rotate", "enable", "admin-on", "remove"]))
+                         ("disabled", ["rotate", "enable", "admin-on", "grant", "remove"]))
         self.assertEqual((rows["frank"]["account"], rows["frank"]["actions"]), ("none", ["add"]))
         self.assertEqual((rows["Hana.W"]["valid_name"], rows["Hana.W"]["actions"]), (False, []))
         self.assertEqual((rows["gina"]["active"], rows["gina"]["account"]), (False, "none"))

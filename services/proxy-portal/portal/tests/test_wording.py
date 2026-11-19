@@ -105,6 +105,37 @@ class WordingTest(PortalTestCase):
             self.sign_in("carol")
             self.check("/admin/users", **headers)
 
+    def test_private_proxy_pages(self):
+        """A granted user's My access, and the admins' pages to give and take back a private proxy."""
+        jp = "jpty1-bwh-2tb"
+
+        def grants(data):
+            for account in data["accounts"]:
+                account["proxies"] = {"alice": [jp], "bob": [jp], "carol": [jp]}.get(account["name"], [])
+        self.write_status(grants)
+        for headers in ({}, {"HTTP_ACCEPT_LANGUAGE": "zh-CN"}):
+            for user in ("alice", "bob"):  # on, off
+                self.client.post("/signout")
+                self.sign_in(user)
+                self.assertIn(jp, self.check("/access", **headers))
+            self.client.post("/signout")
+            self.sign_in("carol")
+            self.check("/admin/users", **headers)
+            for op, query in (("grant", "username=alice"),
+                              ("grant", "username=bob&proxy=miyaip-uk-01_relay_jpty1-bwh-2tb"),
+                              ("revoke", "username=alice"), ("revoke", f"username=alice&proxy={jp}"),
+                              ("admin-off", "username=carol"), ("rotate", "username=alice")):
+                self.check(f"/admin/accounts/{op}?{query}", **headers)
+            self.check(f"/admin/accounts/grant?username=carol&proxy={jp}", status=409, **headers)
+            response = self.client.post("/api/admin/requests", json.dumps({"op": "revoke", "username": "alice",
+                                                                            "proxy": jp, "confirm": "alice"}),
+                                        content_type="application/json", **headers)
+            request_id = response.json()["id"]
+            self.plain(response.json()["text"], "revoke json", bool(headers))
+            AccountRequest.objects.filter(id=request_id).update(state="unconfirmed")
+            self.check(f"/admin/requests/{request_id}", **headers)
+            self.check("/admin/log", **headers)
+
     def test_request_pages(self):
         """The applier's stage and restarted services as admins read them; the stored values are the applier's."""
         self.sign_in("carol")
