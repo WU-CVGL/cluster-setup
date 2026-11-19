@@ -169,23 +169,23 @@ tests:
   - name: proxies moved during a reload and across a restart
     interval: 30s
     input_series:
-      # s1: public, passing all along
-      - series: 'up{job="proxy-probe",instance="s1_http",entry="s1",protocol="http",kind="raw",pool="ha-general",access="public"}'
+      # k1: public, passing all along
+      - series: 'up{job="proxy-probe",instance="k1_http",entry="k1",protocol="http",kind="raw",pool="ha-general",access="public"}'
         values: '1x960'
-      - series: 'probe_success{job="proxy-probe",instance="s1_http",entry="s1",protocol="http",kind="raw",pool="ha-general",access="public"}'
+      - series: 'probe_success{job="proxy-probe",instance="k1_http",entry="k1",protocol="http",kind="raw",pool="ha-general",access="public"}'
         values: '1x960'
-      - series: 'up{job="proxy-probe",instance="s1_socks",entry="s1",protocol="socks",kind="raw",pool="ha-general",access="public"}'
+      - series: 'up{job="proxy-probe",instance="k1_socks",entry="k1",protocol="socks",kind="raw",pool="ha-general",access="public"}'
         values: '1x960'
-      - series: 'probe_success{job="proxy-probe",instance="s1_socks",entry="s1",protocol="socks",kind="raw",pool="ha-general",access="public"}'
+      - series: 'probe_success{job="proxy-probe",instance="k1_socks",entry="k1",protocol="socks",kind="raw",pool="ha-general",access="public"}'
         values: '1x960'
-      # s2: private, passing all along
-      - series: 'up{job="proxy-probe",instance="s2_http",entry="s2",protocol="http",kind="raw",pool="ha-private",access="private"}'
+      # k2: private, passing all along
+      - series: 'up{job="proxy-probe",instance="k2_http",entry="k2",protocol="http",kind="raw",pool="ha-private",access="private"}'
         values: '1x960'
-      - series: 'probe_success{job="proxy-probe",instance="s2_http",entry="s2",protocol="http",kind="raw",pool="ha-private",access="private"}'
+      - series: 'probe_success{job="proxy-probe",instance="k2_http",entry="k2",protocol="http",kind="raw",pool="ha-private",access="private"}'
         values: '1x960'
-      - series: 'up{job="proxy-probe",instance="s2_socks",entry="s2",protocol="socks",kind="raw",pool="ha-private",access="private"}'
+      - series: 'up{job="proxy-probe",instance="k2_socks",entry="k2",protocol="socks",kind="raw",pool="ha-private",access="private"}'
         values: '1x960'
-      - series: 'probe_success{job="proxy-probe",instance="s2_socks",entry="s2",protocol="socks",kind="raw",pool="ha-private",access="private"}'
+      - series: 'probe_success{job="proxy-probe",instance="k2_socks",entry="k2",protocol="socks",kind="raw",pool="ha-private",access="private"}'
         values: '1x960'
       # u1: public, its probe up until 5 h 50 min without a result
       - series: 'up{job="proxy-probe",instance="u1_http",entry="u1",protocol="http",kind="raw",pool="ha-general",access="public"}'
