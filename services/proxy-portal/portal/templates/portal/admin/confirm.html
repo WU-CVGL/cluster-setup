@@ -13,7 +13,7 @@
 {% elif choices %}
 <form class="card card-pad" method="get" action="{% url 'admin_confirm' op %}">
   <input type="hidden" name="username" value="{{ username }}">
-  <div class="notice"><p>{% if op == 'grant' %}{% blocktranslate with name=username %}Choose the private proxy that {{ name }} may use at its own address. The Private Auto-switching Proxy stays for admin accounts only.{% endblocktranslate %}{% else %}{% blocktranslate with name=username %}Choose the private proxy that stops accepting {{ name }}.{% endblocktranslate %}{% endif %}</p></div>
+  <div class="notice"><p>{% if op == 'grant' %}{% blocktranslate with name=username %}Choose the private proxy to give {{ name }}, to use at its own address. The private proxies it was given before stay as they are.{% endblocktranslate %}{% else %}{% blocktranslate with name=username %}Choose the private proxy to take back from {{ name }}.{% endblocktranslate %}{% endif %}</p></div>
   <div class="field"><label for="proxy">{% translate "Private proxy" %}</label>
     <select class="input mono" id="proxy" name="proxy" required>{% for p in choices %}<option value="{{ p }}">{{ p }}</option>{% endfor %}</select></div>
   <div class="form-actions">

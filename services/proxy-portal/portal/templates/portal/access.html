@@ -97,26 +97,14 @@
     {% for network, items in view.templates.networks.items %}
     <div data-panel="network" data-value="{{ network }}">
       <h3 class="section">{% if network == 'private' %}{% translate "Private network (the nodes)" %}{% else %}{% translate "Campus network (the login node)" %}{% endif %}</h3>
-      {% for item in items %}
-      <div class="code-panel">
-        <div class="controls"><span>{% if item.kind == 'environment' %}{% translate "Environment variables" %}{% elif item.kind == 'curl' %}{% translate "curl over HTTP" %}{% elif item.kind == 'socks5h' %}{% translate "curl over SOCKS5 (socks5h)" %}{% elif item.kind == 'git' %}{% translate "git, for GitHub over HTTPS" %}{% else %}pip{% endif %}</span>
-          <button type="button" data-copy="tpl-{{ network }}-{{ item.kind }}" data-done="{% translate 'Copied' %}">{% translate "Copy" %}</button></div>
-        <pre id="tpl-{{ network }}-{{ item.kind }}">{{ item.text }}</pre>
-      </div>
-      {% endfor %}
+      {% include "portal/_client_settings.html" with items=items prefix="tpl-"|add:network %}
     </div>
     {% endfor %}
     {% for granted in view.templates.proxies %}
     {% for network, items in granted.networks.items %}
     <div data-panel="network" data-value="{{ network }}">
       <h3 class="section"><code>{{ granted.id }}</code> · {% if network == 'private' %}{% translate "Private network (the nodes)" %}{% else %}{% translate "Campus network (the login node)" %}{% endif %}</h3>
-      {% for item in items %}
-      <div class="code-panel">
-        <div class="controls"><span>{% if item.kind == 'environment' %}{% translate "Environment variables" %}{% elif item.kind == 'curl' %}{% translate "curl over HTTP" %}{% elif item.kind == 'socks5h' %}{% translate "curl over SOCKS5 (socks5h)" %}{% elif item.kind == 'git' %}{% translate "git, for GitHub over HTTPS" %}{% else %}pip{% endif %}</span>
-          <button type="button" data-copy="tpl-{{ granted.id }}-{{ network }}-{{ item.kind }}" data-done="{% translate 'Copied' %}">{% translate "Copy" %}</button></div>
-        <pre id="tpl-{{ granted.id }}-{{ network }}-{{ item.kind }}">{{ item.text }}</pre>
-      </div>
-      {% endfor %}
+      {% with prefix="tpl-"|add:granted.id|add:"-"|add:network %}{% include "portal/_client_settings.html" with items=items prefix=prefix %}{% endwith %}
     </div>
     {% endfor %}
     {% endfor %}

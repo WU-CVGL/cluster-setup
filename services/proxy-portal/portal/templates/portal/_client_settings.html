@@ -1,0 +1,7 @@
+{% load i18n %}{% comment %}One network's client settings: items (kind, text), each with a copy button; prefix makes the ids unique.{% endcomment %}{% for item in items %}
+      <div class="code-panel">
+        <div class="controls"><span>{% if item.kind == 'environment' %}{% translate "Environment variables" %}{% elif item.kind == 'curl' %}{% translate "curl over HTTP" %}{% elif item.kind == 'socks5h' %}{% translate "curl over SOCKS5 (socks5h)" %}{% elif item.kind == 'git' %}{% translate "git, for GitHub over HTTPS" %}{% else %}pip{% endif %}</span>
+          <button type="button" data-copy="{{ prefix }}-{{ item.kind }}" data-done="{% translate 'Copied' %}">{% translate "Copy" %}</button></div>
+        <pre id="{{ prefix }}-{{ item.kind }}">{{ item.text }}</pre>
+      </div>
+{% endfor %}

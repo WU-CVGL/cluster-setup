@@ -70,12 +70,17 @@ _restart_text = accounts.restart_text
 
 
 def _effect_text(op, name, proxy=None, row=None):
+    # a grant or revoke changes this account's access to one private proxy: say just that, with what stays
     if op == "grant":
-        return _("Lets %(name)s use the private proxy %(proxy)s at its own address. The Private Auto-switching Proxy "
-                 "and the other private proxies still refuse it.") % {"name": name, "proxy": proxy}
+        return _("Gives %(name)s the private proxy %(proxy)s, to use at its own address. The private proxies it was "
+                 "given before stay as they are, and the Private Auto-switching Proxy stays for admin accounts "
+                 "only.") % {"name": name, "proxy": proxy}
+    if op == "revoke" and row is not None and row.admin:
+        return _("Takes the private proxy %(proxy)s back from %(name)s. As an admin account, it still reaches "
+                 "%(proxy)s and every other private proxy.") % {"name": name, "proxy": proxy}
     if op == "revoke":
-        return _("%(proxy)s stops accepting %(name)s. Nothing else changes for the account.") % {
-            "name": name, "proxy": proxy}
+        return _("Takes the private proxy %(proxy)s back from %(name)s: %(proxy)s stops accepting it. The other "
+                 "private proxies it was given stay as they are.") % {"name": name, "proxy": proxy}
     if op == "admin-off" and row is not None and row.proxies:
         return _("%(name)s stops being an admin account: the Private Auto-switching Proxy and the private proxies "
                  "refuse it, except %(proxies)s, which it was given.") % {"name": name, "proxies": names(row.proxies)}

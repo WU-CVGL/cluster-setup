@@ -2,6 +2,7 @@
 
 import json
 import os
+import re
 import unittest
 
 from django.utils import translation
@@ -72,7 +73,11 @@ class GrantRequestTest(PortalTestCase):
         self.assertNotContains(page, f'<option value="{PUBLIC}">')  # public
         self.assertNotContains(page, "Send the request")
         page = self.client.get(f"/admin/accounts/grant?username=alice&proxy={JP}")
-        self.assertContains(page, f"Lets alice use the private proxy {JP} at its own address.")
+        # alice has UK already: the page describes the one change, and keeps her other private proxy
+        self.assertContains(page, f"Gives alice the private proxy {JP}, to use at its own address. The private "
+                                  "proxies it was given before stay as they are, and the Private Auto-switching Proxy "
+                                  "stays for admin accounts only.")
+        self.assertNotContains(page, "refuse")
         self.assertContains(page, f"Applying restarts {JP}. Established connections through it drop")
         self.assertContains(page, f'<input type="hidden" name="proxy" value="{JP}">')
         self.assertNotContains(page, 'name="confirm"')  # nothing is taken away
@@ -94,7 +99,8 @@ class GrantRequestTest(PortalTestCase):
         page = self.client.get("/admin/accounts/revoke?username=alice")
         self.assertContains(page, f'<option value="{UK}">')
         page = self.client.get(f"/admin/accounts/revoke?username=alice&proxy={UK}")
-        self.assertContains(page, f"{UK} stops accepting alice. Nothing else changes for the account.")
+        self.assertContains(page, f"Takes the private proxy {UK} back from alice: {UK} stops accepting it. The "
+                                  "other private proxies it was given stay as they are.")
         self.assertContains(page, f"Applying restarts {UK}.")
         self.assertContains(page, 'name="confirm"')
         response = self.client.post("/admin/accounts/revoke", {"username": "alice", "proxy": UK, "confirm": "al"})
@@ -103,6 +109,21 @@ class GrantRequestTest(PortalTestCase):
         response = self.client.post("/admin/accounts/revoke", {"username": "alice", "proxy": UK, "confirm": "alice"})
         self.assertEqual(response.status_code, 302)
         self.assertEqual(AccountRequest.objects.get().proxy, UK)
+
+    def test_revoke_from_an_admin_account(self):
+        """carol is an admin account with an explicit grant: taking it back leaves her access as an admin."""
+        self.write_status(grant("carol", JP))
+        page = self.client.get("/admin/accounts/revoke?username=carol")
+        self.assertContains(page, "Choose the private proxy to take back from carol.")
+        page = self.client.get(f"/admin/accounts/revoke?username=carol&proxy={JP}")
+        self.assertContains(page, f"Takes the private proxy {JP} back from carol. As an admin account, it still "
+                                  f"reaches {JP} and every other private proxy.")
+        self.assertContains(page, "Applying restarts no proxy")
+        self.assertNotContains(page, "stops accepting")
+        zh = self.client.get(f"/admin/accounts/revoke?username=carol&proxy={JP}", HTTP_ACCEPT_LANGUAGE="zh-CN")
+        self.assertContains(zh, f"作为管理员账号，它仍可使用 {JP} 和其他所有私有代理。")
+        response = self.client.post("/admin/accounts/revoke", {"username": "carol", "proxy": JP, "confirm": "carol"})
+        self.assertEqual(response.status_code, 302)
 
     def test_refused_before_any_file(self):
         self.write_status(lambda d: [grant("alice", UK, "gone-proxy")(d), grant("bob", JP)(d)])
@@ -250,6 +271,13 @@ class MyAccessTest(PortalTestCase):
         self.assertContains(page, f"It may also use the private proxy {JP}, at its own address.")
         self.assertContains(page, "One private proxy, no switching, given to your account.")
         self.assertContains(page, f'<pre id="tpl-{JP}-private-environment">')
+        html = page.content.decode()  # each snippet once, with its own copy button: the Auto-switching Proxy's and JP's
+        ids = re.findall(r'<pre id="(tpl-[^"]+)"', html)
+        self.assertEqual(ids, re.findall(r'data-copy="(tpl-[^"]+)"', html))
+        self.assertEqual(len(ids), len(set(ids)))
+        self.assertEqual(len(ids), 2 * 2 * 5)  # two networks, five snippets each, for both
+        self.assertIn("tpl-private-environment", ids)
+        self.assertIn(f"tpl-{JP}-campus-pip", ids)
         self.assertContains(page, "For the Auto-switching Proxy, then for each of your private proxies.")
         self.assertNotContains(page, UK)
         self.assertNotContains(page, "<code>ha-private</code>")
