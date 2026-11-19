@@ -58,22 +58,22 @@ h3{font-size:15px;line-height:1.4;margin:0;font-weight:690}
 .degraded .emblem{background:#fcebc9;color:var(--amber)}.down .emblem{background:#f8dcdc;color:var(--red)}.unknown .emblem{background:#e4e8ec;color:var(--grey)}
 .status-hero p{margin:10px 0 0 56px;color:#4a5f66}
 .status-right{text-align:right;border-left:1px solid #dceae6;padding-left:27px}.status-number{font-size:28px;font-weight:790;letter-spacing:-1px;line-height:1.2}.status-number-label{font-size:11px;color:var(--muted);margin-top:4px}
-.summary-grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px;margin-top:15px}
-.metric{padding:17px 18px;box-shadow:none}.m-label{color:var(--muted);font-size:12px;margin-bottom:8px}.m-value{font-size:20px;font-weight:760;line-height:1.2;display:flex;align-items:center;gap:8px}.m-foot{font-size:11px;color:var(--muted);margin-top:8px}
-.service{padding:18px 22px;display:flex;align-items:center;gap:14px;flex-wrap:wrap}.service+.service{border-top:1px solid var(--border)}
-.service-icon{width:41px;height:41px;border-radius:12px;background:#edf6f4;display:grid;place-items:center;font-size:18px;color:var(--teal);flex:none}
-.service-main{flex:1;min-width:200px}.service-main .desc{font-size:12px;color:var(--muted);margin-top:3px}
-.service-side{display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-left:auto}
-.history{display:grid;grid-template-columns:repeat(30,minmax(0,1fr));gap:5px;margin:0;padding:0;list-style:none}
-.day{height:38px;border-radius:5px;background:#dfe4e9}.day.ok{background:#2da786}.day.degraded{background:#e2ac4f}.day.bad{background:#d0605e}
-.day.unknown{background:repeating-linear-gradient(135deg,#dfe4e9 0 5px,#eef1f4 5px 10px)}
+.status-table{table-layout:fixed;min-width:640px}.status-table .c-name{width:31%}.status-table .c-ports{width:14%}.status-table .c-state{width:11%}.status-table .c-num{width:12%}.status-table .c-age{width:11%}
+.status-table tr.row-main th,.status-table tr.row-main td{border-bottom:0;padding-bottom:6px}.status-table th[scope=row]{color:var(--ink);white-space:normal}
+.row-desc{font-size:11px;color:var(--muted);font-weight:500;margin-top:2px}
+.status-table tr.row-bars td{padding-top:0;padding-bottom:14px}
+.bars{display:grid;grid-template-columns:repeat(96,minmax(1px,1fr));gap:2px;margin:0;padding:0;list-style:none}.bars.days{grid-template-columns:repeat(30,minmax(0,1fr));gap:4px}
+.bar{height:24px;border-radius:2px;background:#dfe4e9}.bars.days .bar{border-radius:4px}.bar.ok{background:#2da786}.bar.degraded{background:#e2ac4f}.bar.bad{background:#d0605e}
+.bar.unknown{background:repeating-linear-gradient(135deg,#dfe4e9 0 5px,#eef1f4 5px 10px)}.bar:hover,.bar:focus-visible{filter:brightness(.88)}.bar:focus-visible{outline-offset:1px}
+.bar-tip{position:fixed;z-index:40;max-width:min(380px,calc(100vw - 16px));background:#142231;color:#fff;font-size:11px;line-height:1.45;padding:6px 9px;border-radius:7px;pointer-events:none;box-shadow:0 6px 18px rgba(10,30,40,.22)}
+.bars-legend{margin-top:10px}
 .legend{display:flex;justify-content:space-between;align-items:center;color:var(--muted);font-size:11px;margin-top:10px;gap:10px;flex-wrap:wrap}.legend-set{display:flex;gap:12px;flex-wrap:wrap}.legend-set span{display:flex;gap:6px;align-items:center}
 .swatch{display:inline-block;width:12px;height:12px;border-radius:3px}.swatch.ok{background:#2da786}.swatch.degraded{background:#e2ac4f}.swatch.bad{background:#d0605e}.swatch.unknown{background:repeating-linear-gradient(135deg,#cfd6dc 0 3px,#eef1f4 3px 6px)}
 .table-scroll{overflow-x:auto;position:relative}.table{border-collapse:collapse;width:100%;text-align:left;font-size:12px}
 .table th{color:var(--muted);font-weight:600;border-bottom:1px solid var(--border);padding:11px 10px;white-space:nowrap}
 .table td{padding:12px 10px;border-bottom:1px solid #edf0f3;white-space:nowrap}.table tr:last-child td{border-bottom:0}
 .table th.group{background:#fafbfc;color:#44566a;font-weight:700}
-.proxy-name{font-weight:650;white-space:normal;word-break:break-all}.phone-only{display:none}
+.proxy-name{font-weight:650;white-space:normal;overflow-wrap:anywhere}.proxy-name code{font-size:12px;font-weight:500;color:var(--muted);white-space:nowrap}.phone-only{display:none}
 .grid-two{display:grid;grid-template-columns:1fr 1fr;gap:14px}
 .timeline{display:flex;flex-direction:column;margin:0;padding:0;list-style:none}.event{display:grid;grid-template-columns:21px 1fr;gap:12px;position:relative;padding:1px 0 19px}.event:last-child{padding-bottom:0}
 .event-dot{width:21px;height:21px;border-radius:50%;display:grid;place-items:center;background:#e7f5ef;color:var(--green);font-size:11px;font-weight:800}.event-dot.open{background:#fff1d9;color:var(--amber)}
@@ -116,11 +116,12 @@ dialog.modal{border:0;border-radius:var(--radius);padding:0;width:calc(100% - 32
 dialog.modal::backdrop{background:rgba(20,34,49,.5)}.modal-body{padding:22px 24px}.modal-body h2{margin-bottom:14px}.modal-body .card-head{align-items:center;margin-bottom:10px}.modal-body .notice+.notice{margin-top:12px}.modal-body .reset-error{margin:12px 0 0}
 .section-gap-top{margin-top:14px}.reset-reason{margin-top:12px}
 .updates{list-style:none;margin:8px 0 0;padding:0 0 0 12px;border-left:2px solid var(--border)}.updates li{font-size:12px;color:var(--muted);margin-top:6px;white-space:pre-line}.updates b{color:var(--ink);font-weight:650}
-@media(max-width:1050px){.summary-grid{grid-template-columns:repeat(2,1fr)}.nav a{padding:0 11px}}
+@media(max-width:1050px){.nav a{padding:0 11px}}
 @media(max-width:770px){.shell{padding:0 16px}.header-inner{flex-wrap:wrap;gap:8px;padding-top:10px}.brand{margin-right:auto}.nav{order:3;width:100%;height:44px}.nav a{flex:1;justify-content:center;padding:0 6px;font-size:13px}.header-right{margin-left:0}
 main.shell{padding-top:24px}.hero-head{display:block}h1{font-size:26px}.status-hero{grid-template-columns:1fr;padding:20px}.status-hero p{margin:10px 0 0}.status-right{border:0;border-top:1px solid #dceae6;padding:11px 0 0;text-align:left;display:flex;gap:10px;align-items:center}.status-number{font-size:22px}.status-number-label{margin:0}
-.grid-two,.access-list,.usage-grid,.form-grid{grid-template-columns:1fr}.table .wide{display:none}.phone-only{display:inline}.table td,.table th{padding:10px 6px}.service{padding:14px}.section-bar{align-items:flex-start;flex-direction:column}.history{gap:3px}.day{border-radius:3px;height:32px}.card-pad{padding:16px}}
-@media(max-width:440px){.summary-grid{gap:9px}.metric{padding:13px}.status-title{font-size:18px}.emblem{width:36px;height:36px}.service-icon{display:none}.brand-sub{display:none}}
+.grid-two,.access-list,.usage-grid,.form-grid{grid-template-columns:1fr}.table .wide{display:none}.phone-only{display:inline}.table td,.table th{padding:10px 6px}.section-bar{align-items:flex-start;flex-direction:column}.status-table{min-width:0}.status-table .c-name{width:29%}.status-table .c-ports{width:19%}.status-table .c-state{width:26%}.status-table td.ports{white-space:normal}.status-table .chip{padding:4px 6px}.bars{gap:1px}.bars.days{gap:2px}.bar{height:22px;border-radius:1px}.bars.days .bar{border-radius:2px}.bars-legend .legend-set{order:3;flex-basis:100%}.card-pad{padding:16px}}
+@media(max-width:400px){.status-table td,.status-table th{padding-left:4px;padding-right:4px}.status-table .chip{padding:4px 5px}.status-table .chip .dot{display:none}}
+@media(max-width:440px){.status-title{font-size:18px}.emblem{width:36px;height:36px}.brand-sub{display:none}}
 </style>
 </head>
 <body>
@@ -157,7 +158,7 @@ main.shell{padding-top:24px}.hero-head{display:block}h1{font-size:26px}.status-h
 {% block content %}{% endblock %}
 </main>
 <footer class="footer"><div class="shell">
-  <b>{% translate "CVGL Proxy" %}</b> · {% translate "Probe results from Prometheus. Account information from the proxy accounts file, refreshed at least every 5 minutes." %}
+  <b>{% translate "CVGL Proxy" %}</b> · {% translate "Probes every 30 seconds. Account information refreshed at least every 5 minutes." %}
   <div><a href="https://grafana.cvgl.lab/d/proxy-availability">{% translate "Proxy Availability in Grafana" %}</a> · <a href="https://grafana.cvgl.lab/d/proxy-usage">{% translate "Proxy Usage in Grafana" %}</a></div>
 </div></footer>
 <script nonce="{{ csp_nonce }}">
@@ -168,12 +169,16 @@ function copy(button){var target=document.getElementById(button.getAttribute('da
   if(navigator.clipboard&&window.isSecureContext){navigator.clipboard.writeText(text).then(done,function(){});}
   else{var r=document.createRange();r.selectNodeContents(target);var s=window.getSelection();s.removeAllRanges();s.addRange(r);}}
 document.addEventListener('click',function(e){var b=e.target.closest('[data-copy]');if(b){copy(b);}});
-document.querySelectorAll('[data-switch]').forEach(function(group){var name=group.getAttribute('data-switch');
+// a switch with data-store remembers its choice in this browser; storage may be unavailable, then it is not kept
+document.querySelectorAll('[data-switch]').forEach(function(group){var name=group.getAttribute('data-switch'),store=group.getAttribute('data-store');
   var buttons=group.querySelectorAll('button[data-value]');var panels=document.querySelectorAll('[data-panel="'+name+'"]');
+  var values=Array.prototype.map.call(buttons,function(b){return b.getAttribute('data-value');});
   function show(value){buttons.forEach(function(b){b.setAttribute('aria-pressed',b.getAttribute('data-value')===value?'true':'false');});
     panels.forEach(function(p){p.hidden=p.getAttribute('data-value')!==value;});}
-  buttons.forEach(function(b){b.addEventListener('click',function(){show(b.getAttribute('data-value'));});});
-  group.hidden=false;show(group.getAttribute('data-default'));});
+  buttons.forEach(function(b){b.addEventListener('click',function(){var value=b.getAttribute('data-value');show(value);
+    if(store){try{localStorage.setItem(store,value);}catch(e){}}});});
+  var kept=null;if(store){try{kept=localStorage.getItem(store);}catch(e){}}
+  group.hidden=false;show(values.indexOf(kept)>=0?kept:group.getAttribute('data-default'));});
 })();
 </script>
 {% block scripts %}{% endblock %}

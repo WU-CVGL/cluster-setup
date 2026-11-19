@@ -72,7 +72,7 @@
             "type": "prometheus",
             "uid": "${prometheus_source}"
           },
-          "expr": "(max by (protocol) (probe_success{job=\"proxy-probe\",kind=\"ha\",pool=\"ha-general\",protocol=\"http\"} unless on (instance) (time() - timestamp(probe_success{job=\"proxy-probe\",kind=\"ha\",pool=\"ha-general\",protocol=\"http\"}) > 90))) or (max by (protocol) (max_over_time(up{job=\"proxy-probe\",kind=\"ha\",pool=\"ha-general\",protocol=\"http\"}[1d])) * 0 - 1)",
+          "expr": "(max by (protocol) (probe_success{job=\"proxy-probe\",kind=\"ha\",pool=\"ha-general\",protocol=\"http\"} unless (time() - timestamp(probe_success{job=\"proxy-probe\",kind=\"ha\",pool=\"ha-general\",protocol=\"http\"}) > 90))) or (max by (protocol) (max_over_time(up{job=\"proxy-probe\",kind=\"ha\",pool=\"ha-general\",protocol=\"http\"}[1d])) * 0 - 1)",
           "legendFormat": "HTTP",
           "refId": "A",
           "instant": true,
@@ -168,7 +168,7 @@
             "type": "prometheus",
             "uid": "${prometheus_source}"
           },
-          "expr": "(max by (protocol) (probe_success{job=\"proxy-probe\",kind=\"ha\",pool=\"ha-general\",protocol=\"socks\"} unless on (instance) (time() - timestamp(probe_success{job=\"proxy-probe\",kind=\"ha\",pool=\"ha-general\",protocol=\"socks\"}) > 90))) or (max by (protocol) (max_over_time(up{job=\"proxy-probe\",kind=\"ha\",pool=\"ha-general\",protocol=\"socks\"}[1d])) * 0 - 1)",
+          "expr": "(max by (protocol) (probe_success{job=\"proxy-probe\",kind=\"ha\",pool=\"ha-general\",protocol=\"socks\"} unless (time() - timestamp(probe_success{job=\"proxy-probe\",kind=\"ha\",pool=\"ha-general\",protocol=\"socks\"}) > 90))) or (max by (protocol) (max_over_time(up{job=\"proxy-probe\",kind=\"ha\",pool=\"ha-general\",protocol=\"socks\"}[1d])) * 0 - 1)",
           "legendFormat": "SOCKS5",
           "refId": "A",
           "instant": true,
@@ -264,7 +264,7 @@
             "type": "prometheus",
             "uid": "${prometheus_source}"
           },
-          "expr": "count(((max by (entry) (probe_success{job=\"proxy-probe\",kind=\"raw\",pool=\"ha-general\",protocol=\"socks\"} unless on (instance) (time() - timestamp(probe_success{job=\"proxy-probe\",kind=\"raw\",pool=\"ha-general\",protocol=\"socks\"}) > 90))) or (max by (entry) (max_over_time(up{job=\"proxy-probe\",kind=\"raw\",pool=\"ha-general\",protocol=\"socks\"}[1d])) * 0 - 1)) == 1) or vector(0)",
+          "expr": "count(((max by (entry) (probe_success{job=\"proxy-probe\",kind=\"raw\",pool=\"ha-general\",protocol=\"socks\"} unless (time() - timestamp(probe_success{job=\"proxy-probe\",kind=\"raw\",pool=\"ha-general\",protocol=\"socks\"}) > 90))) or (max by (entry) (max_over_time(up{job=\"proxy-probe\",kind=\"raw\",pool=\"ha-general\",protocol=\"socks\"}[1d])) * 0 - 1)) == 1) or vector(0)",
           "legendFormat": "passing",
           "refId": "A",
           "instant": true,
@@ -275,7 +275,7 @@
             "type": "prometheus",
             "uid": "${prometheus_source}"
           },
-          "expr": "count(max by (entry) (max_over_time(up{job=\"proxy-probe\",kind=\"raw\",pool=\"ha-general\",protocol=\"socks\"}[1d])))",
+          "expr": "count(max by (entry) (max_over_time(up{job=\"proxy-probe\",kind=\"raw\",pool=\"ha-general\",protocol=\"socks\"}[1d])) unless on (entry) (up{job=\"proxy-probe\",kind=\"raw\",pool!~\"ha-general\",protocol=\"socks\"} unless on (entry) up{job=\"proxy-probe\",kind=\"raw\",pool=\"ha-general\",protocol=\"socks\"}))",
           "legendFormat": "configured",
           "refId": "B",
           "instant": true,
@@ -347,7 +347,7 @@
             "type": "prometheus",
             "uid": "${prometheus_source}"
           },
-          "expr": "max by (protocol) (probe_duration_seconds{job=\"proxy-probe\",kind=\"ha\",pool=\"ha-general\"} unless on (instance) (time() - timestamp(probe_duration_seconds{job=\"proxy-probe\",kind=\"ha\",pool=\"ha-general\"}) > 90))",
+          "expr": "max by (protocol) (probe_duration_seconds{job=\"proxy-probe\",kind=\"ha\",pool=\"ha-general\"} unless (time() - timestamp(probe_duration_seconds{job=\"proxy-probe\",kind=\"ha\",pool=\"ha-general\"}) > 90))",
           "legendFormat": "{{protocol}}",
           "refId": "A",
           "instant": true,
@@ -412,7 +412,7 @@
             "type": "prometheus",
             "uid": "${prometheus_source}"
           },
-          "expr": "max by (protocol) (time() - timestamp(probe_success{job=\"proxy-probe\",kind=\"ha\",pool=\"ha-general\"}))",
+          "expr": "min by (protocol) (time() - timestamp(probe_success{job=\"proxy-probe\",kind=\"ha\",pool=\"ha-general\"}))",
           "legendFormat": "{{protocol}}",
           "refId": "A",
           "instant": true,
@@ -631,7 +631,7 @@
             "type": "prometheus",
             "uid": "${prometheus_source}"
           },
-          "expr": "(max by (protocol) (probe_success{job=\"proxy-probe\",kind=\"ha\",pool=\"ha-private\",protocol=\"http\"} unless on (instance) (time() - timestamp(probe_success{job=\"proxy-probe\",kind=\"ha\",pool=\"ha-private\",protocol=\"http\"}) > 90))) or (max by (protocol) (max_over_time(up{job=\"proxy-probe\",kind=\"ha\",pool=\"ha-private\",protocol=\"http\"}[1d])) * 0 - 1)",
+          "expr": "(max by (protocol) (probe_success{job=\"proxy-probe\",kind=\"ha\",pool=\"ha-private\",protocol=\"http\"} unless (time() - timestamp(probe_success{job=\"proxy-probe\",kind=\"ha\",pool=\"ha-private\",protocol=\"http\"}) > 90))) or (max by (protocol) (max_over_time(up{job=\"proxy-probe\",kind=\"ha\",pool=\"ha-private\",protocol=\"http\"}[1d])) * 0 - 1)",
           "legendFormat": "HTTP",
           "refId": "A",
           "instant": true,
@@ -727,7 +727,7 @@
             "type": "prometheus",
             "uid": "${prometheus_source}"
           },
-          "expr": "(max by (protocol) (probe_success{job=\"proxy-probe\",kind=\"ha\",pool=\"ha-private\",protocol=\"socks\"} unless on (instance) (time() - timestamp(probe_success{job=\"proxy-probe\",kind=\"ha\",pool=\"ha-private\",protocol=\"socks\"}) > 90))) or (max by (protocol) (max_over_time(up{job=\"proxy-probe\",kind=\"ha\",pool=\"ha-private\",protocol=\"socks\"}[1d])) * 0 - 1)",
+          "expr": "(max by (protocol) (probe_success{job=\"proxy-probe\",kind=\"ha\",pool=\"ha-private\",protocol=\"socks\"} unless (time() - timestamp(probe_success{job=\"proxy-probe\",kind=\"ha\",pool=\"ha-private\",protocol=\"socks\"}) > 90))) or (max by (protocol) (max_over_time(up{job=\"proxy-probe\",kind=\"ha\",pool=\"ha-private\",protocol=\"socks\"}[1d])) * 0 - 1)",
           "legendFormat": "SOCKS5",
           "refId": "A",
           "instant": true,
@@ -823,7 +823,7 @@
             "type": "prometheus",
             "uid": "${prometheus_source}"
           },
-          "expr": "count(((max by (entry) (probe_success{job=\"proxy-probe\",kind=\"raw\",pool=~\"ha-general|ha-private\",protocol=\"socks\"} unless on (instance) (time() - timestamp(probe_success{job=\"proxy-probe\",kind=\"raw\",pool=~\"ha-general|ha-private\",protocol=\"socks\"}) > 90))) or (max by (entry) (max_over_time(up{job=\"proxy-probe\",kind=\"raw\",pool=~\"ha-general|ha-private\",protocol=\"socks\"}[1d])) * 0 - 1)) == 1) or vector(0)",
+          "expr": "count(((max by (entry) (probe_success{job=\"proxy-probe\",kind=\"raw\",pool=~\"ha-general|ha-private\",protocol=\"socks\"} unless (time() - timestamp(probe_success{job=\"proxy-probe\",kind=\"raw\",pool=~\"ha-general|ha-private\",protocol=\"socks\"}) > 90))) or (max by (entry) (max_over_time(up{job=\"proxy-probe\",kind=\"raw\",pool=~\"ha-general|ha-private\",protocol=\"socks\"}[1d])) * 0 - 1)) == 1) or vector(0)",
           "legendFormat": "passing",
           "refId": "A",
           "instant": true,
@@ -834,7 +834,7 @@
             "type": "prometheus",
             "uid": "${prometheus_source}"
           },
-          "expr": "count(max by (entry) (max_over_time(up{job=\"proxy-probe\",kind=\"raw\",pool=~\"ha-general|ha-private\",protocol=\"socks\"}[1d])))",
+          "expr": "count(max by (entry) (max_over_time(up{job=\"proxy-probe\",kind=\"raw\",pool=~\"ha-general|ha-private\",protocol=\"socks\"}[1d])) unless on (entry) (up{job=\"proxy-probe\",kind=\"raw\",pool!~\"ha-general|ha-private\",protocol=\"socks\"} unless on (entry) up{job=\"proxy-probe\",kind=\"raw\",pool=~\"ha-general|ha-private\",protocol=\"socks\"}))",
           "legendFormat": "configured",
           "refId": "B",
           "instant": true,
@@ -906,7 +906,7 @@
             "type": "prometheus",
             "uid": "${prometheus_source}"
           },
-          "expr": "max by (protocol) (probe_duration_seconds{job=\"proxy-probe\",kind=\"ha\",pool=\"ha-private\"} unless on (instance) (time() - timestamp(probe_duration_seconds{job=\"proxy-probe\",kind=\"ha\",pool=\"ha-private\"}) > 90))",
+          "expr": "max by (protocol) (probe_duration_seconds{job=\"proxy-probe\",kind=\"ha\",pool=\"ha-private\"} unless (time() - timestamp(probe_duration_seconds{job=\"proxy-probe\",kind=\"ha\",pool=\"ha-private\"}) > 90))",
           "legendFormat": "{{protocol}}",
           "refId": "A",
           "instant": true,
@@ -971,7 +971,7 @@
             "type": "prometheus",
             "uid": "${prometheus_source}"
           },
-          "expr": "max by (protocol) (time() - timestamp(probe_success{job=\"proxy-probe\",kind=\"ha\",pool=\"ha-private\"}))",
+          "expr": "min by (protocol) (time() - timestamp(probe_success{job=\"proxy-probe\",kind=\"ha\",pool=\"ha-private\"}))",
           "legendFormat": "{{protocol}}",
           "refId": "A",
           "instant": true,
@@ -1190,7 +1190,7 @@
             "type": "prometheus",
             "uid": "${prometheus_source}"
           },
-          "expr": "(max by (entry, pool, access) (probe_success{job=\"proxy-probe\",kind=\"raw\",protocol=\"http\"} unless on (instance) (time() - timestamp(probe_success{job=\"proxy-probe\",kind=\"raw\",protocol=\"http\"}) > 90))) or (max by (entry, pool, access) (max_over_time(up{job=\"proxy-probe\",kind=\"raw\",protocol=\"http\"}[1d])) * 0 - 1)",
+          "expr": "(max by (entry, pool, access) (probe_success{job=\"proxy-probe\",kind=\"raw\",protocol=\"http\"} unless (time() - timestamp(probe_success{job=\"proxy-probe\",kind=\"raw\",protocol=\"http\"}) > 90))) or on (entry) (max by (entry, pool, access) (up{job=\"proxy-probe\",kind=\"raw\",protocol=\"http\"}) * 0 - 1) or on (entry) (max by (entry, pool, access) (max_over_time(up{job=\"proxy-probe\",kind=\"raw\",protocol=\"http\"}[1d])) * 0 - 1)",
           "legendFormat": "",
           "refId": "A",
           "instant": true,
@@ -1202,7 +1202,7 @@
             "type": "prometheus",
             "uid": "${prometheus_source}"
           },
-          "expr": "(max by (entry) (probe_success{job=\"proxy-probe\",kind=\"raw\",protocol=\"socks\"} unless on (instance) (time() - timestamp(probe_success{job=\"proxy-probe\",kind=\"raw\",protocol=\"socks\"}) > 90))) or (max by (entry) (max_over_time(up{job=\"proxy-probe\",kind=\"raw\",protocol=\"socks\"}[1d])) * 0 - 1)",
+          "expr": "(max by (entry) (probe_success{job=\"proxy-probe\",kind=\"raw\",protocol=\"socks\"} unless (time() - timestamp(probe_success{job=\"proxy-probe\",kind=\"raw\",protocol=\"socks\"}) > 90))) or (max by (entry) (max_over_time(up{job=\"proxy-probe\",kind=\"raw\",protocol=\"socks\"}[1d])) * 0 - 1)",
           "legendFormat": "",
           "refId": "B",
           "instant": true,
@@ -1214,7 +1214,7 @@
             "type": "prometheus",
             "uid": "${prometheus_source}"
           },
-          "expr": "max by (entry) (probe_duration_seconds{job=\"proxy-probe\",kind=\"raw\",protocol=\"http\"})",
+          "expr": "max by (entry) (probe_duration_seconds{job=\"proxy-probe\",kind=\"raw\",protocol=\"http\"} unless (time() - timestamp(probe_duration_seconds{job=\"proxy-probe\",kind=\"raw\",protocol=\"http\"}) > 90))",
           "legendFormat": "",
           "refId": "C",
           "instant": true,
@@ -1226,7 +1226,7 @@
             "type": "prometheus",
             "uid": "${prometheus_source}"
           },
-          "expr": "max by (entry) (probe_duration_seconds{job=\"proxy-probe\",kind=\"raw\",protocol=\"socks\"})",
+          "expr": "max by (entry) (probe_duration_seconds{job=\"proxy-probe\",kind=\"raw\",protocol=\"socks\"} unless (time() - timestamp(probe_duration_seconds{job=\"proxy-probe\",kind=\"raw\",protocol=\"socks\"}) > 90))",
           "legendFormat": "",
           "refId": "D",
           "instant": true,
@@ -1238,7 +1238,7 @@
             "type": "prometheus",
             "uid": "${prometheus_source}"
           },
-          "expr": "max by (entry) (time() - timestamp(probe_success{job=\"proxy-probe\",kind=\"raw\"}))",
+          "expr": "max by (entry) (min by (entry, protocol) (time() - timestamp(probe_success{job=\"proxy-probe\",kind=\"raw\"})))",
           "legendFormat": "",
           "refId": "E",
           "instant": true,
@@ -1250,7 +1250,7 @@
             "type": "prometheus",
             "uid": "${prometheus_source}"
           },
-          "expr": "max by (entry) (avg_over_time(probe_success{job=\"proxy-probe\",kind=\"raw\",protocol=\"http\"}[24h]))",
+          "expr": "sum by (entry) (sum_over_time(probe_success{job=\"proxy-probe\",kind=\"raw\",protocol=\"http\"}[24h])) / sum by (entry) (count_over_time(probe_success{job=\"proxy-probe\",kind=\"raw\",protocol=\"http\"}[24h]))",
           "legendFormat": "",
           "refId": "F",
           "instant": true,
@@ -1262,7 +1262,7 @@
             "type": "prometheus",
             "uid": "${prometheus_source}"
           },
-          "expr": "max by (entry) (avg_over_time(probe_success{job=\"proxy-probe\",kind=\"raw\",protocol=\"socks\"}[24h]))",
+          "expr": "sum by (entry) (sum_over_time(probe_success{job=\"proxy-probe\",kind=\"raw\",protocol=\"socks\"}[24h])) / sum by (entry) (count_over_time(probe_success{job=\"proxy-probe\",kind=\"raw\",protocol=\"socks\"}[24h]))",
           "legendFormat": "",
           "refId": "G",
           "instant": true,
@@ -1274,7 +1274,7 @@
             "type": "prometheus",
             "uid": "${prometheus_source}"
           },
-          "expr": "min by (entry) (clamp_max(count_over_time(probe_success{job=\"proxy-probe\",kind=\"raw\"}[24h]) / 2880, 1))",
+          "expr": "min by (entry) (clamp_max(sum by (entry, protocol) (count_over_time(probe_success{job=\"proxy-probe\",kind=\"raw\"}[24h])) / 2880, 1))",
           "legendFormat": "",
           "refId": "H",
           "instant": true,
@@ -1311,7 +1311,7 @@
           "id": "joinByField",
           "options": {
             "byField": "entry",
-            "mode": "outer"
+            "mode": "outerTabular"
           }
         },
         {
@@ -1713,7 +1713,7 @@
             "type": "prometheus",
             "uid": "${prometheus_source}"
           },
-          "expr": "(max by (entry, protocol) (probe_success{job=\"proxy-probe\"} unless on (instance) (time() - timestamp(probe_success{job=\"proxy-probe\"}) > 90))) or (max by (entry, protocol) (max_over_time(up{job=\"proxy-probe\"}[1d])) * 0 - 1)",
+          "expr": "(max by (entry, protocol) (probe_success{job=\"proxy-probe\"} unless (time() - timestamp(probe_success{job=\"proxy-probe\"}) > 90))) or (max by (entry, protocol) (max_over_time(up{job=\"proxy-probe\"}[1d])) * 0 - 1)",
           "legendFormat": "{{entry}} {{protocol}}",
           "refId": "A"
         }
@@ -2020,6 +2020,325 @@
         "tooltip": {
           "mode": "multi",
           "sort": "desc"
+        }
+      }
+    },
+    {
+      "type": "row",
+      "title": "Status bars",
+      "id": 25,
+      "collapsed": false,
+      "gridPos": {
+        "h": 1,
+        "w": 24,
+        "x": 0,
+        "y": 53
+      },
+      "panels": []
+    },
+    {
+      "type": "state-timeline",
+      "title": "Probe success per hour",
+      "id": 26,
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${prometheus_source}"
+      },
+      "description": "The proxy portal's hourly status bars: each entry's probe success rate per hour, by protocol. The portal colours a bar by the worse protocol: green from 99 %, amber from 90 %, red below; grey when the coverage beside is under 50 %.",
+      "gridPos": {
+        "h": 12,
+        "w": 12,
+        "x": 0,
+        "y": 54
+      },
+      "interval": "1h",
+      "maxDataPoints": 96,
+      "timeFrom": "96h",
+      "hideTimeOverride": false,
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${prometheus_source}"
+          },
+          "expr": "sum by (entry, protocol) (sum_over_time(probe_success{job=\"proxy-probe\"}[1h])) / sum by (entry, protocol) (count_over_time(probe_success{job=\"proxy-probe\"}[1h]))",
+          "legendFormat": "{{entry}} {{protocol}}",
+          "refId": "A"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "insertNulls": false,
+            "spanNulls": false
+          },
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "red",
+                "value": null
+              },
+              {
+                "color": "#e2ac4f",
+                "value": 0.9
+              },
+              {
+                "color": "green",
+                "value": 0.99
+              }
+            ]
+          },
+          "color": {
+            "mode": "thresholds"
+          },
+          "unit": "percentunit",
+          "decimals": 2,
+          "min": 0,
+          "max": 1
+        },
+        "overrides": []
+      },
+      "options": {
+        "showValue": "never",
+        "mergeValues": false,
+        "rowHeight": 0.8,
+        "alignValue": "left",
+        "legend": {
+          "showLegend": false
+        },
+        "tooltip": {
+          "mode": "single",
+          "sort": "none"
+        }
+      }
+    },
+    {
+      "type": "state-timeline",
+      "title": "Probe coverage per hour",
+      "id": 27,
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${prometheus_source}"
+      },
+      "description": "The share of the 120 probes an hour expects that ran, per entry and protocol. Under 50 %, the portal's bar for that hour is grey.",
+      "gridPos": {
+        "h": 12,
+        "w": 12,
+        "x": 12,
+        "y": 54
+      },
+      "interval": "1h",
+      "maxDataPoints": 96,
+      "timeFrom": "96h",
+      "hideTimeOverride": false,
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${prometheus_source}"
+          },
+          "expr": "clamp_max(sum by (entry, protocol) (count_over_time(probe_success{job=\"proxy-probe\"}[1h])) / 120, 1)",
+          "legendFormat": "{{entry}} {{protocol}}",
+          "refId": "A"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "insertNulls": false,
+            "spanNulls": false
+          },
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "#808080",
+                "value": null
+              },
+              {
+                "color": "blue",
+                "value": 0.5
+              }
+            ]
+          },
+          "color": {
+            "mode": "thresholds"
+          },
+          "unit": "percentunit",
+          "decimals": 0,
+          "min": 0,
+          "max": 1
+        },
+        "overrides": []
+      },
+      "options": {
+        "showValue": "never",
+        "mergeValues": false,
+        "rowHeight": 0.8,
+        "alignValue": "left",
+        "legend": {
+          "showLegend": false
+        },
+        "tooltip": {
+          "mode": "single",
+          "sort": "none"
+        }
+      }
+    },
+    {
+      "type": "state-timeline",
+      "title": "Probe success per day",
+      "id": 28,
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${prometheus_source}"
+      },
+      "description": "The query of the proxy portal's daily status bars: each entry's probe success rate per day, midnight to midnight in the dashboard's time zone, by protocol, with the same colours as the hourly bars. The portal's days end at the last full hour.",
+      "gridPos": {
+        "h": 12,
+        "w": 12,
+        "x": 0,
+        "y": 66
+      },
+      "interval": "1d",
+      "maxDataPoints": 31,
+      "timeFrom": "30d",
+      "hideTimeOverride": false,
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${prometheus_source}"
+          },
+          "expr": "sum by (entry, protocol) (sum_over_time(probe_success{job=\"proxy-probe\"}[24h])) / sum by (entry, protocol) (count_over_time(probe_success{job=\"proxy-probe\"}[24h]))",
+          "interval": "1d",
+          "legendFormat": "{{entry}} {{protocol}}",
+          "refId": "A"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "insertNulls": false,
+            "spanNulls": false
+          },
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "red",
+                "value": null
+              },
+              {
+                "color": "#e2ac4f",
+                "value": 0.9
+              },
+              {
+                "color": "green",
+                "value": 0.99
+              }
+            ]
+          },
+          "color": {
+            "mode": "thresholds"
+          },
+          "unit": "percentunit",
+          "decimals": 2,
+          "min": 0,
+          "max": 1
+        },
+        "overrides": []
+      },
+      "options": {
+        "showValue": "never",
+        "mergeValues": false,
+        "rowHeight": 0.8,
+        "alignValue": "left",
+        "legend": {
+          "showLegend": false
+        },
+        "tooltip": {
+          "mode": "single",
+          "sort": "none"
+        }
+      }
+    },
+    {
+      "type": "state-timeline",
+      "title": "Probe coverage per day",
+      "id": 29,
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${prometheus_source}"
+      },
+      "description": "The share of the 2880 probes a day expects that ran, per entry and protocol, midnight to midnight in the dashboard's time zone. Under 50 %, the portal's bar for a day is grey.",
+      "gridPos": {
+        "h": 12,
+        "w": 12,
+        "x": 12,
+        "y": 66
+      },
+      "interval": "1d",
+      "maxDataPoints": 31,
+      "timeFrom": "30d",
+      "hideTimeOverride": false,
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${prometheus_source}"
+          },
+          "expr": "clamp_max(sum by (entry, protocol) (count_over_time(probe_success{job=\"proxy-probe\"}[24h])) / 2880, 1)",
+          "interval": "1d",
+          "legendFormat": "{{entry}} {{protocol}}",
+          "refId": "A"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "insertNulls": false,
+            "spanNulls": false
+          },
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "#808080",
+                "value": null
+              },
+              {
+                "color": "blue",
+                "value": 0.5
+              }
+            ]
+          },
+          "color": {
+            "mode": "thresholds"
+          },
+          "unit": "percentunit",
+          "decimals": 0,
+          "min": 0,
+          "max": 1
+        },
+        "overrides": []
+      },
+      "options": {
+        "showValue": "never",
+        "mergeValues": false,
+        "rowHeight": 0.8,
+        "alignValue": "left",
+        "legend": {
+          "showLegend": false
+        },
+        "tooltip": {
+          "mode": "single",
+          "sort": "none"
         }
       }
     }

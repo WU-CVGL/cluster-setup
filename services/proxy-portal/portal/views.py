@@ -7,9 +7,10 @@ from django.db import DatabaseError, transaction
 from django.http import HttpResponse, HttpResponseNotAllowed, JsonResponse
 from django.shortcuts import redirect, render
 from django.urls import reverse
-from django.utils import timezone
+from django.utils import dateformat, timezone
 from django.utils.http import url_has_allowed_host_and_scheme
 from django.utils.translation import gettext as _
+from django.utils.translation import gettext_noop
 from django.utils.translation import ngettext
 from django.views.decorators.cache import never_cache
 from django.views.decorators.csrf import csrf_protect
@@ -18,6 +19,7 @@ from django.views.decorators.http import require_GET, require_POST
 
 from . import access, charts, health, limits, master, usage
 from .models import ClusterUser, Incident
+from .templatetags.portal import percent
 
 log = logging.getLogger("portal.signin")
 
@@ -41,6 +43,19 @@ def portal_context(request):
     }
 
 
+def _error(request, title, text, status):
+    return render(request, "portal/error.html", {"title": title, "text": text}, status=status)
+
+
+def csrf_failure(request, reason=""):
+    """A form or request whose CSRF token no longer matches: usually a page left open across a sign-in elsewhere."""
+    return _error(request, _("The page expired"), _("Reload the page and try again."), 403)
+
+
+def not_found(request, exception=None):
+    return _error(request, _("Page not found"), _("There is no page at this address."), 404)
+
+
 def incidents():
     since = timezone.now() - datetime.timedelta(days=30)
     shown = Incident.objects.prefetch_related("updates")
@@ -53,16 +68,40 @@ def _local(ts):
     return datetime.datetime.fromtimestamp(ts, datetime.timezone.utc).astimezone(timezone.get_current_timezone())
 
 
+STATE_TEXTS = {"ok": gettext_noop("Passing"), "degraded": gettext_noop("Degraded"), "bad": gettext_noop("Failing"),
+               "unknown": gettext_noop("Unknown")}
+
+
+def _bar_items(bars, name):
+    """One row's buckets for the page, oldest first, each with its period in local time and its label."""
+    row, step = bars["rows"][name], bars["step_seconds"]
+    start = bars["end"] - (bars["count"] - 1) * step
+    texts = {key: _(value) for key, value in STATE_TEXTS.items()}
+    items = []
+    for i, state in enumerate(row["state"]):
+        end = _local(start + i * step)
+        begin = _local(start + i * step - step)
+        when = (f"{dateformat.format(begin, 'Y-m-d H:i')}–{dateformat.format(end, 'H:i')}"
+                if begin.date() == end.date() else
+                f"{dateformat.format(begin, 'Y-m-d H:i')} – {dateformat.format(end, 'Y-m-d H:i')}")
+        rate, coverage = row["success_rate"][i], row["coverage"][i]
+        detail = (_("no probe results") if rate is None else
+                  _("success %(rate)s, probed %(coverage)s of the time") % {"rate": percent(rate, 2),
+                                                                                "coverage": percent(coverage, 0)})
+        items.append({"state": state, "label": f"{when} · {texts[state]} · {detail}"})
+    return items
+
+
 def _status_context():
     data = health.build()
-    for day in data["history"]["days"]:
-        day["end_local"] = _local(day["end"])
-        day["start_local"] = _local(day["end"] - 86400)
+    names = list(data["entries"]) + [proxy["name"] for proxy in data["proxies"]]
+    data["bar_items"] = {name: {window: _bar_items(bars, name) for window, bars in data["bars"].items()}
+                         for name in names}
     return data
 
 
 def _live(data):
-    """What the status page's script refreshes, in /api/status's form: it polls that and ages the results."""
+    """What the status page's script refreshes, as /api/status/live returns it: it polls that and ages the results."""
     return {key: data[key] for key in ("monitoring_available", "headline", "last_check_age_seconds",
                                        "stale_after_seconds", "entries", "proxies")}
 
@@ -73,7 +112,7 @@ def _live_texts():
         "passing": _("Passing"), "failing": _("Failing"), "unknown": _("Unknown"),
         "s_ago": _("%(n)d s ago"), "min_ago": _("%(n)d min ago"), "h_ago": _("%(n)d h ago"),
         "days_ago": _("%(n)d days ago"),
-        "headline_unknown": _("Status unknown: no recent probe results for the default proxy"),
+        "headline_unknown": _("Status unknown: no recent probe results for the Auto-switching Proxy"),
         "entry_count": _("%(passing)s of %(configured)s proxies passing"),
     }
 
@@ -90,6 +129,12 @@ def api_status(request):
     data = health.build()
     data["incidents"] = [incident.as_json() for incident in incidents()]
     return JsonResponse(data)
+
+
+@require_GET
+def api_status_live(request):
+    """What the Status page polls: /api/status without the bars and the incidents, which update on reload."""
+    return JsonResponse(_live(health.build(bars=False)))
 
 
 def _refuse_parameters(request):

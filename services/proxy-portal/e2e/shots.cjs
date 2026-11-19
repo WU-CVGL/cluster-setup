@@ -1,5 +1,5 @@
-// Renders Status, My access, My usage and the admin console in English and Chinese, at desktop and phone width, and saves
-// screenshots. Needs Playwright for Node (NODE_PATH) and a Chromium (CHROME, optional).
+// Renders Status, My access, My usage, the admin console and the page for an unknown address in English and Chinese, at
+// desktop and phone width, and saves screenshots. Needs Playwright for Node (NODE_PATH) and a Chromium (CHROME, optional).
 //   node e2e/shots.cjs <base URL> <output folder> [user] [password]
 // Fails on a console error, a failed request, a request to another origin, or a page without its main heading.
 const { chromium } = require('playwright');
@@ -20,7 +20,8 @@ const fs = require('fs');
         extraHTTPHeaders: { 'Accept-Language': header } });
       const page = await context.newPage();
       let signedOut = false;  // the 401 of /api/me/usage after signing out is expected
-      page.on('console', m => { if (m.type() === 'error' && !(signedOut && m.text().includes('401'))) problems.push(`${lang}/${device} console: ${m.text()}`); });
+      page.on('console', m => { if (m.type() === 'error' && !(signedOut && m.text().includes('401'))
+        && !(page.url().endsWith('/no-such-page') && m.text().includes('404'))) problems.push(`${lang}/${device} console: ${m.text()}`); });
       page.on('pageerror', e => problems.push(`${lang}/${device} page error: ${e.message}`));
       page.on('request', r => { requests++; if (new URL(r.url()).origin !== origin) problems.push(`off-origin request: ${r.url()}`); });
       page.on('requestfailed', r => problems.push(`failed request: ${r.url()}`));
@@ -43,7 +44,8 @@ const fs = require('fs');
       // the admin console (the user is a Determined admin in the stub master)
       for (const [path, name] of [['/admin/users', 'admin-users'], ['/admin/users?filter=no-account', 'admin-users-filter'],
                                   ['/admin/accounts/disable?username=alice', 'admin-confirm'],
-                                  ['/admin/log', 'admin-log'], ['/admin/incidents', 'admin-incidents']]) {
+                                  ['/admin/log', 'admin-log'], ['/admin/incidents', 'admin-incidents'],
+                                  ['/no-such-page', 'not-found']]) {
         await page.goto(base + path, { waitUntil: 'networkidle' });
         await page.screenshot({ path: `${out}/${name}-${lang}-${device}.png`, fullPage: true });
         results.push([`${name}-${lang}-${device}`, await page.locator('h1').first().textContent()]);

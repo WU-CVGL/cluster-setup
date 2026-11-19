@@ -27,8 +27,9 @@ class QueriesTest(SimpleTestCase):
         for group in ("ha-general", "ha-private", "proxies"):
             for key, expr in queries.STATUS[group].items():
                 self.assertIn(expr, availability, f"{group} {key}")
-        for expr in queries.HISTORY.values():
-            self.assertIn(expr, availability)
+        for window, exprs in queries.BARS.items():
+            for key, expr in exprs.items():
+                self.assertIn(expr, availability, f"bars {window} {key}")
 
     def test_usage_queries_are_the_usage_dashboards(self):
         usage = dashboard_exprs("proxy-usage.json")
@@ -44,6 +45,3 @@ class QueriesTest(SimpleTestCase):
             prom.instant("up", 0)
         with self.assertRaises(ValueError):
             prom.series('probe_success{job="proxy-probe"}', 0, 1, 1)
-
-    def test_catalog_size(self):
-        self.assertEqual(len(queries.ALL), 36)

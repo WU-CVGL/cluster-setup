@@ -302,7 +302,8 @@ class UsersPageTest(PortalTestCase):
         self.assertEqual(rows["alice"]["actions"], [])
         self.assertEqual(rows["frank"]["actions"], [])
         self.assertEqual(data["service_accounts"], [])
-        self.assertContains(self.client.get("/admin/users"), "The accounts status is unavailable")
+        self.assertContains(self.client.get("/admin/users"),
+                            "Account information is unavailable right now, so no change can be requested.")
 
     def test_actions_create_request_files(self):
         cases = (("add", "frank", None), ("rotate", "alice", "alice"), ("disable", "alice", "alice"),
@@ -336,7 +337,7 @@ class UsersPageTest(PortalTestCase):
 
     def test_service_accounts_as_before(self):
         page = self.client.get("/admin/users")
-        self.assertContains(page, "Changed with proxy_accounts.py only", count=2)
+        self.assertContains(page, "Changed outside the portal only", count=2)
         self.assertContains(page, 'href="/admin/accounts/rotate?username=svc-docker-cvgl-node01"')
         self.assertNotContains(page, "username=svc-ha")
         self.assertEqual(self.client.post("/admin/accounts/disable", {"username": "svc-ha", "confirm": "svc-ha"})

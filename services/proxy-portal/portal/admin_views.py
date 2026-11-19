@@ -69,26 +69,27 @@ _restart_text = accounts.restart_text
 
 def _effect_text(op, name):
     return {
-        "add": _("Creates the proxy account %(name)s with a new random password, which you see once when the "
-                 "change is live. It may use ha-general and the public proxies."),
+        "add": _("Creates the proxy account %(name)s with a new random password, which you see once when the change "
+                 "is live. It may use the Auto-switching Proxy and the public proxies."),
         "rotate": _("Gives %(name)s a new random password, which you see once when it is live. The old password "
                     "stops working."),
         "enable": _("Turns proxy access on for %(name)s, with its current password."),
         "disable": _("Turns proxy access off for %(name)s. The account and its password are kept: turning it on "
                      "again restores it."),
         "remove": _("Removes the account %(name)s and its password. Adding it again gives it a new password."),
-        "admin-on": _("Makes %(name)s an admin account: it may also use ha-private and the private proxies. This "
-                      "is the proxy account's flag, not the Determined admin role."),
-        "admin-off": _("%(name)s stops being an admin account: ha-private and the private proxies refuse it."),
+        "admin-on": _("Makes %(name)s an admin account: it may also use the Private Auto-switching Proxy and the "
+                      "private proxies. This is the proxy account's flag, not the Determined admin role."),
+        "admin-off": _("%(name)s stops being an admin account: the Private Auto-switching Proxy and the private "
+                       "proxies refuse it."),
     }[op] % {"name": name}
 
 
 def raw_auth_text(status):
     if status.raw_auth:
-        return _("Raw auth is on: every entry, the public proxies' own entries included, refuses an account whose "
-                 "proxy access is off.")
-    return _("Raw auth is off: proxy access off stops only ha-general, ha-private and the private proxies. A "
-             "public proxy's own entry needs no account, so it still works for that user.")
+        return _("The public proxies' own addresses require an account: an account whose proxy access is off is "
+                 "refused at every proxy.")
+    return _("The public proxies' own addresses need no account: proxy access off stops only the auto-switching "
+             "proxies and the private proxies, and a public proxy's own address still works for that user.")
 
 
 def _pending_by_account():

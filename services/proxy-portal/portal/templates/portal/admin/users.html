@@ -4,16 +4,16 @@
 <div class="hero-head"><div>
   <div class="eyebrow">{% translate "Admin" %}</div>
   <h1>{% translate "Users and proxy accounts" %}</h1>
-  <p class="sub">{% translate "Every cluster user with their proxy account, as the applier last read the accounts file. Each change is a request that the applier on the VM applies and verifies; this list changes once it has." %}</p>
+  <p class="sub">{% translate "Every cluster user with their proxy account. Each change is a request that is applied to the proxies and verified; this list changes once it has." %}</p>
 </div></div>
 {% include "portal/admin/_nav.html" %}
 
 {% if not status.available %}
-<div class="notice bad" role="status"><p>{% translate "The accounts status is unavailable, so no change can be requested." %}</p></div>
+<div class="notice bad" role="status"><p>{% translate "Account information is unavailable right now, so no change can be requested." %}</p></div>
 {% else %}
-{% if status.stale %}<div class="notice warn" role="status"><p>{% translate "The accounts status has not been refreshed for a while: the applier may not be running." %}</p></div>{% endif %}
-{% if status.unapplied_changes %}<div class="notice warn" role="status"><p>{% translate "The accounts file holds a change made with proxy_accounts.py since the applier's last apply: it may not be live yet." %}</p></div>{% elif status.unapplied_changes is None %}<div class="notice warn" role="status"><p>{% translate "No apply is recorded since the configs were last rendered with proxy_accounts.py: they may not be live yet." %}</p></div>{% endif %}
-<div class="notice"><p>{{ raw_auth_text }}</p><p>{% translate "Every change restarts the affected entries: established connections through them drop." %}</p></div>
+{% if status.stale %}<div class="notice warn" role="status"><p>{% translate "The account information has not been refreshed for a while: the service that applies account changes may not be running." %}</p></div>{% endif %}
+{% if status.unapplied_changes %}<div class="notice warn" role="status"><p>{% translate "An account change made outside the portal has not been applied yet: it may not be live." %}</p></div>{% elif status.unapplied_changes is None %}<div class="notice warn" role="status"><p>{% translate "An account change made outside the portal may not be applied yet." %}</p></div>{% endif %}
+<div class="notice"><p>{{ raw_auth_text }}</p><p>{% translate "Every change restarts the affected proxies: established connections through them drop." %}</p></div>
 {% endif %}
 
 <section class="section" aria-labelledby="users-title">
@@ -29,21 +29,21 @@
   </div>
   <nav class="subnav" aria-label="{% translate 'Filters' %}">
     <a href="{% url 'admin_users' %}{% if query %}?q={{ query|urlencode }}{% endif %}"{% if not filter %} aria-current="page"{% endif %}>{% translate "All" %}</a>
-    {% for key, n in filters %}<a href="{% url 'admin_users' %}?filter={{ key }}{% if query %}&amp;q={{ query|urlencode }}{% endif %}"{% if filter == key %} aria-current="page"{% endif %}>{% if key == 'no-account' %}{% translate "No proxy account" %}{% elif key == 'disabled' %}{% translate "Proxy access off" %}{% elif key == 'private' %}{% translate "Private access" %}{% else %}{% translate "Inactive in Determined, proxy access on" %}{% endif %} · {{ n }}</a>{% endfor %}
+    {% for key, n in filters %}<a href="{% url 'admin_users' %}?filter={{ key }}{% if query %}&amp;q={{ query|urlencode }}{% endif %}"{% if filter == key %} aria-current="page"{% endif %}>{% if key == 'no-account' %}{% translate "No proxy account" %}{% elif key == 'disabled' %}{% translate "Proxy access off" %}{% elif key == 'private' %}{% translate "Admin account" %}{% else %}{% translate "Inactive in Determined, proxy access on" %}{% endif %} · {{ n }}</a>{% endfor %}
   </nav>
   <div class="card table-scroll">
     <table class="table">
       <caption class="sr-only">{% translate "Users" %}</caption>
-      <thead><tr><th scope="col">{% translate "User" %}</th><th scope="col">{% translate "Determined" %}</th><th scope="col">{% translate "Proxy account" %}</th><th scope="col">{% translate "Private access" %}</th><th scope="col">{% translate "Pending request" %}</th><th scope="col">{% translate "Actions" %}</th></tr></thead>
+      <thead><tr><th scope="col">{% translate "User" %}</th><th scope="col">{% translate "Determined" %}</th><th scope="col">{% translate "Proxy account" %}</th><th scope="col">{% translate "Admin account" %}</th><th scope="col">{% translate "Pending request" %}</th><th scope="col">{% translate "Actions" %}</th></tr></thead>
       <tbody>
       {% for u in users %}
       <tr>
         <th scope="row" class="mono">{{ u.name }}</th>
         <td>{% if not u.listed %}<span class="small muted">{% translate "Not in the user list" %}</span>{% else %}{% if u.active %}<span class="chip ok">{% translate "Active" %}</span>{% else %}<span class="chip bad">{% translate "Inactive" %}</span>{% endif %}{% if u.determined_admin %} <span class="tag admin">{% translate "Determined admin" %}</span>{% endif %}{% endif %}</td>
-        <td>{% if u.account is None %}<span class="muted">{% translate "Unknown" %}</span>{% elif u.account == 'none' %}<span class="muted">{% translate "No account" %}</span>{% elif u.account == 'enabled' %}<span class="chip ok">{% translate "On" %}</span>{% else %}<span class="chip warn">{% if status.raw_auth %}{% translate "Off" %}{% else %}{% translate "Off at the HA entries" %}{% endif %}</span>{% endif %}</td>
+        <td>{% if u.account is None %}<span class="muted">{% translate "Unknown" %}</span>{% elif u.account == 'none' %}<span class="muted">{% translate "No account" %}</span>{% elif u.account == 'enabled' %}<span class="chip ok">{% translate "On" %}</span>{% else %}<span class="chip warn">{% if status.raw_auth %}{% translate "Off" %}{% else %}{% translate "Off, except at public proxies" %}{% endif %}</span>{% endif %}</td>
         <td>{% if u.private %}<span class="tag admin">{% translate "Admin account" %}</span>{% else %}<span class="muted">—</span>{% endif %}</td>
         <td>{% if u.pending %}<a href="{% url 'admin_request' u.pending.id %}">{{ u.pending.op|op_label }} · {{ u.pending.get_state_display }}</a>{% else %}<span class="muted">—</span>{% endif %}</td>
-        <td class="actions-cell">{% if u.protected %}<span class="small muted">{% translate "Changed with proxy_accounts.py only" %}</span>{% elif u.actions %}<div class="actions">{% for op in u.actions %}<a class="btn sm" href="{% url 'admin_confirm' op %}?username={{ u.name|urlencode }}">{{ op|op_label }}</a>{% endfor %}</div>{% elif not u.valid_name %}<span class="small muted">{% translate "Not a valid proxy account name" %}</span>{% else %}<span class="muted">—</span>{% endif %}</td>
+        <td class="actions-cell">{% if u.protected %}<span class="small muted">{% translate "Changed outside the portal only" %}</span>{% elif u.actions %}<div class="actions">{% for op in u.actions %}<a class="btn sm" href="{% url 'admin_confirm' op %}?username={{ u.name|urlencode }}">{{ op|op_label }}</a>{% endfor %}</div>{% elif not u.valid_name %}<span class="small muted">{% translate "Not a valid proxy account name" %}</span>{% else %}<span class="muted">—</span>{% endif %}</td>
       </tr>
       {% empty %}
       <tr><td colspan="6"><div class="empty">{% translate "No user matches." %}</div></td></tr>
@@ -55,7 +55,7 @@
 
 {% if status.available %}
 <section class="section" aria-labelledby="services-title">
-  <div class="section-bar"><div><h2 id="services-title">{% translate "Service accounts" %}</h2><p>{% translate "The accounts of the HA entry, the monitoring and the nodes' Docker daemons: never a person's account, never an admin account." %}</p></div></div>
+  <div class="section-bar"><div><h2 id="services-title">{% translate "Service accounts" %}</h2><p>{% translate "The accounts of the auto-switching proxies, the monitoring and the nodes' Docker daemons: never a person's account, never an admin account." %}</p></div></div>
   <div class="card table-scroll">
     <table class="table">
       <caption class="sr-only">{% translate "Service accounts" %}</caption>
@@ -63,10 +63,10 @@
       <tbody>
       {% for a in services %}
       <tr>
-        <th scope="row" class="mono">{{ a.name }}</th>
-        <td>{% if a.enabled %}<span class="chip ok">{% translate "On" %}</span>{% else %}<span class="chip warn">{% if status.raw_auth %}{% translate "Off" %}{% else %}{% translate "Off at the HA entries" %}{% endif %}</span>{% endif %}</td>
+        {% with label=a.name|service_account_label %}<th scope="row"{% if not label %} class="mono"{% endif %}>{{ label|default:a.name }}</th>{% endwith %}
+        <td>{% if a.enabled %}<span class="chip ok">{% translate "On" %}</span>{% else %}<span class="chip warn">{% if status.raw_auth %}{% translate "Off" %}{% else %}{% translate "Off, except at public proxies" %}{% endif %}</span>{% endif %}</td>
         <td>{% if a.pending %}<a href="{% url 'admin_request' a.pending.id %}">{{ a.pending.op|op_label }} · {{ a.pending.get_state_display }}</a>{% else %}<span class="muted">—</span>{% endif %}</td>
-        <td class="actions-cell">{% if a.protected %}<span class="small muted">{% translate "Changed with proxy_accounts.py only" %}</span>{% else %}<div class="actions">{% for op in a.actions %}<a class="btn sm" href="{% url 'admin_confirm' op %}?username={{ a.name|urlencode }}">{{ op|op_label }}</a>{% endfor %}</div>{% endif %}</td>
+        <td class="actions-cell">{% if a.protected %}<span class="small muted">{% translate "Changed outside the portal only" %}</span>{% else %}<div class="actions">{% for op in a.actions %}<a class="btn sm" href="{% url 'admin_confirm' op %}?username={{ a.name|urlencode }}">{{ op|op_label }}</a>{% endfor %}</div>{% endif %}</td>
       </tr>
       {% empty %}
       <tr><td colspan="4"><div class="empty">{% translate "No account matches." %}</div></td></tr>

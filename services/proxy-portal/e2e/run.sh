@@ -1,7 +1,8 @@
 #!/usr/bin/env bash
 # The portal behind nginx with a self-signed stand-in certificate, against the stub master and Prometheus:
 # checks the redirect, headers and sign-in, takes screenshots with e2e/shots.cjs, checks the Status page's refresh
-# with e2e/status-refresh.cjs and the self-service password reset with e2e/self-reset.cjs, also without Prometheus,
+# with e2e/status-refresh.cjs, its status bars with e2e/status-bars.cjs and the self-service password reset with
+# e2e/self-reset.cjs, also without Prometheus,
 # then removes everything.
 #   e2e/run.sh <screenshot folder>     (needs Docker, openssl, and Playwright for Node in NODE_PATH)
 set -euo pipefail
@@ -35,6 +36,7 @@ echo "http redirect: $(r -o /dev/null -w '%{http_code} %{redirect_url}' http://p
 echo "status:        $(r -o /dev/null -w '%{http_code}' https://proxy.cvgl.lab/)"
 echo "me anonymous:  $(r -o /dev/null -w '%{http_code}' https://proxy.cvgl.lab/api/me/access)"
 r -D - -o /dev/null https://proxy.cvgl.lab/ | grep -iE '^(content-security-policy|x-frame-options|x-content-type-options|referrer-policy):' | cut -c1-90
+echo "answer sizes:  /api/status $(r -o /dev/null -w '%{size_download}' https://proxy.cvgl.lab/api/status) B, polled /api/status/live $(r -o /dev/null -w '%{size_download}' https://proxy.cvgl.lab/api/status/live) B"
 echo "headline:      $(r https://proxy.cvgl.lab/api/status | python3 -c 'import json,sys; print(json.load(sys.stdin)["headline"]["text"])')"
 
 # incidents in the database: one resolved, one open
@@ -46,12 +48,13 @@ id=$(incident "Proxy restarted" "A public proxy restarted after an update." prox
 compose exec -T proxy-portal python manage.py shell -c "
 from django.utils import timezone; from portal.models import Incident
 i = Incident.objects.get(id=$id); i.state = 'resolved'; i.resolved_at = timezone.now(); i.save()"
-incident "Slow downloads on one proxy" "Downloads through one public proxy are slow; the default proxy is not affected." proxies >/dev/null
+incident "Slow downloads on one proxy" "Downloads through one public proxy are slow; the Auto-switching Proxy is not affected." proxies >/dev/null
 echo "incidents:     $(r https://proxy.cvgl.lab/api/status | python3 -c 'import json,sys; print([(i["title"], i["state"]) for i in json.load(sys.stdin)["incidents"]])')"
 
 sleep 3   # Chromium aborts with ERR_NETWORK_CHANGED while Docker is still setting up interfaces
 RESOLVE="proxy.cvgl.lab 127.0.0.1" node shots.cjs https://proxy.cvgl.lab "$out" carol pw-carol
 RESOLVE="proxy.cvgl.lab 127.0.0.1" node status-refresh.cjs https://proxy.cvgl.lab
+RESOLVE="proxy.cvgl.lab 127.0.0.1" node status-bars.cjs https://proxy.cvgl.lab "$out"
 RESOLVE="proxy.cvgl.lab 127.0.0.1" node self-reset.cjs https://proxy.cvgl.lab "$out"
 
 stats() { compose exec -T proxy-portal python -c "import urllib.request as u; print(u.urlopen('$1/stub/stats').read().decode())"; }

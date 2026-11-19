@@ -41,6 +41,15 @@ os.write(fd, json.dumps({'id': '${id}', 'username': '${user}', 'password': '${pa
     }
     throw new Error(`state ${text} not shown within ${timeout} ms: ${await chip.textContent()}`);
   };
+  // a dialog step at the run's width and, for the screenshots only, at the other device's width
+  const other = { desktop: ['phone', { width: 390, height: 844 }], phone: ['desktop', { width: 1280, height: 900 }] };
+  const shoot = async (page, run, step) => {
+    await page.screenshot({ path: `${out}/reset-${step}-${run.lang}-${run.device}.png` });
+    const [device, viewport] = other[run.device];
+    await page.setViewportSize(viewport);
+    await page.screenshot({ path: `${out}/reset-${step}-${run.lang}-${device}.png` });
+    await page.setViewportSize(run.viewport);
+  };
   const check = (label, ok, got) => { results.push(`${ok ? 'ok  ' : 'FAIL'} ${label}${ok ? '' : ': ' + JSON.stringify(got)}`); if (!ok) problems.push(label); };
 
   const runs = [
@@ -82,7 +91,7 @@ os.write(fd, json.dumps({'id': '${id}', 'username': '${user}', 'password': '${pa
     await opener.click();
     let s = await state();
     check(`${tag}: opens on the confirmation with focus inside`, s.open && s.step === 'confirm' && s.inside, s);
-    await page.screenshot({ path: `${out}/reset-confirm-${run.lang}-${run.device}.png` });
+    await shoot(page, run, 'confirm');
     let trapped = true;
     for (const key of ['Tab', 'Tab', 'Tab', 'Shift+Tab', 'Shift+Tab', 'Shift+Tab', 'Shift+Tab']) {
       await page.keyboard.press(key);
@@ -139,7 +148,7 @@ os.write(fd, json.dumps({'id': '${id}', 'username': '${user}', 'password': '${pa
     // the applier takes it, then applies it and writes the one-time result
     writeStatus(id, run.user, 'applying');
     await waitChip(page, run.t.applying);
-    await page.screenshot({ path: `${out}/reset-applying-${run.lang}-${run.device}.png` });
+    await shoot(page, run, 'applying');
     check(`${tag}: applying, no reveal yet`, !(await page.locator('[data-action=reveal]').isVisible()), await state());
     const password = `E2e-${run.lang}-` + Math.random().toString(36).slice(2, 12);
     writeResult(id, run.user, password);
@@ -157,7 +166,7 @@ os.write(fd, json.dumps({'id': '${id}', 'username': '${user}', 'password': '${pa
     const warning = await page.locator('[data-step=password] .notice').textContent();
     check(`${tag}: the warning`, warning.includes(run.t.warning), warning);
     check(`${tag}: result file deleted`, !fs.readdirSync(path.join(spool, 'results')).includes(`${id}.json`), fs.readdirSync(path.join(spool, 'results')));
-    await page.screenshot({ path: `${out}/reset-password-${run.lang}-${run.device}.png` });
+    await shoot(page, run, 'password');
     await page.click('[data-copy=reset-password]');
     const copied = await page.evaluate(() => navigator.clipboard.readText());
     const copyLabel = (await page.locator('[data-copy=reset-password]').textContent()).trim();
@@ -221,7 +230,7 @@ os.write(fd, json.dumps({'id': '${id}', 'username': '${user}', 'password': '${pa
     const revealLabel = (await page.locator('[data-action=reveal]').textContent()).trim();
     check(`${tag}: the wait is shown`, revealLabel === run.t.collecting && await page.locator('[data-action=reveal]').isDisabled(), revealLabel);
     check(`${tag}: leaving the page asks first while the password is on its way`, await asksBeforeLeaving(), null);
-    await page.screenshot({ path: `${out}/reset-collecting-${run.lang}-${run.device}.png` });
+    await shoot(page, run, 'collecting');
     await page.evaluate(() => document.getElementById('reset-dialog').close());  // a close the page could not prevent
     await page.evaluate(() => window.__held.release());
     await page.waitForTimeout(300);
@@ -246,7 +255,7 @@ os.write(fd, json.dumps({'id': '${id}', 'username': '${user}', 'password': '${pa
     await createError.waitFor({ state: 'visible', timeout: 10000 });
     check(`${tag}: signed out says to sign in again`, (await createError.textContent()) === run.t.signin, await createError.textContent());
     check(`${tag}: no request file from it`, fs.readdirSync(path.join(spool, 'requests')).length === requestsNow, fs.readdirSync(path.join(spool, 'requests')));
-    await page.screenshot({ path: `${out}/reset-signed-out-${run.lang}-${run.device}.png` });
+    await shoot(page, run, 'signed-out');
     await page.keyboard.press('Escape');
     await context.close();
   }

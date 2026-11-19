@@ -78,6 +78,7 @@ MIDDLEWARE = [
 ]
 
 ROOT_URLCONF = "portal.urls"
+CSRF_FAILURE_VIEW = "portal.views.csrf_failure"
 WSGI_APPLICATION = "portal.wsgi.application"
 
 TEMPLATES = [
@@ -175,7 +176,7 @@ SIGNIN_MAX_PER_USERNAME = int(env("SIGNIN_MAX_PER_USERNAME", "5"))
 # A probe result older than this is unknown (the dashboards use the same 90 s).
 STALE_SECONDS = 90
 STATUS_CACHE_SECONDS = 15
-HISTORY_CACHE_SECONDS = 300
+BARS_CACHE_SECONDS = 300
 USAGE_CACHE_SECONDS = 60
 
 LOGGING = {

@@ -128,7 +128,7 @@ class RequestFileTest(PortalTestCase):
             for op in accounts.OPS:
                 response = self.post(op, name, confirm=name)
                 self.assertEqual(response.status_code, 403, (op, name))
-                self.assertIn("proxy_accounts.py", response.json()["error"])
+                self.assertIn("can only be changed outside the portal", response.json()["error"])
             page = self.client.get(f"/admin/accounts/disable?username={name}")
             self.assertEqual(page.status_code, 403)
             self.assertNotContains(page, "Send the request", status_code=403)
@@ -200,7 +200,7 @@ class AccountsListTest(PortalTestCase):
         self.assertEqual(rows["carol"]["actions"], ["rotate", "disable", "admin-off", "remove"])
         self.assertEqual(rows["svc-docker-cvgl-node01"]["actions"], ["rotate", "disable", "remove"])
         self.assertIs(data["raw_auth"], False)
-        self.assertIn("public proxy's own entry", data["raw_auth_text"])
+        self.assertIn("public proxy's own address", data["raw_auth_text"])
         self.assertNotIn("password", json.dumps(data).replace("raw_auth", ""))
 
     def test_search(self):
@@ -215,16 +215,16 @@ class AccountsListTest(PortalTestCase):
 
     def test_page(self):
         page = self.client.get("/admin/users")
-        self.assertContains(page, "Changed with proxy_accounts.py only", count=2)
-        self.assertContains(page, "Off at the HA entries", count=2)  # bob and erin
-        self.assertContains(page, "own entry needs no account, so it still works for that user")
+        self.assertContains(page, "Changed outside the portal only", count=2)
+        self.assertContains(page, "Off, except at public proxies", count=2)  # bob and erin
+        self.assertContains(page, "a public proxy&#x27;s own address still works for that user")
         self.assertContains(page, '<option value="svc-docker-cvgl-node02">')
         self.assertNotContains(page, '<option value="svc-docker-cvgl-node01">')  # exists already
         self.assertContains(page, "uses svc-docker-&lt;node&gt;.")
 
     def test_applied_state_notice(self):
-        unknown = "No apply is recorded since the configs were last rendered with proxy_accounts.py"
-        changed = "holds a change made with proxy_accounts.py since the applier"
+        unknown = "An account change made outside the portal may not be applied yet."
+        changed = "An account change made outside the portal has not been applied yet"
         for value, shown in ((None, unknown), (True, changed), (False, None)):
             self.write_status(lambda d: d.update(unapplied_changes=value))
             page = self.client.get("/admin/users")
@@ -236,7 +236,7 @@ class AccountsListTest(PortalTestCase):
         self.assertContains(rotate, "put the new password in proxy.env on the node")
         for op in ("disable", "remove"):
             page = self.client.get(f"/admin/accounts/{op}?username=svc-docker-cvgl-node01")
-            self.assertContains(page, "its pulls through the HA entry are refused.")
+            self.assertContains(page, "its pulls through the Auto-switching Proxy are refused.")
             self.assertNotContains(page, "proxy.env")
         self.assertNotContains(self.client.get("/admin/accounts/rotate?username=alice"), "Docker daemon")
 
@@ -268,28 +268,31 @@ class LifecycleTest(PortalTestCase):
         cases = [
             ("disable", None, "pending", "the old access still works"),
             ("disable", {"status": "applying"}, "applying",
-             "The revoke is not confirmed yet: the old access may still work"),
+             "Being applied; the affected proxies restart. Until the change is confirmed, the old access may still "
+             "work."),
             ("enable", {"status": "applying"}, "applying", "Being applied"),
             ("disable", {"status": "applied", "changed": True, "restarted": ["xray-ha"]}, "applied",
              "Applied and verified."),
             ("enable", {"status": "applied", "changed": False, "restarted": []}, "applied",
              "Nothing to change: the account was already in that state. Nothing restarted."),
             ("enable", {"status": "applied", "changed": False, "restarted": ["xray-ha"]}, "applied",
-             "Nothing to change: the account was already in that state. The entries restarted to apply other "
+             "Nothing to change: the account was already in that state. The proxies restarted to apply other "
              "changes."),
             ("disable", {"status": "failed", "stage": "test", "error": "xray-ha/config/config.json: bad",
                          "restored": True}, "failed", "the previous state is back: the account is unchanged and the "
                                                        "old access still works."),
             ("enable", {"status": "failed", "stage": "verify", "error": "no 204", "restored": True}, "failed",
-             "the previous state is back: the account is unchanged. The entries restarted: established "
-             "connections dropped."),
+             "the previous state is back: the account is unchanged. The affected proxies restarted: "
+             "established connections dropped."),
             ("enable", {"status": "failed", "stage": "verify", "error": "x", "restored": False}, "failed",
-             "the rollback did not finish"),
+             "Failed, and the previous settings could not be fully restored: the affected proxies may be down or in a "
+             "mixed state."),
             ("enable", {"status": "failed", "stage": "request", "error": "account exists", "restored": True},
-             "failed", "Refused by the applier"),
+             "failed", "The request was refused. Nothing changed."),
             ("disable", {"status": "unconfirmed", "stage": "verify", "error": "no 204", "restarted": ["xray-ha"]},
-             "unconfirmed", "the entries refuse the old access (verified)"),
-            ("enable", {"status": "unconfirmed", "stage": "verify"}, "unconfirmed", "Live, but not confirmed yet"),
+             "unconfirmed", "the proxies refuse the old access (verified)"),
+            ("enable", {"status": "unconfirmed", "stage": "verify"}, "unconfirmed",
+             "Live, but not confirmed yet: no proxy answered the new login in time (the proxies may be down)."),
             ("rotate", {"status": "unconfirmed", "stage": "verify", "result": True}, "unconfirmed",
              "the old password is refused (verified)"),
         ]
@@ -308,14 +311,14 @@ class LifecycleTest(PortalTestCase):
             else:
                 self.assertNotContains(page, "data-poll=")
         test_failure = AccountRequest.objects.get(state="failed", stage="test")
-        self.assertNotIn("The entries restarted", lifecycle.describe(test_failure))
+        self.assertNotIn("The affected proxies restarted", lifecycle.describe(test_failure))
         failed = AccountRequest.objects.filter(state="failed", stage="test").get()
         self.assertEqual((failed.error, failed.restored), ("xray-ha/config/config.json: bad", True))
 
     def test_unfinished_rollback_is_read_again_until_its_outcome_is_known(self):
         request_id = self.request("disable", "alice")
         self.status(request_id, status="failed", stage="verify", error="no 407", restored=False)
-        self.assertIn("the rollback did not finish", self.get(request_id)["text"])
+        self.assertIn("the previous settings could not be fully restored", self.get(request_id)["text"])
         # the applier's next run restores the files and the entries: the same status file, restored now
         self.status(request_id, status="failed", stage="interrupted", error="the apply was interrupted",
                     restored=True, updated_at="2026-01-01T00:05:00Z")
@@ -330,7 +333,7 @@ class LifecycleTest(PortalTestCase):
         request_id = self.request()
         AccountRequest.objects.filter(id=request_id).update(requested_at=timezone.now()
                                                             - datetime.timedelta(minutes=20))
-        self.assertIn("Not taken after 20 minutes", self.get(request_id)["text"])
+        self.assertIn("Not started after 20 minutes", self.get(request_id)["text"])
 
     def test_unreadable_or_foreign_status_ignored(self):
         request_id = self.request()
@@ -365,12 +368,12 @@ class RestartTextTest(PortalTestCase):
     def test_confirm_page_says_what_restarts(self):
         self.sign_in("carol")
         self.assertContains(self.client.get("/admin/accounts/disable?username=alice"),
-                            "Applying restarts the HA entries (xray-ha). Established connections")
+                            "Applying restarts both auto-switching proxies. Established connections")
         self.assertContains(self.client.get("/admin/accounts/disable?username=carol"),
-                            "the HA entries (xray-ha) and the private proxies")
+                            "both auto-switching proxies and the private proxies")
         self.write_status(lambda d: d.update(raw_auth=True))
         self.assertContains(self.client.get("/admin/accounts/disable?username=alice"),
-                            "the HA entries (xray-ha) and every proxy")
+                            "both auto-switching proxies and every proxy")
 
 
 @override_settings(REQUEST_PENDING_WARN=360)
@@ -394,7 +397,7 @@ class RawAuthAndEscapingTest(PortalTestCase):
                                                                         "confirm": "alice"}),
                                     content_type="application/json")
         request_id = response.json()["id"]
-        caveat = "A public proxy's own entry needs no account, so it still works for that user."
+        caveat = "and a public proxy's own address still works for that user."
         self.assertIn(caveat, response.json()["raw_auth_text"])
         self.assertIn(caveat, self.client.get(f"/api/admin/requests/{request_id}").json()["raw_auth_text"])
         self.assertIn(caveat, self.client.get("/api/admin/requests").json()["requests"][0]["raw_auth_text"])
@@ -403,7 +406,8 @@ class RawAuthAndEscapingTest(PortalTestCase):
                      "/admin/accounts/disable?username=bob"):
             self.assertContains(self.client.get(path), html, msg_prefix=path)
         self.write_status(lambda d: d.update(raw_auth=True))
-        self.assertIn("Raw auth is on", self.client.get(f"/api/admin/requests/{request_id}").json()["raw_auth_text"])
+        self.assertIn("The public proxies' own addresses require an account",
+                      self.client.get(f"/api/admin/requests/{request_id}").json()["raw_auth_text"])
         enable = self.client.post("/api/admin/requests", json.dumps({"op": "admin-on", "username": "alice"}),
                                   content_type="application/json")
         self.assertIsNone(enable.json()["raw_auth_text"])
