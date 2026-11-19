@@ -1250,7 +1250,7 @@
             "type": "prometheus",
             "uid": "${prometheus_source}"
           },
-          "expr": "max by (entry) (avg_over_time(probe_success{job=\"proxy-probe\",kind=\"raw\",protocol=\"http\"}[24h]))",
+          "expr": "sum by (entry) (sum_over_time(probe_success{job=\"proxy-probe\",kind=\"raw\",protocol=\"http\"}[24h])) / sum by (entry) (count_over_time(probe_success{job=\"proxy-probe\",kind=\"raw\",protocol=\"http\"}[24h]))",
           "legendFormat": "",
           "refId": "F",
           "instant": true,
@@ -1262,7 +1262,7 @@
             "type": "prometheus",
             "uid": "${prometheus_source}"
           },
-          "expr": "max by (entry) (avg_over_time(probe_success{job=\"proxy-probe\",kind=\"raw\",protocol=\"socks\"}[24h]))",
+          "expr": "sum by (entry) (sum_over_time(probe_success{job=\"proxy-probe\",kind=\"raw\",protocol=\"socks\"}[24h])) / sum by (entry) (count_over_time(probe_success{job=\"proxy-probe\",kind=\"raw\",protocol=\"socks\"}[24h]))",
           "legendFormat": "",
           "refId": "G",
           "instant": true,
@@ -1274,7 +1274,7 @@
             "type": "prometheus",
             "uid": "${prometheus_source}"
           },
-          "expr": "min by (entry) (clamp_max(count_over_time(probe_success{job=\"proxy-probe\",kind=\"raw\"}[24h]) / 2880, 1))",
+          "expr": "min by (entry) (clamp_max(sum by (entry, protocol) (count_over_time(probe_success{job=\"proxy-probe\",kind=\"raw\"}[24h])) / 2880, 1))",
           "legendFormat": "",
           "refId": "H",
           "instant": true,
@@ -2196,7 +2196,7 @@
         "type": "prometheus",
         "uid": "${prometheus_source}"
       },
-      "description": "The proxy portal's daily status bars: each entry's probe success rate per 24 hours, by protocol, with the same colours as the hourly bars.",
+      "description": "The query of the proxy portal's daily status bars: each entry's probe success rate per day, midnight to midnight in the dashboard's time zone, by protocol, with the same colours as the hourly bars. The portal's days end at the last full hour.",
       "gridPos": {
         "h": 12,
         "w": 12,
@@ -2204,7 +2204,7 @@
         "y": 66
       },
       "interval": "1d",
-      "maxDataPoints": 30,
+      "maxDataPoints": 31,
       "timeFrom": "30d",
       "hideTimeOverride": false,
       "targets": [
@@ -2214,6 +2214,7 @@
             "uid": "${prometheus_source}"
           },
           "expr": "sum by (entry, protocol) (sum_over_time(probe_success{job=\"proxy-probe\"}[24h])) / sum by (entry, protocol) (count_over_time(probe_success{job=\"proxy-probe\"}[24h]))",
+          "interval": "1d",
           "legendFormat": "{{entry}} {{protocol}}",
           "refId": "A"
         }
@@ -2274,7 +2275,7 @@
         "type": "prometheus",
         "uid": "${prometheus_source}"
       },
-      "description": "The share of the 2880 probes a day expects that ran, per entry and protocol. Under 50 %, the portal's bar for that day is grey.",
+      "description": "The share of the 2880 probes a day expects that ran, per entry and protocol, midnight to midnight in the dashboard's time zone. Under 50 %, the portal's bar for a day is grey.",
       "gridPos": {
         "h": 12,
         "w": 12,
@@ -2282,7 +2283,7 @@
         "y": 66
       },
       "interval": "1d",
-      "maxDataPoints": 30,
+      "maxDataPoints": 31,
       "timeFrom": "30d",
       "hideTimeOverride": false,
       "targets": [
@@ -2292,6 +2293,7 @@
             "uid": "${prometheus_source}"
           },
           "expr": "clamp_max(sum by (entry, protocol) (count_over_time(probe_success{job=\"proxy-probe\"}[24h])) / 2880, 1)",
+          "interval": "1d",
           "legendFormat": "{{entry}} {{protocol}}",
           "refId": "A"
         }

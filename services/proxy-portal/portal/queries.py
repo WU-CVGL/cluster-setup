@@ -34,6 +34,14 @@ def _ha(pool):
 
 _RAW = 'job="proxy-probe",kind="raw"'
 
+
+def _pooled_rate(selector, by, width):
+    """Passing samples over all samples in the window, per `by`: a proxy whose probe labels change (public to
+    private) has an old and a new series, and both count."""
+    return (f"sum by ({by}) (sum_over_time(probe_success{{{selector}}}[{width}])) / "
+            f"sum by ({by}) (count_over_time(probe_success{{{selector}}}[{width}]))")
+
+
 STATUS = {
     "ha-general": _ha("ha-general"),
     "ha-private": _ha("ha-private"),
@@ -43,9 +51,10 @@ STATUS = {
         "duration_http": f'max by (entry) (probe_duration_seconds{{{_RAW},protocol="http"}})',
         "duration_socks": f'max by (entry) (probe_duration_seconds{{{_RAW},protocol="socks"}})',
         "last_check": f"max by (entry) (time() - timestamp(probe_success{{{_RAW}}}))",
-        "rate_24h_http": f'max by (entry) (avg_over_time(probe_success{{{_RAW},protocol="http"}}[24h]))',
-        "rate_24h_socks": f'max by (entry) (avg_over_time(probe_success{{{_RAW},protocol="socks"}}[24h]))',
-        "coverage_24h": f"min by (entry) (clamp_max(count_over_time(probe_success{{{_RAW}}}[24h]) / 2880, 1))",
+        "rate_24h_http": _pooled_rate(_RAW + ',protocol="http"', "entry", "24h"),
+        "rate_24h_socks": _pooled_rate(_RAW + ',protocol="socks"', "entry", "24h"),
+        "coverage_24h": (f"min by (entry) (clamp_max(sum by (entry, protocol) "
+                         f"(count_over_time(probe_success{{{_RAW}}}[24h])) / 2880, 1))"),
     },
 }
 
@@ -63,7 +72,7 @@ def _bars(width, seconds):
     expected = seconds // PROBE_INTERVAL
     samples = f"sum by (entry, protocol) (count_over_time(probe_success{{{sel}}}[{width}]))"
     return {
-        "rate": f"sum by (entry, protocol) (sum_over_time(probe_success{{{sel}}}[{width}])) / {samples}",
+        "rate": _pooled_rate(sel, "entry, protocol", width),
         "coverage": f"clamp_max({samples} / {expected}, 1)",
     }
 
