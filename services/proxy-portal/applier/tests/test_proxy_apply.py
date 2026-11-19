@@ -133,16 +133,23 @@ class FakeDocker:
 
 
 class FakeProbe:
-    """The HA entries: 204 for a login it knows, 407 otherwise; or a down entry, or one without proxies."""
+    """
+    The HA entries and the proxies' own entries: 204 for a login it knows, 407 otherwise; or a down entry, one without
+    proxies, or one whose proxies hang (hang: a known login takes the probe's whole timeout on the test's clock, then
+    gets no answer; a refused one still gets its 407 at once).
+    """
 
     def __init__(self, docker):
         self.docker = docker
-        self.mode = "ok"      # ok | down | silent | noproxies
+        self.mode = "ok"      # ok | down | silent | noproxies | hang | hang-all (every login hangs)
+        self.time = None      # the test's clock ([seconds]), which a hanging probe advances
+        self.timeouts = []    # the timeout of each probe
         self.calls = []       # users
         self.entry_calls = []  # (entry, user)
         self.logins = []      # (user, password) of each probe
 
-    def __call__(self, entry, user, password):
+    def __call__(self, entry, user, password, timeout):
+        self.timeouts.append(timeout)
         self.calls.append(user)
         self.entry_calls.append((entry, user))
         self.logins.append((user, password))
@@ -150,12 +157,18 @@ class FakeProbe:
             return "unreachable", None
         if self.mode == "silent":
             return "noresponse", None
+        if self.mode == "hang-all":
+            self.time[0] += timeout
+            return "noresponse", None
         users = {"ha-general": self.docker.ha_users, "ha-private": self.docker.ha_private_users}.get(entry)
         if users is None:  # a proxy's own entry, by its Compose service
             users = self.docker.proxy_users[entry]
         known = users.get(user) == password
         if not known:
             return "status", 407
+        if self.mode == "hang":
+            self.time[0] += timeout
+            return "noresponse", None
         return ("noresponse", None) if self.mode == "noproxies" else ("status", 204)
 
 
@@ -917,6 +930,109 @@ class GrantTest(_Base):
         self.assertEqual((record["status"], record["changed"], record["restarted"]), ("applied", False, []))
         self.assertEqual(self.docker.restarts(), [["xray-" + PRIVATE]])
         self.assertIn("alice", self.calls("xray-" + PRIVATE))
+
+
+class DeadlineTest(_Base):
+    """
+    verify_timeout bounds the whole verification, probe by probe, not only between rounds: with many logins to check
+    and proxies that hang on every login they accept, a run still ends near verify_timeout, far below the 15 minutes
+    proxy-apply.service may run (TimeoutStartSec), with every result written. Each probe takes its whole timeout on
+    the test's clock.
+    """
+
+    SYSTEMD_LIMIT = 900  # seconds: TimeoutStartSec of proxy-apply.service
+    VERIFY_TIMEOUT = 60  # the applier's default
+
+    def setUp(self):
+        super().setUp()
+        self.other = self.base / "xray" / OTHER / "config" / "config.json"
+        self.other.parent.mkdir(parents=True)
+        self.other.write_text(self.proxy.read_text())
+        pa.render(pa.Accounts(self.base))
+        self.mark_applied()
+        self.docker = GrantDocker(self.base)
+        self.probe = FakeProbe(self.docker)
+        self.probe.time = self.time
+
+    def applier(self):
+        applier = super().applier()
+        applier.verify_timeout = self.VERIFY_TIMEOUT
+        return applier
+
+    def accounts(self, names, proxies=()):
+        accounts = pa.Accounts(self.base)
+        for name in names:
+            accounts.accounts[name] = pa.new_password()
+            if proxies:
+                accounts.grants[name] = set(proxies)
+        accounts.save()
+        pa.render(accounts)
+        self.mark_applied()
+        self.docker.load()
+
+    def timed_run(self):
+        start = self.time[0]
+        code = self.run_applier()
+        return code, self.time[0] - start
+
+    def assert_bounded(self, elapsed, verifications=1):
+        # each verification ends at most one probe after its deadline, plus the pause between two rounds
+        self.assertLessEqual(elapsed, verifications * (self.VERIFY_TIMEOUT + ap.PROBE_TIMEOUT + 2))
+        self.assertLess(elapsed, self.SYSTEMD_LIMIT / 4)
+        self.assertTrue(all(0 < t <= ap.PROBE_TIMEOUT for t in self.probe.timeouts), set(self.probe.timeouts))
+
+    def test_many_rotates_of_granted_accounts(self):
+        names = [f"u{i:02d}" for i in range(40)]
+        self.accounts(names, (PRIVATE, OTHER))
+        before = self.passwords()
+        for i, name in enumerate(names):
+            self.request(f"abcdefgh-{i:02d}", "rotate", name)
+        self.probe.mode = "hang"  # every login a proxy accepts hangs: 122 such checks, 976 s at 8 s each
+        code, elapsed = self.timed_run()
+        self.assertEqual(code, 0)
+        self.assert_bounded(elapsed)
+        for i, name in enumerate(names):
+            record = self.status(f"abcdefgh-{i:02d}")
+            self.assertEqual((record["status"], record["stage"], record["result"]), ("unconfirmed", "verify", True))
+            self.assertIn("no 204 for", record["error"])
+            self.assertNotEqual(self.passwords()[name], before[name])  # live
+        self.assertEqual(len(os.listdir(self.spool.results)), 40)    # every new password handed out
+        self.assertFalse((self.base / ap.BACKUP_DIR).exists())        # committed, nothing left to recover
+
+    def test_many_grants_of_one_proxy(self):
+        names = [f"g{i:02d}" for i in range(64)]
+        self.accounts(names)
+        for i, name in enumerate(names):
+            self.request(f"abcdefgh-{i:02d}", "grant", name, raw=json.dumps(
+                {"id": f"abcdefgh-{i:02d}", "op": "grant", "username": name, "proxy": PRIVATE}).encode())
+        self.probe.mode = "hang"  # 131 checks that must pass, 1,048 s at 8 s each
+        code, elapsed = self.timed_run()
+        self.assertEqual(code, 0)
+        self.assert_bounded(elapsed)
+        self.assertEqual({self.status(f"abcdefgh-{i:02d}")["status"] for i in range(64)}, {"unconfirmed"})
+        self.assertEqual(self.status("abcdefgh-00")["restarted"], ["xray-" + PRIVATE])
+        self.assertEqual(pa.Accounts(self.base).grants, {name: {PRIVATE} for name in names})
+
+    def test_refusals_not_confirmed_in_time_roll_back_in_time(self):
+        """
+        Every login hangs, refused ones too: no 407 by the deadline fails and rolls back; the rollback's own check
+        (whose wrong password gets no 407 either) is bounded the same way, and reports the rollback as unfinished.
+        """
+        names = [f"u{i:02d}" for i in range(40)]
+        self.accounts(names, (PRIVATE, OTHER))
+        files = self.files()
+        for i, name in enumerate(names):
+            self.request(f"abcdefgh-{i:02d}", "rotate", name)
+        self.probe.mode = "hang-all"
+        code, elapsed = self.timed_run()
+        self.assertEqual(code, 1)  # a rollback that did not finish
+        self.assert_bounded(elapsed, verifications=2)  # the apply's and the rollback's
+        record = self.status("abcdefgh-00")
+        self.assertEqual((record["status"], record["stage"], record["restored"]), ("failed", "verify", False))
+        self.assertFalse((self.base / pa.APPLIED_FILE).exists())  # the next run restarts and checks everything
+        self.assertTrue(record["error"].endswith("a wrong password on ha-private (-)"), record["error"])  # no 407 in time
+        self.assertEqual(self.files(), files)
+        self.assertEqual(os.listdir(self.spool.results), [])
 
 
 class OpenDocker(FakeDocker):

@@ -62,9 +62,11 @@ MANIFEST = "manifest.json"
 SEQUENCE_FILE = "sequence.json"  # in the spool: the last apply sequence number
 
 Run = Callable[[Sequence[str], Optional[str], float], Tuple[int, str, str]]
-# (target, user, password): the target is ha-general, ha-private or a proxy's own entry, by its Compose service
-# (xray-<proxy>), whose address the applier finds in the Compose file
-Probe = Callable[[str, str, str], Tuple[str, Optional[int]]]
+# (target, user, password, timeout): the target is ha-general, ha-private or a proxy's own entry, by its Compose
+# service (xray-<proxy>), whose address the applier finds in the Compose file; timeout (seconds) bounds the request
+Probe = Callable[[str, str, str, float], Tuple[str, Optional[int]]]
+PROBE_TIMEOUT = 8.0       # seconds one probe may take at most
+MIN_PROBE_TIMEOUT = 0.5   # a probe gets at least this much, once verification has any time left
 ENTRIES = (pa.GENERAL, pa.HA_PRIVATE)
 Login = Tuple[str, str, str, str]  # (label, entry, user, password)
 Checks = Tuple[List[Login], List[Login], List[str]]  # (accept, refuse, the private proxies that could not be checked)
@@ -444,10 +446,19 @@ class Compose:
         return rc == 0, (out + err)
 
 
-def _read_status(sock: socket.socket) -> Optional[int]:
+def _within(sock: socket.socket, end: float) -> socket.socket:
+    """Give the socket's next operation only the time left until end (time.monotonic()); raises when none is."""
+    left = end - time.monotonic()
+    if left <= 0:
+        raise socket.timeout("probe time is up")
+    sock.settimeout(left)
+    return sock
+
+
+def _read_status(sock: socket.socket, end: float) -> Optional[int]:
     data = b""
     while b"\r\n" not in data and len(data) < 16384:
-        chunk = sock.recv(4096)
+        chunk = _within(sock, end).recv(4096)
         if not chunk:
             break
         data += chunk
@@ -460,8 +471,10 @@ def proxy_probe(proxy: Tuple[str, int], url: str, user: str, password: str, time
     """
     One request for url through an HTTP proxy, logging in as user: ("status", code), ("noresponse", None)
     when the proxy took the connection but sent no status, or ("unreachable", None).
-    An https url goes through CONNECT: a refused login is the CONNECT's 407.
+    An https url goes through CONNECT: a refused login is the CONNECT's 407. timeout bounds the whole request,
+    every connect, send and receive together.
     """
+    end = time.monotonic() + timeout
     parts = urllib.parse.urlsplit(url)
     host = parts.hostname or ""
     port = parts.port or (443 if parts.scheme == "https" else 80)
@@ -475,19 +488,21 @@ def proxy_probe(proxy: Tuple[str, int], url: str, user: str, password: str, time
         if parts.query:
             path += "?" + parts.query
         if parts.scheme == "http":
-            sock.sendall((f"GET {url} HTTP/1.1\r\nHost: {parts.netloc}\r\nProxy-Authorization: Basic {auth}\r\n"
-                          "User-Agent: proxy-apply\r\nConnection: close\r\n\r\n").encode("ascii"))
-            code = _read_status(sock)
+            _within(sock, end).sendall((f"GET {url} HTTP/1.1\r\nHost: {parts.netloc}\r\n"
+                                        f"Proxy-Authorization: Basic {auth}\r\n"
+                                        "User-Agent: proxy-apply\r\nConnection: close\r\n\r\n").encode("ascii"))
+            code = _read_status(sock, end)
         else:
-            sock.sendall((f"CONNECT {host}:{port} HTTP/1.1\r\nHost: {host}:{port}\r\n"
-                          f"Proxy-Authorization: Basic {auth}\r\nUser-Agent: proxy-apply\r\n\r\n").encode("ascii"))
-            code = _read_status(sock)
+            _within(sock, end).sendall((f"CONNECT {host}:{port} HTTP/1.1\r\nHost: {host}:{port}\r\n"
+                                        f"Proxy-Authorization: Basic {auth}\r\nUser-Agent: proxy-apply\r\n\r\n")
+                                       .encode("ascii"))
+            code = _read_status(sock, end)
             if code == 200:
-                tls = (context or ssl.create_default_context()).wrap_socket(sock, server_hostname=host)
+                tls = (context or ssl.create_default_context()).wrap_socket(_within(sock, end), server_hostname=host)
                 sock = tls
-                tls.sendall((f"GET {path} HTTP/1.1\r\nHost: {parts.netloc}\r\nUser-Agent: proxy-apply\r\n"
-                             "Connection: close\r\n\r\n").encode("ascii"))
-                code = _read_status(tls)
+                _within(tls, end).sendall((f"GET {path} HTTP/1.1\r\nHost: {parts.netloc}\r\n"
+                                           "User-Agent: proxy-apply\r\nConnection: close\r\n\r\n").encode("ascii"))
+                code = _read_status(tls, end)
         return ("status", code) if code is not None else ("noresponse", None)
     except (OSError, ValueError):
         return "noresponse", None
@@ -501,8 +516,10 @@ class Applier:
     def __init__(self, base_dir: Path, spool: Spool, compose: Compose, probe: Probe,
                  verify_timeout: float = 60, verify_interval: float = 2,
                  sleep: Callable[[float], None] = time.sleep, clock: Callable[[], float] = time.monotonic,
-                 addresses: Optional[Dict[str, Tuple[str, int]]] = None, proxy_host: str = "127.0.0.1"):
+                 addresses: Optional[Dict[str, Tuple[str, int]]] = None, proxy_host: str = "127.0.0.1",
+                 probe_timeout: float = PROBE_TIMEOUT):
         self.base = Path(base_dir)
+        self.probe_timeout = probe_timeout
         # the probe's targets: the HA entries, and each private proxy's own entry once a check needs it, at its
         # published HTTP port on proxy_host (or the host address the Compose file publishes it on)
         self.addresses = addresses if addresses is not None else {}
@@ -1001,24 +1018,43 @@ class Applier:
         ("ok"|"failed"|"unconfirmed", detail). A login that must be refused gets 407 from a running entry
         whatever the proxies do, and a wrong password always must (the canary, on each entry): no 407 by the
         deadline is a failure. A login that must pass needs a working proxy for its 204: no answer by then
-        is unconfirmed.
+        is unconfirmed. The deadline holds between probes too: each probe gets at most the time left (and at least
+        MIN_PROBE_TIMEOUT), and none starts once it is up, however many logins there are to check, so a run with
+        many checks through hanging proxies still ends near verify_timeout.
         """
         deadline = self.clock() + self.verify_timeout
         accept = list(accept)
         refuse = list(refuse) + [(f"a wrong password on {entry}", entry, pa.MONITOR, "wrong-" + pa.new_password())
                                  for entry in ENTRIES]
         last = {}
+
+        def probe(item):
+            """The probe's answer, or None when the time is up."""
+            left = deadline - self.clock()
+            if left <= 0:
+                return None
+            return self.probe(item[1], item[2], item[3], min(self.probe_timeout, max(left, MIN_PROBE_TIMEOUT)))
+
         while True:
+            expired = False
             for item in list(refuse):
-                kind, code = self.probe(item[1], item[2], item[3])
+                answer = probe(item)
+                if answer is None:
+                    expired = True
+                    break
+                kind, code = answer
                 if kind == "status" and code == 407:
                     refuse.remove(item)
                 elif kind == "status":
                     return "failed", f"{item[0]}: expected 407, got {code}"
                 else:
                     last[item[0]] = kind
-            for item in list(accept):
-                kind, code = self.probe(item[1], item[2], item[3])
+            for item in [] if expired else list(accept):
+                answer = probe(item)
+                if answer is None:
+                    expired = True
+                    break
+                kind, code = answer
                 if kind == "status" and code == 204:
                     accept.remove(item)
                 elif kind == "status" and code == 407:
@@ -1027,7 +1063,7 @@ class Applier:
                     last[item[0]] = str(code) if kind == "status" else kind
             if not accept and not refuse:
                 return "ok", ""
-            if self.clock() >= deadline:
+            if expired or self.clock() >= deadline:
                 if refuse:
                     services = sorted({HA_SERVICE if target in ENTRIES else target for _, target, _, _ in refuse})
                     return "failed", f"no 407 from {', '.join(services)} in {self.verify_timeout:.0f} s for " + \
@@ -1239,11 +1275,11 @@ def main(argv: Optional[List[str]] = None) -> int:
 
     addresses = {pa.GENERAL: args.ha_http, pa.HA_PRIVATE: args.ha_private_http}  # the applier adds the proxies'
 
-    def probe(target, user, password):
+    def probe(target, user, password, timeout):
         address = addresses.get(target)
         if address is None:
             return "unreachable", None
-        return proxy_probe(address, args.probe_url, user, password)
+        return proxy_probe(address, args.probe_url, user, password, timeout=timeout)
 
     try:
         return Applier(args.services_dir, spool, compose, probe, verify_timeout=args.verify_timeout,
