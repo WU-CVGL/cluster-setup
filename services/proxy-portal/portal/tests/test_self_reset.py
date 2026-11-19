@@ -249,7 +249,10 @@ class SelfResetTest(SelfResetMixin, PortalTestCase):
         data = self.client.get(f"/api/me/reset/{request_id}").json()
         self.assertEqual((data["state"], data["level"], data["password"]), ("failed", "bad", "none"))
         self.assertIn("Failed; the previous state is back", data["text"])
-        self.assertNotIn("502", json.dumps(data))
+        # the texts and states only: a random id or the time's microseconds may hold "502"
+        shown_to_user = json.dumps({k: v for k, v in data.items() if k not in ("id", "requested_at")})
+        self.assertNotIn("ha-general", shown_to_user)
+        self.assertNotIn("502", shown_to_user)
         second = self.reset().json()["id"]
         self.status(second, "unconfirmed")
         data = self.client.get(f"/api/me/reset/{second}").json()
