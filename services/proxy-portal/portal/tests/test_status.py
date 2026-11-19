@@ -212,6 +212,31 @@ class StatusTest(PortalTestCase):
         self.assertEqual(set(bars["days"]["rows"]["usca6-bwh-1tb"]["state"]), {"unknown"})
         self.assertEqual(set(bars["days"]["rows"]["usca6-bwh-1tb"]["success_rate"]), {None})
 
+    def test_bucket_with_a_label_change(self):
+        """
+        A proxy reclassified half way through an hour: failing on its old labels, passing on its new ones. The
+        queries pool both series (services/prometheus/tests/proxy-status-bars.test.yml): half the samples passed and
+        the hour is fully probed, so the bar is red, not green from the better series with half the coverage.
+        """
+        rows = [{"entry": "ha-general", "protocol": p} for p in ("http", "socks")]
+
+        def rate(params):
+            return stubs._range(params, lambda labels, t: 0.5, rows)
+
+        def coverage(params):
+            return stubs._range(params, lambda labels, t: 1, rows)
+
+        for window in queries.BARS:
+            self.prometheus.answers[("range", queries.BARS[window]["rate"])] = rate
+            self.prometheus.answers[("range", queries.BARS[window]["coverage"])] = coverage
+        self.assertEqual(health.bucket_state(0.5, 1.0), "bad")
+        bars = self.client.get("/api/status").json()["bars"]
+        for window in ("hours", "days"):
+            row = bars[window]["rows"]["ha-general"]
+            self.assertEqual(set(row["state"]), {"bad"})
+            self.assertEqual(set(row["success_rate"]), {0.5})
+            self.assertEqual(set(row["coverage"]), {1.0})
+
     def test_ports(self):
         data = self.client.get("/api/status").json()
         self.assertEqual(data["entries"]["ha-general"]["ports"], {"http": 30889, "socks": 30089})

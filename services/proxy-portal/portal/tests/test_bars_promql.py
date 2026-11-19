@@ -1,0 +1,55 @@
+"""
+The status bars' queries evaluated by Prometheus itself: services/prometheus/tests/proxy-status-bars.test.yml runs
+them on probe samples (a label change inside a bucket, two series at once, partly probed and empty buckets) with
+promtool, from PATH or from the Prometheus image docker-compose.yml pins (only when Docker has it already, and with
+no network). Without either, that test is skipped.
+"""
+
+import re
+import shutil
+import subprocess
+import tempfile
+from pathlib import Path
+
+from django.test import SimpleTestCase
+
+from portal import queries
+
+SERVICES = Path(__file__).resolve().parents[3]
+FIXTURE = SERVICES / "prometheus" / "tests" / "proxy-status-bars.test.yml"
+
+
+def fixture_exprs():
+    return set(re.findall(r"^\s*- expr: '(.*)'$", FIXTURE.read_text(), re.MULTILINE))
+
+
+def prometheus_image():
+    found = re.search(r"^\s*image:\s*(prom/prometheus:\S+)\s*$", (SERVICES / "docker-compose.yml").read_text(),
+                      re.MULTILINE)
+    return found.group(1) if found else None
+
+
+class BarsPromQLTest(SimpleTestCase):
+    def test_fixture_tests_the_bars_queries(self):
+        self.assertEqual(fixture_exprs(), {expr for exprs in queries.BARS.values() for expr in exprs.values()})
+
+    def test_promtool(self):
+        promtool = shutil.which("promtool")
+        image = prometheus_image()
+        if promtool is None:
+            if image is None or shutil.which("docker") is None:
+                self.skipTest("promtool or Docker with the Prometheus image of docker-compose.yml is required")
+            if subprocess.run(["docker", "image", "inspect", image], capture_output=True).returncode:
+                self.skipTest(f"promtool is not installed and Docker does not have {image}")
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            root.chmod(0o755)
+            (root / FIXTURE.name).write_text(FIXTURE.read_text())
+            (root / FIXTURE.name).chmod(0o644)
+            command = [promtool] if promtool else [
+                "docker", "run", "--rm", "--network", "none", "--entrypoint", "promtool",
+                "-v", f"{root}:/test:ro", "-w", "/test", image]
+            result = subprocess.run(command + ["test", "rules", FIXTURE.name], cwd=root, capture_output=True,
+                                    text=True, timeout=300)
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        self.assertIn("SUCCESS", result.stdout + result.stderr)

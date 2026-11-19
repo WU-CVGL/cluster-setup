@@ -51,7 +51,9 @@ STATUS = {
 
 # The status bars: every probed entry's (the HA entries' and each proxy's) probe success rate and coverage per
 # bucket, by protocol, from range queries whose step is the bucket, so each value covers the bucket before its time:
-# 96 one-hour buckets, or 30 one-day buckets. One query per value and bucket size covers every row.
+# 96 one-hour buckets, or 30 one-day buckets. One query per value and bucket size covers every row. A proxy whose
+# probe labels change (public to private) has two series in that bucket: the rate pools their samples (passing
+# samples over all samples) and the coverage counts them together, at most 1 when both overlap.
 BAR_WINDOWS = {"hours": ("1h", 3600, 96), "days": ("24h", 86400, 30)}
 PROBE_INTERVAL = 30  # seconds between two probes of a target, as in Prometheus
 
@@ -59,10 +61,10 @@ PROBE_INTERVAL = 30  # seconds between two probes of a target, as in Prometheus
 def _bars(width, seconds):
     sel = 'job="proxy-probe"'
     expected = seconds // PROBE_INTERVAL
+    samples = f"sum by (entry, protocol) (count_over_time(probe_success{{{sel}}}[{width}]))"
     return {
-        "rate": f"max by (entry, protocol) (avg_over_time(probe_success{{{sel}}}[{width}]))",
-        "coverage": (f"min by (entry, protocol) (clamp_max(count_over_time(probe_success{{{sel}}}[{width}]) / "
-                     f"{expected}, 1))"),
+        "rate": f"sum by (entry, protocol) (sum_over_time(probe_success{{{sel}}}[{width}])) / {samples}",
+        "coverage": f"clamp_max({samples} / {expected}, 1)",
     }
 
 

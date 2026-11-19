@@ -2061,7 +2061,7 @@
             "type": "prometheus",
             "uid": "${prometheus_source}"
           },
-          "expr": "max by (entry, protocol) (avg_over_time(probe_success{job=\"proxy-probe\"}[1h]))",
+          "expr": "sum by (entry, protocol) (sum_over_time(probe_success{job=\"proxy-probe\"}[1h])) / sum by (entry, protocol) (count_over_time(probe_success{job=\"proxy-probe\"}[1h]))",
           "legendFormat": "{{entry}} {{protocol}}",
           "refId": "A"
         }
@@ -2139,7 +2139,7 @@
             "type": "prometheus",
             "uid": "${prometheus_source}"
           },
-          "expr": "min by (entry, protocol) (clamp_max(count_over_time(probe_success{job=\"proxy-probe\"}[1h]) / 120, 1))",
+          "expr": "clamp_max(sum by (entry, protocol) (count_over_time(probe_success{job=\"proxy-probe\"}[1h])) / 120, 1)",
           "legendFormat": "{{entry}} {{protocol}}",
           "refId": "A"
         }
@@ -2213,7 +2213,7 @@
             "type": "prometheus",
             "uid": "${prometheus_source}"
           },
-          "expr": "max by (entry, protocol) (avg_over_time(probe_success{job=\"proxy-probe\"}[24h]))",
+          "expr": "sum by (entry, protocol) (sum_over_time(probe_success{job=\"proxy-probe\"}[24h])) / sum by (entry, protocol) (count_over_time(probe_success{job=\"proxy-probe\"}[24h]))",
           "legendFormat": "{{entry}} {{protocol}}",
           "refId": "A"
         }
@@ -2291,7 +2291,7 @@
             "type": "prometheus",
             "uid": "${prometheus_source}"
           },
-          "expr": "min by (entry, protocol) (clamp_max(count_over_time(probe_success{job=\"proxy-probe\"}[24h]) / 2880, 1))",
+          "expr": "clamp_max(sum by (entry, protocol) (count_over_time(probe_success{job=\"proxy-probe\"}[24h])) / 2880, 1)",
           "legendFormat": "{{entry}} {{protocol}}",
           "refId": "A"
         }
