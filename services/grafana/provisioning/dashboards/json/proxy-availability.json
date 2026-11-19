@@ -72,7 +72,7 @@
             "type": "prometheus",
             "uid": "${prometheus_source}"
           },
-          "expr": "(max by (protocol) (probe_success{job=\"proxy-probe\",kind=\"ha\",pool=\"ha-general\",protocol=\"http\"} unless on (instance) (time() - timestamp(probe_success{job=\"proxy-probe\",kind=\"ha\",pool=\"ha-general\",protocol=\"http\"}) > 90))) or (max by (protocol) (max_over_time(up{job=\"proxy-probe\",kind=\"ha\",pool=\"ha-general\",protocol=\"http\"}[1d])) * 0 - 1)",
+          "expr": "(max by (protocol) (probe_success{job=\"proxy-probe\",kind=\"ha\",pool=\"ha-general\",protocol=\"http\"} unless (time() - timestamp(probe_success{job=\"proxy-probe\",kind=\"ha\",pool=\"ha-general\",protocol=\"http\"}) > 90))) or (max by (protocol) (max_over_time(up{job=\"proxy-probe\",kind=\"ha\",pool=\"ha-general\",protocol=\"http\"}[1d])) * 0 - 1)",
           "legendFormat": "HTTP",
           "refId": "A",
           "instant": true,
@@ -168,7 +168,7 @@
             "type": "prometheus",
             "uid": "${prometheus_source}"
           },
-          "expr": "(max by (protocol) (probe_success{job=\"proxy-probe\",kind=\"ha\",pool=\"ha-general\",protocol=\"socks\"} unless on (instance) (time() - timestamp(probe_success{job=\"proxy-probe\",kind=\"ha\",pool=\"ha-general\",protocol=\"socks\"}) > 90))) or (max by (protocol) (max_over_time(up{job=\"proxy-probe\",kind=\"ha\",pool=\"ha-general\",protocol=\"socks\"}[1d])) * 0 - 1)",
+          "expr": "(max by (protocol) (probe_success{job=\"proxy-probe\",kind=\"ha\",pool=\"ha-general\",protocol=\"socks\"} unless (time() - timestamp(probe_success{job=\"proxy-probe\",kind=\"ha\",pool=\"ha-general\",protocol=\"socks\"}) > 90))) or (max by (protocol) (max_over_time(up{job=\"proxy-probe\",kind=\"ha\",pool=\"ha-general\",protocol=\"socks\"}[1d])) * 0 - 1)",
           "legendFormat": "SOCKS5",
           "refId": "A",
           "instant": true,
@@ -264,7 +264,7 @@
             "type": "prometheus",
             "uid": "${prometheus_source}"
           },
-          "expr": "count(((max by (entry) (probe_success{job=\"proxy-probe\",kind=\"raw\",pool=\"ha-general\",protocol=\"socks\"} unless on (instance) (time() - timestamp(probe_success{job=\"proxy-probe\",kind=\"raw\",pool=\"ha-general\",protocol=\"socks\"}) > 90))) or (max by (entry) (max_over_time(up{job=\"proxy-probe\",kind=\"raw\",pool=\"ha-general\",protocol=\"socks\"}[1d])) * 0 - 1)) == 1) or vector(0)",
+          "expr": "count(((max by (entry) (probe_success{job=\"proxy-probe\",kind=\"raw\",pool=\"ha-general\",protocol=\"socks\"} unless (time() - timestamp(probe_success{job=\"proxy-probe\",kind=\"raw\",pool=\"ha-general\",protocol=\"socks\"}) > 90))) or (max by (entry) (max_over_time(up{job=\"proxy-probe\",kind=\"raw\",pool=\"ha-general\",protocol=\"socks\"}[1d])) * 0 - 1)) == 1) or vector(0)",
           "legendFormat": "passing",
           "refId": "A",
           "instant": true,
@@ -347,7 +347,7 @@
             "type": "prometheus",
             "uid": "${prometheus_source}"
           },
-          "expr": "max by (protocol) (probe_duration_seconds{job=\"proxy-probe\",kind=\"ha\",pool=\"ha-general\"} unless on (instance) (time() - timestamp(probe_duration_seconds{job=\"proxy-probe\",kind=\"ha\",pool=\"ha-general\"}) > 90))",
+          "expr": "max by (protocol) (probe_duration_seconds{job=\"proxy-probe\",kind=\"ha\",pool=\"ha-general\"} unless (time() - timestamp(probe_duration_seconds{job=\"proxy-probe\",kind=\"ha\",pool=\"ha-general\"}) > 90))",
           "legendFormat": "{{protocol}}",
           "refId": "A",
           "instant": true,
@@ -412,7 +412,7 @@
             "type": "prometheus",
             "uid": "${prometheus_source}"
           },
-          "expr": "max by (protocol) (time() - timestamp(probe_success{job=\"proxy-probe\",kind=\"ha\",pool=\"ha-general\"}))",
+          "expr": "min by (protocol) (time() - timestamp(probe_success{job=\"proxy-probe\",kind=\"ha\",pool=\"ha-general\"}))",
           "legendFormat": "{{protocol}}",
           "refId": "A",
           "instant": true,
@@ -631,7 +631,7 @@
             "type": "prometheus",
             "uid": "${prometheus_source}"
           },
-          "expr": "(max by (protocol) (probe_success{job=\"proxy-probe\",kind=\"ha\",pool=\"ha-private\",protocol=\"http\"} unless on (instance) (time() - timestamp(probe_success{job=\"proxy-probe\",kind=\"ha\",pool=\"ha-private\",protocol=\"http\"}) > 90))) or (max by (protocol) (max_over_time(up{job=\"proxy-probe\",kind=\"ha\",pool=\"ha-private\",protocol=\"http\"}[1d])) * 0 - 1)",
+          "expr": "(max by (protocol) (probe_success{job=\"proxy-probe\",kind=\"ha\",pool=\"ha-private\",protocol=\"http\"} unless (time() - timestamp(probe_success{job=\"proxy-probe\",kind=\"ha\",pool=\"ha-private\",protocol=\"http\"}) > 90))) or (max by (protocol) (max_over_time(up{job=\"proxy-probe\",kind=\"ha\",pool=\"ha-private\",protocol=\"http\"}[1d])) * 0 - 1)",
           "legendFormat": "HTTP",
           "refId": "A",
           "instant": true,
@@ -727,7 +727,7 @@
             "type": "prometheus",
             "uid": "${prometheus_source}"
           },
-          "expr": "(max by (protocol) (probe_success{job=\"proxy-probe\",kind=\"ha\",pool=\"ha-private\",protocol=\"socks\"} unless on (instance) (time() - timestamp(probe_success{job=\"proxy-probe\",kind=\"ha\",pool=\"ha-private\",protocol=\"socks\"}) > 90))) or (max by (protocol) (max_over_time(up{job=\"proxy-probe\",kind=\"ha\",pool=\"ha-private\",protocol=\"socks\"}[1d])) * 0 - 1)",
+          "expr": "(max by (protocol) (probe_success{job=\"proxy-probe\",kind=\"ha\",pool=\"ha-private\",protocol=\"socks\"} unless (time() - timestamp(probe_success{job=\"proxy-probe\",kind=\"ha\",pool=\"ha-private\",protocol=\"socks\"}) > 90))) or (max by (protocol) (max_over_time(up{job=\"proxy-probe\",kind=\"ha\",pool=\"ha-private\",protocol=\"socks\"}[1d])) * 0 - 1)",
           "legendFormat": "SOCKS5",
           "refId": "A",
           "instant": true,
@@ -823,7 +823,7 @@
             "type": "prometheus",
             "uid": "${prometheus_source}"
           },
-          "expr": "count(((max by (entry) (probe_success{job=\"proxy-probe\",kind=\"raw\",pool=~\"ha-general|ha-private\",protocol=\"socks\"} unless on (instance) (time() - timestamp(probe_success{job=\"proxy-probe\",kind=\"raw\",pool=~\"ha-general|ha-private\",protocol=\"socks\"}) > 90))) or (max by (entry) (max_over_time(up{job=\"proxy-probe\",kind=\"raw\",pool=~\"ha-general|ha-private\",protocol=\"socks\"}[1d])) * 0 - 1)) == 1) or vector(0)",
+          "expr": "count(((max by (entry) (probe_success{job=\"proxy-probe\",kind=\"raw\",pool=~\"ha-general|ha-private\",protocol=\"socks\"} unless (time() - timestamp(probe_success{job=\"proxy-probe\",kind=\"raw\",pool=~\"ha-general|ha-private\",protocol=\"socks\"}) > 90))) or (max by (entry) (max_over_time(up{job=\"proxy-probe\",kind=\"raw\",pool=~\"ha-general|ha-private\",protocol=\"socks\"}[1d])) * 0 - 1)) == 1) or vector(0)",
           "legendFormat": "passing",
           "refId": "A",
           "instant": true,
@@ -906,7 +906,7 @@
             "type": "prometheus",
             "uid": "${prometheus_source}"
           },
-          "expr": "max by (protocol) (probe_duration_seconds{job=\"proxy-probe\",kind=\"ha\",pool=\"ha-private\"} unless on (instance) (time() - timestamp(probe_duration_seconds{job=\"proxy-probe\",kind=\"ha\",pool=\"ha-private\"}) > 90))",
+          "expr": "max by (protocol) (probe_duration_seconds{job=\"proxy-probe\",kind=\"ha\",pool=\"ha-private\"} unless (time() - timestamp(probe_duration_seconds{job=\"proxy-probe\",kind=\"ha\",pool=\"ha-private\"}) > 90))",
           "legendFormat": "{{protocol}}",
           "refId": "A",
           "instant": true,
@@ -971,7 +971,7 @@
             "type": "prometheus",
             "uid": "${prometheus_source}"
           },
-          "expr": "max by (protocol) (time() - timestamp(probe_success{job=\"proxy-probe\",kind=\"ha\",pool=\"ha-private\"}))",
+          "expr": "min by (protocol) (time() - timestamp(probe_success{job=\"proxy-probe\",kind=\"ha\",pool=\"ha-private\"}))",
           "legendFormat": "{{protocol}}",
           "refId": "A",
           "instant": true,
@@ -1190,7 +1190,7 @@
             "type": "prometheus",
             "uid": "${prometheus_source}"
           },
-          "expr": "(max by (entry, pool, access) (probe_success{job=\"proxy-probe\",kind=\"raw\",protocol=\"http\"} unless on (instance) (time() - timestamp(probe_success{job=\"proxy-probe\",kind=\"raw\",protocol=\"http\"}) > 90))) or on (entry) (max by (entry, pool, access) (up{job=\"proxy-probe\",kind=\"raw\",protocol=\"http\"}) * 0 - 1) or on (entry) (max by (entry, pool, access) (max_over_time(up{job=\"proxy-probe\",kind=\"raw\",protocol=\"http\"}[1d])) * 0 - 1)",
+          "expr": "(max by (entry, pool, access) (probe_success{job=\"proxy-probe\",kind=\"raw\",protocol=\"http\"} unless (time() - timestamp(probe_success{job=\"proxy-probe\",kind=\"raw\",protocol=\"http\"}) > 90))) or on (entry) (max by (entry, pool, access) (up{job=\"proxy-probe\",kind=\"raw\",protocol=\"http\"}) * 0 - 1) or on (entry) (max by (entry, pool, access) (max_over_time(up{job=\"proxy-probe\",kind=\"raw\",protocol=\"http\"}[1d])) * 0 - 1)",
           "legendFormat": "",
           "refId": "A",
           "instant": true,
@@ -1202,7 +1202,7 @@
             "type": "prometheus",
             "uid": "${prometheus_source}"
           },
-          "expr": "(max by (entry) (probe_success{job=\"proxy-probe\",kind=\"raw\",protocol=\"socks\"} unless on (instance) (time() - timestamp(probe_success{job=\"proxy-probe\",kind=\"raw\",protocol=\"socks\"}) > 90))) or (max by (entry) (max_over_time(up{job=\"proxy-probe\",kind=\"raw\",protocol=\"socks\"}[1d])) * 0 - 1)",
+          "expr": "(max by (entry) (probe_success{job=\"proxy-probe\",kind=\"raw\",protocol=\"socks\"} unless (time() - timestamp(probe_success{job=\"proxy-probe\",kind=\"raw\",protocol=\"socks\"}) > 90))) or (max by (entry) (max_over_time(up{job=\"proxy-probe\",kind=\"raw\",protocol=\"socks\"}[1d])) * 0 - 1)",
           "legendFormat": "",
           "refId": "B",
           "instant": true,
@@ -1214,7 +1214,7 @@
             "type": "prometheus",
             "uid": "${prometheus_source}"
           },
-          "expr": "max by (entry) (probe_duration_seconds{job=\"proxy-probe\",kind=\"raw\",protocol=\"http\"})",
+          "expr": "max by (entry) (probe_duration_seconds{job=\"proxy-probe\",kind=\"raw\",protocol=\"http\"} unless (time() - timestamp(probe_duration_seconds{job=\"proxy-probe\",kind=\"raw\",protocol=\"http\"}) > 90))",
           "legendFormat": "",
           "refId": "C",
           "instant": true,
@@ -1226,7 +1226,7 @@
             "type": "prometheus",
             "uid": "${prometheus_source}"
           },
-          "expr": "max by (entry) (probe_duration_seconds{job=\"proxy-probe\",kind=\"raw\",protocol=\"socks\"})",
+          "expr": "max by (entry) (probe_duration_seconds{job=\"proxy-probe\",kind=\"raw\",protocol=\"socks\"} unless (time() - timestamp(probe_duration_seconds{job=\"proxy-probe\",kind=\"raw\",protocol=\"socks\"}) > 90))",
           "legendFormat": "",
           "refId": "D",
           "instant": true,
@@ -1238,7 +1238,7 @@
             "type": "prometheus",
             "uid": "${prometheus_source}"
           },
-          "expr": "max by (entry) (time() - timestamp(probe_success{job=\"proxy-probe\",kind=\"raw\"}))",
+          "expr": "max by (entry) (min by (entry, protocol) (time() - timestamp(probe_success{job=\"proxy-probe\",kind=\"raw\"})))",
           "legendFormat": "",
           "refId": "E",
           "instant": true,
@@ -1311,7 +1311,7 @@
           "id": "joinByField",
           "options": {
             "byField": "entry",
-            "mode": "outer"
+            "mode": "outerTabular"
           }
         },
         {
@@ -1713,7 +1713,7 @@
             "type": "prometheus",
             "uid": "${prometheus_source}"
           },
-          "expr": "(max by (entry, protocol) (probe_success{job=\"proxy-probe\"} unless on (instance) (time() - timestamp(probe_success{job=\"proxy-probe\"}) > 90))) or (max by (entry, protocol) (max_over_time(up{job=\"proxy-probe\"}[1d])) * 0 - 1)",
+          "expr": "(max by (entry, protocol) (probe_success{job=\"proxy-probe\"} unless (time() - timestamp(probe_success{job=\"proxy-probe\"}) > 90))) or (max by (entry, protocol) (max_over_time(up{job=\"proxy-probe\"}[1d])) * 0 - 1)",
           "legendFormat": "{{entry}} {{protocol}}",
           "refId": "A"
         }

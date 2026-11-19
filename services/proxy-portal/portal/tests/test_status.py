@@ -14,6 +14,7 @@ from portal.models import Incident
 from . import stubs
 from .base import PortalTestCase
 from .stubs import vector
+from .test_promql import fixture_results
 
 GENERAL = queries.STATUS["ha-general"]
 
@@ -426,6 +427,42 @@ class StatusTest(PortalTestCase):
                         self.assertEqual(proxy["protocols"]["http"]["state"], "passing", path)
                         self.assertEqual(proxy["protocols"]["socks"]["state"], "passing", path)
                         self.assertEqual((proxy["pool"], proxy["access"]), ("ha-private", "private"), path)
+        self.assert_only_fixed_queries()
+
+    def test_reclassified_across_a_restart(self):
+        # Prometheus answers what proxy-live-status.test.yml expects, which promtool checks: m1 moved from public to
+        # private while Prometheus restarted, so its old series ended without a staleness marker and their last
+        # samples, 180 s old, are still within the 5-minute lookback; h1's SOCKS5 probe has had no result for 120 s.
+        answers = fixture_results("proxy-live-status.test.yml",
+                                  "a proxy reclassified across a Prometheus restart, and a protocol without results",
+                                  "6h3m")
+        self.assertLessEqual(set(answers), queries.ALL)
+        self.prometheus.answers = {expr: vector(*rows) for expr, rows in answers.items()}  # nothing else answers
+        for path in ("/api/status", "/api/status/live"):
+            with self.subTest(path=path):
+                cache.clear()
+                data = self.client.get(path).json()
+                proxies = {p["name"]: p for p in data["proxies"]}
+                m1 = proxies["m1"]
+                self.assertEqual((m1["pool"], m1["access"]), ("ha-private", "private"))
+                self.assertEqual({p: v["state"] for p, v in m1["protocols"].items()},
+                                 {"http": "passing", "socks": "passing"})
+                self.assertEqual(m1["last_check_age_seconds"], 0)
+                self.assertEqual(m1["protocols"]["http"]["duration_seconds"], 0.4)
+                # a proxy's last check is its older protocol's: h1's HTTP result is current, but 120 s ages both
+                h1 = proxies["h1"]
+                self.assertEqual({p: v["state"] for p, v in h1["protocols"].items()},
+                                 {"http": "unknown", "socks": "unknown"})
+                self.assertEqual(h1["last_check_age_seconds"], 120)
+                self.assertEqual({p: v["state"] for p, v in proxies["g1"]["protocols"].items()},
+                                 {"http": "passing", "socks": "passing"})
+                entries = data["entries"]
+                self.assertEqual(entries["ha-general"]["proxies"], {"passing": 1, "configured": 2})
+                self.assertEqual(entries["ha-private"]["proxies"], {"passing": 2, "configured": 3})
+                general = entries["ha-general"]["protocols"]
+                self.assertEqual({p: v["state"] for p, v in general.items()}, {"http": "passing", "socks": "passing"})
+                self.assertEqual({p: v["last_check_age_seconds"] for p, v in general.items()}, {"http": 0, "socks": 0})
+                self.assertEqual({p: v["duration_seconds"] for p, v in general.items()}, {"http": 0.2, "socks": 0.2})
         self.assert_only_fixed_queries()
 
     def test_unknown_proxy_shows_no_duration(self):

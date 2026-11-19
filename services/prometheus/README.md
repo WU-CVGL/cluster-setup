@@ -300,7 +300,7 @@ promtool test rules proxy-status-bars.test.yml proxy-24h-success.test.yml proxy-
 "Status bars" panels), `proxy-24h-success.test.yml` the proxies' 24-hour success rates and coverage (its Proxies
 table) and `proxy-live-status.test.yml` the proxies' live status (the Proxies table) and the HA entries' proxy counts
 (the Proxies passing panels) on probe samples, also across a change of a proxy's probe labels whose old labels were
-up within the day; the portal's tests run them too, with
+up within the day, during a reload and across a restart; the portal's tests run them too, with
 `promtool` or the pinned image, and check that their expressions are the portal's.
 
 Fixtures stay outside `rules/`, so the production wildcard `/etc/prometheus/rules/*.yml` never loads
