@@ -5,7 +5,7 @@ from django.db import migrations, models
 class Migration(migrations.Migration):
 
     dependencies = [
-        ("portal", "0004_self_service_and_cluster_users"),
+        ("portal", "0005_accountrequest_self_service_db_default"),
     ]
 
     operations = [

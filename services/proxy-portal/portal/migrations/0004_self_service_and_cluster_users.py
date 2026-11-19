@@ -11,7 +11,7 @@ class Migration(migrations.Migration):
         migrations.AddField(
             model_name="accountrequest",
             name="self_service",
-            field=models.BooleanField(default=False, db_default=False),
+            field=models.BooleanField(default=False),
         ),
         migrations.CreateModel(
             name="ClusterUser",
