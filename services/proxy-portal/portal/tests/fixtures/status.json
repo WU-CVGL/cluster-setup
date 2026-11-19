@@ -60,6 +60,7 @@
     {
       "name": "jpty1-bwh-2tb",
       "access": "private",
+      "open": false,
       "ports": {
         "http": 55889,
         "socks": 55089
@@ -68,6 +69,7 @@
     {
       "name": "miyaip-jp-01_relay_jpty1-bwh-2tb",
       "access": "private",
+      "open": false,
       "ports": {
         "http": 52889,
         "socks": 52089
@@ -76,6 +78,7 @@
     {
       "name": "miyaip-jp-01_relay_usca5-bwh-sla-2tb",
       "access": "private",
+      "open": false,
       "ports": {
         "http": 51889,
         "socks": 51089
@@ -84,6 +87,7 @@
     {
       "name": "miyaip-uk-01_relay_jpty1-bwh-2tb",
       "access": "private",
+      "open": false,
       "ports": {
         "http": 54889,
         "socks": 54089
@@ -92,6 +96,7 @@
     {
       "name": "miyaip-uk-01_relay_usca5-bwh-sla-2tb",
       "access": "private",
+      "open": false,
       "ports": {
         "http": 53889,
         "socks": 53089
@@ -100,6 +105,7 @@
     {
       "name": "us-west-racknerd-12tb",
       "access": "public",
+      "open": true,
       "ports": {
         "http": 58889,
         "socks": 50089
@@ -108,6 +114,7 @@
     {
       "name": "usca1-bwh-megaboxpro-2tb",
       "access": "public",
+      "open": true,
       "ports": {
         "http": 28889,
         "socks": 20089
@@ -116,6 +123,7 @@
     {
       "name": "usca5-bwh-sla-1tb",
       "access": "public",
+      "open": false,
       "ports": {
         "http": 59889,
         "socks": 59880
@@ -124,6 +132,7 @@
     {
       "name": "usca6-bwh-1tb",
       "access": "public",
+      "open": false,
       "ports": {
         "http": 18889,
         "socks": 10089

@@ -1,6 +1,7 @@
 """
 The applier's sanitized accounts status, status.json in its spool (proxy_accounts.py status --json): the accounts
-without passwords, raw auth, the proxies with their access and ports, and the HA entries' ports. The applier writes
+without passwords, raw auth, the proxies with their access, whether they are open (never require an account) and
+their ports, and the HA entries' ports. The applier writes
 it after each of its runs from the accounts file; the portal only reads it.
 """
 
@@ -43,6 +44,11 @@ class Proxy:
     name: str
     public: bool
     ports: Dict[str, Optional[int]]
+    # an open proxy's own entry never requires an account, also with raw auth; only a public proxy can be open
+    open: bool = False
+
+    def requires_account(self, raw_auth: bool) -> bool:
+        return not self.public or (raw_auth and not self.open)
 
 
 @dataclass
@@ -58,6 +64,11 @@ class ProxyStatus:
     # the accounts file differs from the applier's last apply (a change made with proxy_accounts.py): what it
     # holds may not be running yet
     unapplied_changes: Optional[bool] = None
+
+    @property
+    def open_proxies(self) -> List[str]:
+        """The open proxies: their own entries never require an account."""
+        return sorted(proxy.name for proxy in self.proxies if proxy.open)
 
 
 def _port(value):
@@ -97,8 +108,9 @@ def parse(data, now=None):
     proxies = []
     for entry in data.get("proxies") or []:
         if isinstance(entry, dict) and isinstance(entry.get("name"), str) and PROXY_NAME_RE.fullmatch(entry["name"]):
-            proxies.append(Proxy(name=entry["name"], public=entry.get("access") == "public",
-                                 ports=_ports(entry.get("ports"))))
+            public = entry.get("access") == "public"
+            proxies.append(Proxy(name=entry["name"], public=public, ports=_ports(entry.get("ports")),
+                                 open=public and entry.get("open") is True))
     entries = data.get("entries") if isinstance(data.get("entries"), dict) else {}
     entry_ports = {name: _ports((entries.get(name) or {}).get("ports") if isinstance(entries.get(name), dict)
                                 else None)

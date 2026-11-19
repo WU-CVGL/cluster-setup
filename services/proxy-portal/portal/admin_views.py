@@ -19,6 +19,7 @@ from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse
 from django.utils import timezone
 from django.utils.translation import gettext as _
+from django.utils.translation import ngettext
 from django.views.decorators.cache import never_cache
 from django.views.decorators.csrf import csrf_exempt, csrf_protect
 from django.views.decorators.debug import sensitive_variables
@@ -26,6 +27,7 @@ from django.views.decorators.http import require_GET, require_http_methods, requ
 
 from . import accounts, lifecycle, proxy_status
 from .models import AccountRequest, ClusterUser, Incident, IncidentUpdate
+from .templatetags.portal import names
 from .views import SESSION_ADMIN, _signin_redirect, session_user
 
 log = logging.getLogger("portal.admin")
@@ -85,11 +87,21 @@ def _effect_text(op, name):
 
 
 def raw_auth_text(status):
+    if status.raw_auth and status.open_proxies:
+        return _("The public proxies' own addresses require an account, except those of %(open)s, which need none: "
+                 "an account whose proxy access is off is refused everywhere else.") % {
+            "open": names(status.open_proxies)}
     if status.raw_auth:
         return _("The public proxies' own addresses require an account: an account whose proxy access is off is "
                  "refused at every proxy.")
-    return _("The public proxies' own addresses need no account: proxy access off stops only the auto-switching "
+    text = _("The public proxies' own addresses need no account: proxy access off stops only the auto-switching "
              "proxies and the private proxies, and a public proxy's own address still works for that user.")
+    if status.open_proxies:  # what stays so once the public proxies' own addresses require an account
+        text = lifecycle.sentences(text, ngettext(
+            "%(open)s needs no account at its own address even when the public proxies require one.",
+            "%(open)s need no account at their own addresses even when the public proxies require one.",
+            len(status.open_proxies)) % {"open": names(status.open_proxies)})
+    return text
 
 
 def _pending_by_account():

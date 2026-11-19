@@ -32,7 +32,7 @@ except ImportError:  # 没有 PyYAML 时使用基于正则的简单解析
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 from XrayConfigHandler import DEFAULT_API_PORT, DEFAULT_HTTP_PORT, DEFAULT_SOCKS_PORT, XrayConfigHandler
-from proxy_accounts import PUBLIC_PROXIES_FILE, Accounts, accounts_lock, public_proxies
+from proxy_accounts import OPEN_PROXIES_FILE, PUBLIC_PROXIES_FILE, Accounts, accounts_lock, open_proxies, public_proxies
 
 
 # 容器内固定端口 (现有 compose 服务和 exporter 都依赖这些值)
@@ -216,18 +216,18 @@ class XrayServiceCreator:
         owner = host_port_owners(services).get(port)
         return owner is None, owner
 
-    def raw_inbound_users(self, private: bool) -> Optional[List[Tuple[str, str]]]:
+    def raw_inbound_users(self, private: bool, open_: bool = False) -> Optional[List[Tuple[str, str]]]:
         """
         新代理入站要求的账号，与 proxy_accounts.py render 写入的相同 (Accounts.proxy_users)：
-        私有代理始终要求账号 (启用的管理员账号、svc-ha、svc-monitor)；公共代理在 raw_auth 为 true 时
-        要求所有启用的账号，否则返回 None (入站不要求认证)
+        私有代理始终要求账号 (启用的管理员账号、svc-ha、svc-monitor)；开放代理 (open-proxies.txt) 始终不要求；
+        其他公共代理在 raw_auth 为 true 时要求所有启用的账号，否则返回 None (入站不要求认证)
         """
         accounts = Accounts(self.base_dir)
         if private:
             missing = [name for name in ("svc-ha", "svc-monitor") if name not in accounts.accounts]
             if missing:
                 raise ValueError(f"私有代理要求账号，但 {accounts.path} 中没有 {', '.join(missing)}")
-        users = accounts.proxy_users(private)
+        users = accounts.proxy_users(private, open_)
         if users is not None and not users:
             raise ValueError(f"raw-auth 已开启，但 {accounts.path} 中没有账号")
         return users
@@ -557,6 +557,10 @@ class XrayServiceCreator:
         listed = service_name in public_proxies(self.base_dir)
         if private and listed:
             raise ValueError(f"{service_name} 已列在 {PUBLIC_PROXIES_FILE} 中 (公共代理)，不能创建为私有代理")
+        # 开放代理 (open-proxies.txt) 必须是公共代理；列表中的其他名称按现有的公共代理列表检查
+        open_listed = service_name in open_proxies(self.base_dir, public_proxies(self.base_dir) | {service_name})
+        if private and open_listed:
+            raise ValueError(f"{service_name} 已列在 {OPEN_PROXIES_FILE} 中 (开放代理)，不能创建为私有代理")
         if yaml is None:
             print("⚠  未安装 PyYAML，使用简单的正则解析 docker-compose.yml")
         services = compose_services(compose_text)
@@ -579,7 +583,7 @@ class XrayServiceCreator:
         print("✓ 端口检查通过")
 
         # 私有代理始终要求账号；公共代理在 raw-auth 开启时要求所有代理账号 (见 proxy_accounts.py)
-        inbound_users = self.raw_inbound_users(private)
+        inbound_users = self.raw_inbound_users(private, open_listed)
         if inbound_users is not None:
             reason = "私有代理" if private else "raw-auth 已开启"
             print(f"✓ {reason}: 入站要求 {len(inbound_users)} 个代理账号")

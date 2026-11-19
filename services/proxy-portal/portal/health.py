@@ -180,6 +180,9 @@ def proxies_view(data, status, now):
         age = proxy.get("last_check")
         row = {"name": name, "access": "public" if public else "private", "pool": labels.get("pool"),
                "ports": dict(known[name].ports) if name in known else _no_ports(),
+               # from the applier's status: whether its own entry needs an account (null when unknown)
+               "open": known[name].open if name in known else False,
+               "account_required": known[name].requires_account(status.raw_auth) if name in known else None,
                "last_check_age_seconds": None if age is None else round(age + now - data["time"]),
                "coverage_24h": _ratio(proxy.get("coverage_24h")), "protocols": {}}
         for protocol in PROTOCOLS:

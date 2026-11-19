@@ -14,7 +14,8 @@ Proxy accounts: one protected accounts file, from which every authenticated prox
     proxy_accounts.py render                 write the configs below from the accounts file
 
 Proxies: xray/public-proxies.txt lists the public proxies. Every other proxy (xray/<name>/) is private: for admin
-accounts only.
+accounts only. xray/open-proxies.txt lists the open proxies, public proxies whose own entries never require an
+account, also with raw auth; a private proxy is never open.
 
 The HA entry xray-ha has two entries: ha-general (inbounds http_IN, socks_IN) over the pool-* outbounds, which
 must all lead to public proxies, and ha-private (inbounds ha-private_http_IN, ha-private_socks_IN) over the pool-*
@@ -27,14 +28,14 @@ render writes, relative to services/ (all gitignored, mode 0600, replaced atomic
   blackbox/config/blackbox.yml   blackbox/blackbox.example.yml with svc-monitor in the proxy URLs of the HA
                                  entries and the private proxies, and of the public proxies with raw auth
   xray/*/config/config.json      private proxies: the enabled admins, svc-ha and svc-monitor, always. Public proxies:
-                                 with raw auth, every enabled account; without it, inbounds that carry accounts
-                                 back to no authentication, other files untouched
+                                 with raw auth, every enabled account; without it, and on the open proxies always,
+                                 inbounds that carry accounts back to no authentication, other files untouched
 
 Account names are cluster usernames; names starting with svc- are service accounts:
 svc-ha (the HA entry's login to the proxies), svc-monitor (the probes), svc-docker-<node> (a node's Docker daemon).
 svc-ha and svc-monitor cannot be disabled or removed; service accounts are never admins. A disabled account is
-left out of every rendered config: with raw auth off, the public proxies' own entries require no account, so a
-disabled account can still use them.
+left out of every rendered config: the open proxies' own entries, and with raw auth off every public proxy's own
+entry, require no account, so a disabled account can still use them.
 
 The commands that change the accounts file or render hold an exclusive lock (proxy-accounts/.lock), which the
 portal's applier (proxy-portal/applier/proxy_apply.py) holds for a whole apply.
@@ -68,6 +69,7 @@ BLACKBOX_EXAMPLE = Path("blackbox/blackbox.example.yml")
 BLACKBOX_CONFIG = Path("blackbox/config/blackbox.yml")
 RAW_CONFIG_GLOB = "xray/*/config/config.json"
 PUBLIC_PROXIES_FILE = Path("xray/public-proxies.txt")
+OPEN_PROXIES_FILE = Path("xray/open-proxies.txt")
 COMPOSE_FILE = Path("docker-compose.yml")
 
 RELAY = "svc-ha"
@@ -114,27 +116,56 @@ def new_password() -> str:
     return secrets.token_urlsafe(24)
 
 
-def public_proxies(base_dir: Path) -> Set[str]:
-    """
-    The public proxies, from xray/public-proxies.txt: one proxy name per line, '#' starts a comment. A proxy not
-    listed, including one nobody classified, is private. A missing file is an error, not an empty list.
-    """
-    path = Path(base_dir) / PUBLIC_PROXIES_FILE
-    try:
-        text = path.read_text(encoding="utf-8")
-    except FileNotFoundError:
-        raise AccountsError(f"{PUBLIC_PROXIES_FILE} is missing: it lists the public proxies")
+def _proxy_list(path: Path, rel: Path) -> Set[str]:
+    """One proxy name per line, '#' starts a comment."""
+    text = path.read_text(encoding="utf-8")
     names = set()  # type: Set[str]
     for number, line in enumerate(text.splitlines(), 1):
         name = line.split("#", 1)[0].strip()
         if not name:
             continue
         if not PROXY_NAME_RE.fullmatch(name):
-            raise AccountsError(f"{PUBLIC_PROXIES_FILE}:{number}: invalid proxy name {name!r}")
+            raise AccountsError(f"{rel}:{number}: invalid proxy name {name!r}")
         if name in names:
-            raise AccountsError(f"{PUBLIC_PROXIES_FILE}:{number}: {name} is listed twice")
+            raise AccountsError(f"{rel}:{number}: {name} is listed twice")
         names.add(name)
     return names
+
+
+def public_proxies(base_dir: Path) -> Set[str]:
+    """
+    The public proxies, from xray/public-proxies.txt: one proxy name per line, '#' starts a comment. A proxy not
+    listed, including one nobody classified, is private. A missing file is an error, not an empty list.
+    """
+    try:
+        return _proxy_list(Path(base_dir) / PUBLIC_PROXIES_FILE, PUBLIC_PROXIES_FILE)
+    except FileNotFoundError:
+        raise AccountsError(f"{PUBLIC_PROXIES_FILE} is missing: it lists the public proxies")
+
+
+def open_proxies(base_dir: Path, public: Set[str]) -> Set[str]:
+    """
+    The open proxies, from xray/open-proxies.txt: public proxies whose own entries never require an account, also
+    with raw auth. A private proxy (one not in public) in the list is an error: it always requires accounts. Without
+    the file no proxy is open, which only ever requires more accounts.
+    """
+    try:
+        names = _proxy_list(Path(base_dir) / OPEN_PROXIES_FILE, OPEN_PROXIES_FILE)
+    except FileNotFoundError:
+        return set()
+    private = sorted(names - public)
+    if private:
+        raise AccountsError(f"{OPEN_PROXIES_FILE}: {', '.join(private)} not in {PUBLIC_PROXIES_FILE}: "
+                            "a private proxy always requires accounts and can never be open")
+    return names
+
+
+def requires_accounts(proxy: str, public: Set[str], open_: Set[str], raw_auth: bool) -> bool:
+    """Whether a proxy's own entry requires accounts: a private proxy always, an open one never, another public
+    proxy with raw auth."""
+    if proxy not in public:
+        return True
+    return raw_auth and proxy not in open_
 
 
 def proxy_names(base_dir: Path) -> List[str]:
@@ -317,14 +348,15 @@ class Accounts:
         """Who may log in to ha-private: the enabled admins and svc-monitor."""
         return sorted(self.admin_pairs() + [(MONITOR, self.accounts[MONITOR])])
 
-    def proxy_users(self, private: bool) -> Optional[List[Tuple[str, str]]]:
+    def proxy_users(self, private: bool, open_: bool = False) -> Optional[List[Tuple[str, str]]]:
         """
         Who may log in to a proxy's own entry: on a private proxy the enabled admins, svc-ha and svc-monitor, always;
-        on a public proxy every enabled account with raw auth, else nobody needs to (None).
+        on an open proxy nobody needs to (None), whatever raw auth says; on another public proxy every enabled account
+        with raw auth, else nobody needs to.
         """
         if private:
             return sorted(self.admin_pairs() + [(name, self.accounts[name]) for name in PROTECTED])
-        return self.pairs() if self.raw_auth else None
+        return self.pairs() if self.raw_auth and not open_ else None
 
 
 def kind(name: str) -> str:
@@ -388,17 +420,20 @@ def status(accounts: Accounts) -> dict:
     applied_sha = applied.get("accounts_sha256") if isinstance(applied, dict) else None
     proxies = proxy_names(accounts.base_dir)
     public = public_proxies(accounts.base_dir) if proxies else set()
+    open_ = open_proxies(accounts.base_dir, public) if proxies else set()
     ports = compose_ports(accounts.base_dir)
     return {
         "raw_auth": accounts.raw_auth,
         # The entries that refuse a disabled account: while raw auth is off, the public proxies' own entries
-        # require no account, so they do not
+        # require no account, so they do not; with it, the public proxies other than the open ones do
         "disabled_refused_at": [GENERAL, HA_PRIVATE, "private-proxies"]
                                + (["public-proxies"] if accounts.raw_auth else []),
         "accounts": [{"name": name, "kind": kind(name), "enabled": accounts.enabled(name),
                       "admin": name in accounts.admins, "protected": name in PROTECTED}
                      for name in sorted(accounts.accounts)],
         "proxies": [{"name": name, "access": "public" if name in public else "private",
+                     # an open proxy's own entry never requires an account
+                     "open": name in open_,
                      # host ports from docker-compose.yml, null when not published
                      "ports": _ports(ports.get(PROXY_HOST_PREFIX + name, {}), PROXY_CONTAINER_PORTS)}
                     for name in proxies],
@@ -514,7 +549,7 @@ def check_ha(config: dict, public: Set[str]) -> Dict[str, str]:
     return proxies
 
 
-def render_ha(example: dict, accounts: Accounts, public: Set[str]) -> dict:
+def render_ha(example: dict, accounts: Accounts, public: Set[str], open_: Set[str]) -> dict:
     config = json.loads(json.dumps(example))
     proxies = check_ha(config, public)
     try:
@@ -527,7 +562,7 @@ def render_ha(example: dict, accounts: Accounts, public: Set[str]) -> dict:
         if proxy is None:
             continue
         server = outbound["settings"]["servers"][0]
-        if proxy not in public or accounts.raw_auth:  # the proxy requires accounts
+        if requires_accounts(proxy, public, open_, accounts.raw_auth):
             server["users"] = [{"user": RELAY, "pass": accounts.accounts[RELAY]}]
         else:
             server.pop("users", None)
@@ -573,18 +608,20 @@ def render_files(accounts: Accounts) -> List[Tuple[Path, str]]:
         if name not in accounts.accounts:
             raise AccountsError(f"service account {name} is missing: run 'add {name}' first")
     public = public_proxies(base)
+    open_ = open_proxies(base, public)
     outputs = []  # type: List[Tuple[Path, str]]
-    ha = render_ha(json.loads((base / HA_EXAMPLE).read_text(encoding="utf-8")), accounts, public)
+    ha = render_ha(json.loads((base / HA_EXAMPLE).read_text(encoding="utf-8")), accounts, public, open_)
     outputs.append((base / HA_CONFIG, json.dumps(ha, indent=4) + "\n"))
     outputs.append((base / BLACKBOX_CONFIG,
                     render_blackbox((base / BLACKBOX_EXAMPLE).read_text(encoding="utf-8"), accounts, public)))
     for path in sorted(base.glob(RAW_CONFIG_GLOB)):
-        raw_users = accounts.proxy_users(private=path.parent.parent.name not in public)
+        name = path.parent.parent.name
+        raw_users = accounts.proxy_users(private=name not in public, open_=name in open_)
         old_text = path.read_text(encoding="utf-8")
         old = json.loads(old_text)
         if raw_users is None and not has_logins(old):
             outputs.append((path, old_text))
-            continue  # a public proxy, raw auth off and no accounts there: leave its config as it is
+            continue  # a public proxy that requires no account, with no accounts there: leave its config as it is
         new = json.loads(json.dumps(old))
         try:
             XrayConfigHandler.set_inbound_users(new, raw_users)
@@ -666,6 +703,9 @@ def main(argv: Optional[List[str]] = None) -> int:
             accounts = Accounts(args.base_dir)
             if args.command in ("add", "rotate", "remove", "enable", "disable", "admin"):
                 name = validate_name(args.name)
+                # read before anything is saved: a bad list fails the command with nothing changed
+                open_ = open_proxies(accounts.base_dir, public_proxies(accounts.base_dir)) \
+                    if args.command == "disable" and accounts.raw_auth else set()
                 if args.command == "add" and name in accounts.accounts:
                     raise AccountsError(f"account {name!r} exists; use rotate")
                 if args.command == "remove":
@@ -684,14 +724,16 @@ def main(argv: Optional[List[str]] = None) -> int:
                 note = ""
                 if args.command == "disable" and not accounts.raw_auth:
                     note = " (raw auth is off: the public proxies' own entries still accept it)"
+                elif args.command == "disable" and open_:
+                    note = " (the open proxies' own entries still accept it)"
                 what = f"admin {args.state}" if args.command == "admin" else args.command
                 print(f"{what}: {name}{note}; run render, then restart the proxies whose configs it writes",
                       file=sys.stderr)
             elif args.command == "raw-auth":
                 accounts.raw_auth = args.state == "on"
                 accounts.save()
-                print(f"raw-auth: {args.state}; run render, then restart the public proxies and xray-ha together",
-                      file=sys.stderr)
+                print(f"raw-auth: {args.state}; run render, then restart the public proxies other than the open ones "
+                      "and xray-ha together", file=sys.stderr)
             elif args.command == "render":
                 written = render(accounts)
                 for path in written:
@@ -714,7 +756,9 @@ def read_command(accounts: Accounts, args: argparse.Namespace) -> int:
         print(json.dumps(status(accounts), indent=2))
     else:
         view = status(accounts)
-        scope = ("every entry" if accounts.raw_auth else
+        open_ = sorted(p["name"] for p in view["proxies"] if p["open"])
+        scope = ("every entry" + (f" but the open proxies' own entries ({', '.join(open_)})" if open_ else "")
+                 if accounts.raw_auth else
                  "ha-general, ha-private and the private proxies; the public proxies' own entries still accept them "
                  "(raw auth is off)")
         print(f"raw auth: {'on' if accounts.raw_auth else 'off'}; disabled accounts are refused at {scope}")
@@ -723,7 +767,7 @@ def read_command(accounts: Accounts, args: argparse.Namespace) -> int:
             flags = ("  admin" if entry["admin"] else "") + ("  protected" if entry["protected"] else "")
             print(f"{entry['name']:<32} {entry['kind']:<8} {state}{flags}")
         for proxy in view["proxies"]:
-            access = "public" if proxy["access"] == "public" else "private"
+            access = "private" if proxy["access"] != "public" else "public open" if proxy["open"] else "public"
             ports = "  ".join(f"{protocol} {port}" for protocol, port in proxy["ports"].items() if port)
             print(f"proxy {proxy['name']:<40} {access:<12} {ports}".rstrip())
         applied = view["applied"] or {}

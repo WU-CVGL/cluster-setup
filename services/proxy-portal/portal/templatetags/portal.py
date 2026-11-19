@@ -9,6 +9,12 @@ UNITS = ("B", "KiB", "MiB", "GiB", "TiB", "PiB")
 
 
 @register.filter
+def names(value):
+    """Names as one list in a sentence: "a, b" in English, "a、b" in Chinese."""
+    return pgettext("list separator", ", ").join(value or [])
+
+
+@register.filter
 def bytes_value(value):
     """The number part of a size in binary units, e.g. 1.25 for 1.25 GiB."""
     if value is None:

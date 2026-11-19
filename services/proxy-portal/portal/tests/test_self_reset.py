@@ -184,7 +184,18 @@ class SelfResetTest(SelfResetMixin, PortalTestCase):
         carol = https_client()
         self.sign_in("carol", client=carol)  # an admin account: the private proxies restart too
         self.assertContains(carol.get("/access"), "both auto-switching proxies and the private proxies")
-        self.write_status(lambda d: d.update(raw_auth=True))  # every proxy restarts; alice uses the public ones
+        self.write_status(lambda d: d.update(raw_auth=True))  # every proxy but the open ones restarts
+        self.assertContains(self.client.get("/access"), "Applying restarts the Auto-switching Proxy and every public "
+                                                        "proxy but us-west-racknerd-12tb, usca1-bwh-megaboxpro-2tb. "
+                                                        "Established connections through them drop")
+        self.assertContains(self.client.get("/access", HTTP_ACCEPT_LANGUAGE="zh-CN"),
+                            "us-west-racknerd-12tb、usca1-bwh-megaboxpro-2tb")
+
+        def none_open(data):
+            data["raw_auth"] = True
+            for proxy in data["proxies"]:
+                proxy["open"] = False
+        self.write_status(none_open)
         self.assertContains(self.client.get("/access"), "Applying restarts the Auto-switching Proxy and every public "
                                                         "proxy. Established connections through them drop")
 

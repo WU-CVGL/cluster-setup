@@ -1,7 +1,8 @@
 """
 My access: the signed-in user's proxy account and the entries it may use, from the applier's status (the accounts
 file at the applier's last run, never a pending portal request). Every account may use ha-general and the public
-proxies; admin accounts also ha-private and the private proxies. The proxy admin flag is the account's own, not the
+proxies; admin accounts also ha-private and the private proxies. The open proxies' own entries never require an
+account; with raw auth off, no public proxy's own entry does. The proxy admin flag is the account's own, not the
 Determined admin role.
 """
 
@@ -61,6 +62,7 @@ def build(username):
         "status_stale": status.stale if status.available else None,
         "status_generated_at": status.generated_at.isoformat() if status.generated_at else None,
         "raw_auth": status.raw_auth if status.available else None,
+        "open_proxies": status.open_proxies if status.available else [],
         "status_unapplied_changes": status.unapplied_changes if status.available else None,
         "account": None,
         "entries": [],
@@ -81,9 +83,9 @@ def build(username):
         entries.append(_entry("ha-private", "ha", False, private_ports, admin, True))
     for proxy in status.proxies:
         if proxy.public:
-            # without raw auth, a public proxy's own entry takes no account: anyone may use it
-            usable = enabled if status.raw_auth else True
-            entries.append(_entry(proxy.name, "proxy", True, proxy.ports, usable, status.raw_auth))
+            # an open proxy's own entry, and without raw auth every public proxy's, takes no account: anyone may use it
+            requires = proxy.requires_account(status.raw_auth)
+            entries.append(_entry(proxy.name, "proxy", True, proxy.ports, enabled if requires else True, requires))
     if show_admin:
         for proxy in status.proxies:
             if not proxy.public:

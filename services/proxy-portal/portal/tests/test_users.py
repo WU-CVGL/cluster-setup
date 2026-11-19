@@ -343,6 +343,37 @@ class UsersPageTest(PortalTestCase):
         self.assertEqual(self.client.post("/admin/accounts/disable", {"username": "svc-ha", "confirm": "svc-ha"})
                          .status_code, 403)
 
+    def test_open_proxies_with_raw_auth_off(self):
+        """Named for what stays so once the public proxies' own addresses require an account."""
+        page = self.client.get("/admin/users")
+        self.assertContains(page, "a public proxy&#x27;s own address still works for that user. us-west-racknerd-12tb, "
+                                  "usca1-bwh-megaboxpro-2tb need no account at their own addresses even when the "
+                                  "public proxies require one.")
+        zh = self.client.get("/admin/users", HTTP_ACCEPT_LANGUAGE="zh-CN")
+        self.assertContains(zh, "该用户仍可使用公共代理自己的地址。即使公共代理需要账号，us-west-racknerd-12tb、"
+                                "usca1-bwh-megaboxpro-2tb 自己的地址也无需账号。")
+
+        def one_open(data):
+            next(p for p in data["proxies"] if p["name"] == "usca1-bwh-megaboxpro-2tb")["open"] = False
+        self.write_status(one_open)
+        self.assertContains(self.client.get("/admin/users"), "us-west-racknerd-12tb needs no account at its own "
+                                                             "address even when the public proxies require one.")
+
+        def none_open(data):
+            for proxy in data["proxies"]:
+                proxy["open"] = False
+        self.write_status(none_open)
+        self.assertNotContains(self.client.get("/admin/users"), "even when the public proxies require one")
+
+    def test_open_proxies_with_raw_auth_on(self):
+        self.write_status(lambda d: d.update(raw_auth=True))
+        page = self.client.get("/admin/users")
+        self.assertContains(page, "own addresses require an account, except those of us-west-racknerd-12tb, "
+                                  "usca1-bwh-megaboxpro-2tb, which need none: an account whose proxy access is off is "
+                                  "refused everywhere else.")
+        zh = self.client.get("/admin/users", HTTP_ACCEPT_LANGUAGE="zh-CN")
+        self.assertContains(zh, "us-west-racknerd-12tb、usca1-bwh-megaboxpro-2tb 的地址除外（无需账号）")
+
     def test_chinese(self):
         page = self.client.get("/admin/users", HTTP_ACCEPT_LANGUAGE="zh-CN")
         self.assertContains(page, "用户列表")

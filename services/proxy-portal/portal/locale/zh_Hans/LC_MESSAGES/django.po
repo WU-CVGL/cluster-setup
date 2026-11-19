@@ -43,6 +43,13 @@ msgstr "服务账号不能成为管理员账号。"
 msgid "The request could not be saved. Nothing changed."
 msgstr "无法保存请求。没有任何变更。"
 
+#, python-format
+msgid ""
+"Applying restarts the Auto-switching Proxy and every public proxy but "
+"%(open)s. Established connections through them drop, and new ones fail for a "
+"few seconds."
+msgstr "应用时会重启自动切换代理和除 %(open)s 以外的所有公共代理。经过它们的已建立连接会断开，新连接会有几秒失败。"
+
 msgid ""
 "Applying restarts the Auto-switching Proxy and every public proxy. "
 "Established connections through them drop, and new ones fail for a few "
@@ -53,6 +60,10 @@ msgid ""
 "Applying restarts the Auto-switching Proxy. Established connections through "
 "it drop, and new ones fail for a few seconds."
 msgstr "应用时会重启自动切换代理。经过它的已建立连接会断开，新连接会有几秒失败。"
+
+#, python-format
+msgid "both auto-switching proxies and every proxy but %(open)s"
+msgstr "两个自动切换代理和除 %(open)s 以外的所有代理"
 
 msgid "both auto-switching proxies and every proxy"
 msgstr "两个自动切换代理和所有代理"
@@ -111,6 +122,13 @@ msgid ""
 "the private proxies refuse it."
 msgstr "%(name)s 不再是管理员账号：私有自动切换代理和私有代理会拒绝它。"
 
+#, python-format
+msgid ""
+"The public proxies' own addresses require an account, except those of "
+"%(open)s, which need none: an account whose proxy access is off is refused "
+"everywhere else."
+msgstr "公共代理自己的地址需要账号，%(open)s 的地址除外（无需账号）：已关闭代理访问的账号在其他地址都会被拒绝。"
+
 msgid ""
 "The public proxies' own addresses require an account: an account whose proxy "
 "access is off is refused at every proxy."
@@ -121,6 +139,15 @@ msgid ""
 "only the auto-switching proxies and the private proxies, and a public "
 "proxy's own address still works for that user."
 msgstr "公共代理自己的地址无需账号：关闭代理访问只会让两个自动切换代理和私有代理拒绝该账号，该用户仍可使用公共代理自己的地址。"
+
+#, python-format
+msgid ""
+"%(open)s needs no account at its own address even when the public proxies "
+"require one."
+msgid_plural ""
+"%(open)s need no account at their own addresses even when the public proxies "
+"require one."
+msgstr[0] "即使公共代理需要账号，%(open)s 自己的地址也无需账号。"
 
 msgid "Type the account name to confirm."
 msgstr "请输入账号名确认。"
@@ -534,6 +561,9 @@ msgstr "在所有公共和私有代理之间切换，供管理员账号使用"
 msgid "%(passing)s of %(configured)s proxies passing"
 msgstr "%(configured)s 个代理中 %(passing)s 个正常"
 
+msgid "No account needed"
+msgstr "无需账号"
+
 #, python-format
 msgid "%(name)s, last 96 hours"
 msgstr "%(name)s，近 96 小时"
@@ -582,6 +612,15 @@ msgid ""
 msgstr "没有账号时可以通过公共代理自己的地址使用它们：这些地址无需账号。"
 
 #, python-format
+msgid ""
+"Without an account you can use %(open)s at its own address: it never needs "
+"one."
+msgid_plural ""
+"Without an account you can use %(open)s at their own addresses: they never "
+"need one."
+msgstr[0] "没有账号时也可以通过自己的地址使用 %(open)s：始终无需账号。"
+
+#, python-format
 msgid "Proxy access is <b>on</b> for the account <b>%(name)s</b>."
 msgstr "账号 <b>%(name)s</b> 的代理访问已<b>开启</b>。"
 
@@ -593,6 +632,15 @@ msgstr "这是管理员账号：还可以使用私有自动切换代理和私有
 #, python-format
 msgid "Proxy access is <b>off</b> for the account <b>%(name)s</b>."
 msgstr "账号 <b>%(name)s</b> 的代理访问已<b>关闭</b>。"
+
+#, python-format
+msgid ""
+"Every proxy refuses it, except %(open)s at its own address, which needs no "
+"account."
+msgid_plural ""
+"Every proxy refuses it, except %(open)s at their own addresses, which need "
+"no account."
+msgstr[0] "除 %(open)s 自己的地址（无需账号）外，所有代理都拒绝它。"
 
 msgid "Every proxy refuses it, the public proxies' own addresses included."
 msgstr "所有代理都拒绝它，包括公共代理自己的地址。"
@@ -611,6 +659,15 @@ msgid ""
 "The public proxies' own addresses need no account, so turning an account off "
 "stops only the auto-switching proxies and the private proxies for it."
 msgstr "公共代理自己的地址无需账号，所以关闭一个账号的代理访问只会让两个自动切换代理和私有代理拒绝它。"
+
+#, python-format
+msgid ""
+"Every proxy requires an enabled account, except %(open)s at its own address, "
+"which needs none."
+msgid_plural ""
+"Every proxy requires an enabled account, except %(open)s at their own "
+"addresses, which need none."
+msgstr[0] "所有代理都需要已启用的账号，%(open)s 自己的地址除外（无需账号）。"
 
 msgid "Every proxy, at every address, requires an enabled account."
 msgstr "所有代理的所有地址都需要已启用的账号。"
@@ -662,9 +719,6 @@ msgstr "每个账号都可以使用自动切换代理和公共代理；管理员
 
 msgid "Private"
 msgstr "私有"
-
-msgid "No account needed"
-msgstr "无需账号"
 
 msgid "Usable"
 msgstr "可用"
@@ -1353,6 +1407,10 @@ msgstr "这些是观测总量，不是账单或配额，包括访问内网和国
 
 msgid "Only the signed-in user's own usage is shown."
 msgstr "这里只显示当前登录用户自己的流量。"
+
+msgctxt "list separator"
+msgid ", "
+msgstr "、"
 
 #, python-format
 msgid "%(n)d s ago"

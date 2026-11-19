@@ -251,6 +251,34 @@ class StatusTest(PortalTestCase):
         self.assertIn('<td class="mono ports">28889 / 20089</td>', page)
         self.assertIn("Ports", page)
 
+    def test_no_account_needed(self):
+        def tags(page):
+            return re.findall(r'<span class="proxy-name">([^<]+)</span> <span class="tag">No account needed</span>',
+                              page.content.decode())
+
+        # raw auth off: no public proxy's own entry needs an account
+        proxies = {p["name"]: p for p in self.client.get("/api/status").json()["proxies"]}
+        self.assertEqual({n for n, p in proxies.items() if p["account_required"] is False},
+                         {"us-west-racknerd-12tb", "usca1-bwh-megaboxpro-2tb", "usca5-bwh-sla-1tb", "usca6-bwh-1tb"})
+        self.assertEqual(len(tags(self.client.get("/"))), 4)
+        # raw auth on: only the open proxies
+        self.write_status(lambda d: d.update(raw_auth=True))
+        cache.clear()
+        proxies = {p["name"]: p for p in self.client.get("/api/status").json()["proxies"]}
+        self.assertEqual({n for n, p in proxies.items() if p["open"]}, {"us-west-racknerd-12tb",
+                                                                       "usca1-bwh-megaboxpro-2tb"})
+        self.assertEqual({n for n, p in proxies.items() if p["account_required"] is False},
+                         {"us-west-racknerd-12tb", "usca1-bwh-megaboxpro-2tb"})
+        self.assertTrue(proxies["jpty1-bwh-2tb"]["account_required"])
+        self.assertEqual(tags(self.client.get("/")), ["us-west-racknerd-12tb", "usca1-bwh-megaboxpro-2tb"])
+        self.assertContains(self.client.get("/", HTTP_ACCEPT_LANGUAGE="zh-CN"),
+                            '<span class="proxy-name">usca1-bwh-megaboxpro-2tb</span> <span class="tag">无需账号</span>')
+        # without the applier's status: unknown, no tag
+        self.status_file.unlink()
+        proxies = self.client.get("/api/status").json()["proxies"]
+        self.assertEqual({p["account_required"] for p in proxies}, {None})
+        self.assertEqual(tags(self.client.get("/")), [])
+
     def test_ports_without_the_applier_status(self):
         self.status_file.unlink()
         data = self.client.get("/api/status").json()

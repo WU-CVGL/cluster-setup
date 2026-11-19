@@ -22,6 +22,7 @@ from django.utils.translation import pgettext_lazy
 from django.views.decorators.debug import sensitive_variables
 
 from . import spool
+from .templatetags.portal import names as list_names
 
 log = logging.getLogger("portal.requests")
 
@@ -54,7 +55,7 @@ def restarted_names(restarted):
     names = []
     for service in restarted.split():
         names += ["ha-general", "ha-private"] if service == HA_SERVICE else [service.removeprefix("xray-")]
-    return ", ".join(names)
+    return list_names(names)
 RESULT_RECHECK = datetime.timedelta(hours=1)  # a later request of the same run can supersede a result
 
 
