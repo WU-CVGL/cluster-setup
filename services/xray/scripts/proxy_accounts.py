@@ -16,8 +16,9 @@ Proxy accounts: one protected accounts file, from which every authenticated prox
     proxy_accounts.py render                 write the configs below from the accounts file
 
 Proxies: xray/public-proxies.txt lists the public proxies. Every other proxy (xray/<name>/) is private: for admin
-accounts, and for the accounts granted that proxy (grant), at its own entry only. xray/open-proxies.txt lists the open proxies, public proxies whose own entries never require an
-account, also with raw auth; a private proxy is never open.
+accounts, and for the accounts granted that proxy (grant), at its own entry only. xray/open-proxies.txt lists the
+open proxies, public proxies whose own entries never require an account, also with raw auth; a private proxy is never
+open.
 
 The HA entry xray-ha has two entries: ha-general (inbounds http_IN, socks_IN) over the pool-* outbounds, which
 must all lead to public proxies, and ha-private (inbounds ha-private_http_IN, ha-private_socks_IN) over the pool-*

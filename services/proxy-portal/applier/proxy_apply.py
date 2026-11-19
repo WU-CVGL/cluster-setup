@@ -67,6 +67,7 @@ Run = Callable[[Sequence[str], Optional[str], float], Tuple[int, str, str]]
 Probe = Callable[[str, str, str], Tuple[str, Optional[int]]]
 ENTRIES = (pa.GENERAL, pa.HA_PRIVATE)
 Login = Tuple[str, str, str, str]  # (label, entry, user, password)
+Checks = Tuple[List[Login], List[Login], List[str]]  # (accept, refuse, the private proxies that could not be checked)
 
 
 class RequestError(Exception):
@@ -863,8 +864,7 @@ class Applier:
         return restart
 
     def request_checks(self, requests: List[Dict[str, str]], old_passwords: Dict[str, str],
-                       old_grants: Dict[str, Set[str]], accounts: pa.Accounts) -> Tuple[List[Login], List[Login],
-                                                                                         List[str]]:
+                       old_grants: Dict[str, Set[str]], accounts: pa.Accounts) -> Checks:
         """(accept, refuse, unverified) for each request's own account: on both HA entries and at private proxies."""
         accept, refuse = self.target_checks(requests, old_passwords, accounts)
         proxy_accept, proxy_refuse, unverified = self.proxy_checks(requests, old_passwords, old_grants, accounts)
@@ -886,8 +886,7 @@ class Applier:
         return service
 
     def proxy_checks(self, requests: List[Dict[str, str]], old_passwords: Dict[str, str],
-                     old_grants: Dict[str, Set[str]], accounts: pa.Accounts) -> Tuple[List[Login], List[Login],
-                                                                                       List[str]]:
+                     old_grants: Dict[str, Set[str]], accounts: pa.Accounts) -> Checks:
         """
         (accept, refuse, unverified) at the private proxies' own entries, where the grants count: for each request's
         account, at every private proxy it was or is granted and at the one a grant or revoke names, its login passes

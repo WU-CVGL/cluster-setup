@@ -45,8 +45,8 @@ class StatusTest(PortalTestCase):
         status = proxy_status.load()
         self.assertTrue(status.available)
         self.assertEqual({r.name: r.proxies for r in status.all_accounts if r.proxies}, {})
-        self.write_status(lambda d: grant("alice", JP)(d) or [a.update(proxies="jpty1") for a in d["accounts"]
-                                                             if a["name"] == "bob"])
+        self.write_status(lambda d: [grant("alice", JP)(d)]
+                          + [a.update(proxies="jpty1") for a in d["accounts"] if a["name"] == "bob"])
         self.assertEqual(proxy_status.load().accounts["bob"].proxies, [])
 
 

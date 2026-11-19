@@ -121,7 +121,8 @@ class WordingTest(PortalTestCase):
             self.client.post("/signout")
             self.sign_in("carol")
             self.check("/admin/users", **headers)
-            for op, query in (("grant", "username=alice"), ("grant", "username=bob&proxy=miyaip-uk-01_relay_jpty1-bwh-2tb"),
+            for op, query in (("grant", "username=alice"),
+                              ("grant", "username=bob&proxy=miyaip-uk-01_relay_jpty1-bwh-2tb"),
                               ("revoke", "username=alice"), ("revoke", f"username=alice&proxy={jp}"),
                               ("admin-off", "username=carol"), ("rotate", "username=alice")):
                 self.check(f"/admin/accounts/{op}?{query}", **headers)
