@@ -277,10 +277,13 @@ class StatusTest(_Base):
         self.assertEqual(view, {
             "raw_auth": False, "disabled_refused_at": ["ha-general", "ha-private", "private-proxies"],
             "accounts": [
-                {"name": "alice", "kind": "user", "enabled": True, "admin": True, "protected": False},
-                {"name": "bob", "kind": "user", "enabled": False, "admin": False, "protected": False},
-                {"name": "svc-ha", "kind": "service", "enabled": True, "admin": False, "protected": True},
-                {"name": "svc-monitor", "kind": "service", "enabled": True, "admin": False, "protected": True}],
+                {"name": "alice", "kind": "user", "enabled": True, "admin": True, "protected": False, "proxies": []},
+                {"name": "bob", "kind": "user", "enabled": False, "admin": False, "protected": False,
+                 "proxies": []},
+                {"name": "svc-ha", "kind": "service", "enabled": True, "admin": False, "protected": True,
+                 "proxies": []},
+                {"name": "svc-monitor", "kind": "service", "enabled": True, "admin": False, "protected": True,
+                 "proxies": []}],
             "proxies": [{"name": PRIVATE, "access": "private", "open": False, "ports": {"http": None, "socks": None}},
                       {"name": PUBLIC, "access": "public", "open": False, "ports": {"http": None, "socks": None}}],
             "entries": {"ha-general": {"ports": {"http": None, "socks": None}},
@@ -1033,6 +1036,187 @@ class AdminTest(_Base):
         self.assertEqual([n for n, _ in accounts.proxy_users(private=True)], ["svc-ha", "svc-monitor"])
         self.assertIsNone(accounts.proxy_users(private=False))
         self.assertTrue(self.accounts()["accounts"]["alice"]["admin"])  # the flag is kept
+
+
+class GrantTest(_Base):
+    """A private proxy granted to single accounts: their own entry only, never ha-private or ha-general."""
+
+    OTHER = "miyaip-uk-01_relay_jpty1-bwh-2tb"  # another private proxy
+
+    def setUp(self):
+        super().setUp()
+        self.public = self.proxy(PUBLIC)
+        self.private = self.proxy(PRIVATE)
+        self.other = self.proxy(self.OTHER)
+        self.add("alice", "bob", "boss", "svc-monitor", "svc-ha", "svc-docker-node01")
+        run(self.base, "admin", "boss", "on")
+        self.assertEqual(run(self.base, "render")[0], 0)
+
+    def users(self, path):
+        config = json.loads(path.read_text())
+        return {i["tag"]: [u["user"] for u in i["settings"].get("users", [])] for i in config["inbounds"]
+                if i.get("protocol") in ("http", "socks")}
+
+    def ha(self):
+        return self.users(self.base / pa.HA_CONFIG)
+
+    def test_grant_and_revoke(self):
+        ha_before = (self.base / pa.HA_CONFIG).read_text()
+        code, out, err = run(self.base, "grant", "alice", PRIVATE)
+        self.assertEqual((code, out), (0, ""))
+        self.assertIn(f"run render, then restart xray-{PRIVATE}", err)
+        self.assertEqual(self.accounts()["accounts"]["alice"]["proxies"], [PRIVATE])
+        self.assertNotIn("proxies", self.accounts()["accounts"]["bob"])  # written only when there are grants
+        self.assertEqual(run(self.base, "list")[1],
+                         f"alice proxies={PRIVATE}\nbob\nboss admin\nsvc-docker-node01\nsvc-ha\nsvc-monitor\n")
+        self.assertIn(f"alice                            user     enabled  proxies {PRIVATE}",
+                      run(self.base, "status")[1])
+        code, out, _ = run(self.base, "render")
+        self.assertEqual((code, out.split()), (0, [f"xray/{PRIVATE}/config/config.json"]))  # that proxy only
+        for tag, users in self.users(self.private).items():
+            self.assertEqual(users, ["alice", "boss", "svc-ha", "svc-monitor"], tag)
+        password = self.passwords()["alice"]
+        logins = json.loads(self.private.read_text())["inbounds"]
+        self.assertIn({"user": "alice", "pass": password},
+                      next(i for i in logins if i["protocol"] == "http")["settings"]["users"])
+        self.assertEqual(set(self.users(self.other)["http_IN"]), {"boss", "svc-ha", "svc-monitor"})
+        self.assertEqual((self.base / pa.HA_CONFIG).read_text(), ha_before)  # ha-private and ha-general unchanged
+        self.assertNotIn("alice", self.ha()["ha-private_http_IN"])
+        self.assertEqual(run(self.base, "grant", "alice", PRIVATE)[0], 0)  # again: no change
+        self.assertEqual(run(self.base, "render")[2].strip(), "no changes")
+
+        self.assertEqual(run(self.base, "grant", "alice", self.OTHER)[0], 0)
+        self.assertEqual(self.accounts()["accounts"]["alice"]["proxies"], sorted([PRIVATE, self.OTHER]))
+        self.assertEqual(run(self.base, "revoke", "alice", PRIVATE)[0], 0)
+        self.assertEqual(self.accounts()["accounts"]["alice"]["proxies"], [self.OTHER])
+        out = run(self.base, "render")[1].split()
+        self.assertEqual(sorted(out), sorted([f"xray/{PRIVATE}/config/config.json",
+                                              f"xray/{self.OTHER}/config/config.json"]))
+        self.assertNotIn("alice", self.users(self.private)["http_IN"])
+        self.assertIn("alice", self.users(self.other)["http_IN"])
+        self.assertEqual(run(self.base, "revoke", "alice", self.OTHER)[0], 0)
+        self.assertNotIn("proxies", self.accounts()["accounts"]["alice"])  # the last one goes with its key
+        code, _, err = run(self.base, "revoke", "alice", self.OTHER)
+        self.assertEqual((code, err.strip()), (0, f"revoke: alice {self.OTHER}: no change"))
+
+    def test_refused(self):
+        (self.base / pa.OPEN_PROXIES_FILE).write_text(PUBLIC + "\n")
+        before = (self.base / pa.ACCOUNTS_FILE).read_text()
+        for name, proxy, why in (("alice", PUBLIC, "not a private proxy"),           # public (and open)
+                                 ("alice", "usca6-bwh-1tb", "not a private proxy"),  # public, no config here
+                                 ("alice", "no-such-proxy", "not a private proxy"),  # unknown
+                                 ("alice", "../x", "not a private proxy"),
+                                 ("boss", PRIVATE, "admin account"),
+                                 ("svc-docker-node01", PRIVATE, "service account"),
+                                 ("svc-monitor", PRIVATE, "service account"),
+                                 ("carol", PRIVATE, "no account")):
+            code, _, err = run(self.base, "grant", name, proxy)
+            self.assertEqual(code, 1, (name, proxy))
+            self.assertIn(why, err, (name, proxy))
+            self.assertEqual((self.base / pa.ACCOUNTS_FILE).read_text(), before)  # nothing written
+        self.assertEqual(run(self.base, "revoke", "carol", PRIVATE)[0], 1)
+
+    def test_disabled_account(self):
+        run(self.base, "disable", "alice")
+        code, _, err = run(self.base, "grant", "alice", PRIVATE)
+        self.assertEqual(code, 0)
+        self.assertIn("no proxy config changes while the account is disabled", err)
+        run(self.base, "render")
+        self.assertNotIn("alice", self.users(self.private)["http_IN"])  # disabled: everywhere out
+        run(self.base, "enable", "alice")
+        out = run(self.base, "render")[1].split()
+        self.assertIn(f"xray/{PRIVATE}/config/config.json", out)
+        self.assertIn("alice", self.users(self.private)["http_IN"])
+        self.assertNotIn("alice", self.users(self.other)["http_IN"])
+        run(self.base, "disable", "alice")
+        run(self.base, "render")
+        self.assertNotIn("alice", self.users(self.private)["socks_IN"])
+
+    def test_admin_keeps_its_grants(self):
+        """Admins may use every private proxy: no grant for an admin, but an account keeps its grants as one."""
+        run(self.base, "grant", "alice", PRIVATE)
+        run(self.base, "admin", "alice", "on")
+        self.assertEqual(self.accounts()["accounts"]["alice"]["proxies"], [PRIVATE])
+        run(self.base, "render")
+        for path in (self.private, self.other):
+            self.assertEqual(self.users(path)["http_IN"].count("alice"), 1)  # once, as an admin
+        self.assertIn("alice", self.ha()["ha-private_http_IN"])
+        code, _, err = run(self.base, "grant", "alice", self.OTHER)
+        self.assertEqual(code, 1)
+        self.assertIn("may use every private proxy already", err)
+        self.assertEqual(run(self.base, "revoke", "alice", PRIVATE)[0], 0)  # revoke works on an admin
+        run(self.base, "grant", "bob", PRIVATE)
+        run(self.base, "admin", "bob", "on")
+        run(self.base, "admin", "bob", "off")  # the grant counts again
+        run(self.base, "render")
+        self.assertIn("bob", self.users(self.private)["http_IN"])
+        self.assertNotIn("bob", self.users(self.other)["http_IN"])
+        self.assertNotIn("bob", self.ha()["ha-private_http_IN"])
+
+    def test_remove_drops_the_grants(self):
+        run(self.base, "grant", "alice", PRIVATE)
+        run(self.base, "remove", "alice")
+        run(self.base, "add", "alice")
+        self.assertNotIn("proxies", self.accounts()["accounts"]["alice"])
+
+    def test_stale_grant_stops_render_until_revoked(self):
+        run(self.base, "grant", "alice", PRIVATE)
+        run(self.base, "render")
+        rendered = self.private.read_text()
+        listed = (self.base / pa.PUBLIC_PROXIES_FILE).read_text()
+        (self.base / pa.PUBLIC_PROXIES_FILE).write_text(listed + PRIVATE + "\n")  # reclassified as public
+        code, _, err = run(self.base, "render")
+        self.assertEqual(code, 1)
+        self.assertIn(f"alice is granted {PRIVATE}, which is not a private proxy", err)
+        self.assertEqual(self.private.read_text(), rendered)  # nothing written
+        self.assertEqual(run(self.base, "revoke", "alice", PRIVATE)[0], 0)
+        self.assertNotIn("is granted", run(self.base, "render")[2])  # (the HA example still has it as private)
+        (self.base / pa.PUBLIC_PROXIES_FILE).write_text(listed)
+        self.assertEqual(run(self.base, "render")[0], 0)
+        run(self.base, "grant", "bob", self.OTHER)
+        shutil.rmtree(self.base / "xray" / self.OTHER)  # removed
+        self.assertEqual(run(self.base, "render")[0], 1)
+        self.assertEqual(run(self.base, "revoke", "bob", self.OTHER)[0], 0)
+        self.assertEqual(run(self.base, "render")[0], 0)
+
+    def test_format(self):
+        text = (self.base / pa.ACCOUNTS_FILE).read_text()
+        self.assertNotIn("proxies", text)
+        self.assertEqual(pa.Accounts(self.base).text(), text)  # a file without grants reads and writes the same
+        run(self.base, "grant", "alice", self.OTHER)
+        run(self.base, "grant", "alice", PRIVATE)
+        self.assertEqual(self.accounts()["accounts"]["alice"],
+                         {"password": self.passwords()["alice"], "enabled": True, "admin": False,
+                          "proxies": sorted([PRIVATE, self.OTHER])})
+        entry = {"password": "x", "enabled": True, "admin": False}
+        for bad in ({"version": 3, "accounts": {"alice": dict(entry, proxies=PRIVATE)}},
+                    {"version": 3, "accounts": {"alice": dict(entry, proxies=[PRIVATE, PRIVATE])}},
+                    {"version": 3, "accounts": {"alice": dict(entry, proxies=["Bad name"])}},
+                    {"version": 3, "accounts": {"alice": dict(entry, proxies=[1])}},
+                    {"version": 3, "accounts": {"svc-docker-n1": dict(entry, proxies=[PRIVATE])}},
+                    {"version": 2, "accounts": {"alice": {"password": "x", "enabled": True, "proxies": []}}}):
+            (self.base / pa.ACCOUNTS_FILE).write_text(json.dumps(bad))
+            with self.assertRaises(pa.AccountsError, msg=bad):
+                pa.Accounts(self.base)
+        (self.base / pa.ACCOUNTS_FILE).write_text(json.dumps({"version": 3, "accounts": {
+            "alice": dict(entry, proxies=[])}}))
+        self.assertNotIn("proxies", pa.Accounts(self.base).text())  # an empty list is no grant
+
+    def test_status(self):
+        run(self.base, "grant", "alice", PRIVATE)
+        run(self.base, "grant", "alice", self.OTHER)
+        view = json.loads(run(self.base, "status", "--json")[1])
+        self.assertEqual({a["name"]: a["proxies"] for a in view["accounts"]},
+                         {"alice": sorted([PRIVATE, self.OTHER]), "bob": [], "boss": [], "svc-docker-node01": [],
+                          "svc-ha": [], "svc-monitor": []})
+
+    def test_new_private_proxy_takes_the_logins_render_would_write(self):
+        from create_xray_service import XrayServiceCreator
+        run(self.base, "grant", "alice", "jp-new")  # refused: no config yet
+        self.assertNotIn("proxies", self.accounts()["accounts"]["alice"])
+        creator = XrayServiceCreator(self.base)
+        names = [n for n, _ in creator.raw_inbound_users(True, False, "jp-new")]
+        self.assertEqual(names, ["boss", "svc-ha", "svc-monitor"])
 
 
 class HandlerUsersTest(unittest.TestCase):

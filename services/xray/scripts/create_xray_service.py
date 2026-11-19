@@ -216,10 +216,11 @@ class XrayServiceCreator:
         owner = host_port_owners(services).get(port)
         return owner is None, owner
 
-    def raw_inbound_users(self, private: bool, open_: bool = False) -> Optional[List[Tuple[str, str]]]:
+    def raw_inbound_users(self, private: bool, open_: bool = False,
+                          service_name: Optional[str] = None) -> Optional[List[Tuple[str, str]]]:
         """
         新代理入站要求的账号，与 proxy_accounts.py render 写入的相同 (Accounts.proxy_users)：
-        私有代理始终要求账号 (启用的管理员账号、svc-ha、svc-monitor)；开放代理 (open-proxies.txt) 始终不要求；
+        私有代理始终要求账号 (启用的管理员账号、授权了该代理的启用账号、svc-ha、svc-monitor)；开放代理 (open-proxies.txt) 始终不要求；
         其他公共代理在 raw_auth 为 true 时要求所有启用的账号，否则返回 None (入站不要求认证)
         """
         accounts = Accounts(self.base_dir)
@@ -227,7 +228,7 @@ class XrayServiceCreator:
             missing = [name for name in ("svc-ha", "svc-monitor") if name not in accounts.accounts]
             if missing:
                 raise ValueError(f"私有代理要求账号，但 {accounts.path} 中没有 {', '.join(missing)}")
-        users = accounts.proxy_users(private, open_)
+        users = accounts.proxy_users(private, open_, proxy=service_name)
         if users is not None and not users:
             raise ValueError(f"raw-auth 已开启，但 {accounts.path} 中没有账号")
         return users
@@ -527,7 +528,7 @@ class XrayServiceCreator:
             service_name: 简短的服务名称（如: jp-osaka-xuqi）
             http_port: HTTP 代理端口
             socks_port: SOCKS5 代理端口
-            private: 必须明确给出，没有默认值。True: 私有代理 (只有管理员账号可用，始终要求账号)；
+            private: 必须明确给出，没有默认值。True: 私有代理 (管理员账号和被授权该代理的账号可用，始终要求账号)；
                 False: 公共代理，加入 xray/public-proxies.txt
         """
         if not isinstance(private, bool):
@@ -538,7 +539,7 @@ class XrayServiceCreator:
     def _create_service(self, share_url: str, service_name: str, http_port: int, socks_port: int,
                         private: bool) -> None:
         """create_service 的内容，在 proxy-accounts/.lock 中执行"""
-        print(f"正在创建 xray 服务: {service_name} ({'私有，只有管理员账号可用' if private else '公共'})")
+        print(f"正在创建 xray 服务: {service_name} ({'私有，管理员账号和被授权的账号可用' if private else '公共'})")
         print(f"HTTP 端口: {http_port}, SOCKS5 端口: {socks_port}")
 
         # 检查参数
@@ -583,7 +584,7 @@ class XrayServiceCreator:
         print("✓ 端口检查通过")
 
         # 私有代理始终要求账号；公共代理在 raw-auth 开启时要求所有代理账号 (见 proxy_accounts.py)
-        inbound_users = self.raw_inbound_users(private, open_listed)
+        inbound_users = self.raw_inbound_users(private, open_listed, service_name)
         if inbound_users is not None:
             reason = "私有代理" if private else "raw-auth 已开启"
             print(f"✓ {reason}: 入站要求 {len(inbound_users)} 个代理账号")
@@ -664,7 +665,8 @@ class XrayServiceCreator:
         print(f"  2. 启动服务: docker compose up -d xray-{service_name} xray-{service_name}-exporter")
         print("  3. 重新加载 Prometheus 配置: docker compose kill -s SIGHUP prometheus")
         if private:
-            print("     私有代理：只有管理员账号可用，入站始终要求账号；只有 ha-private 能经过它")
+            print("     私有代理：管理员账号可用，也可以用 proxy_accounts.py grant 授权给单个账号；入站始终要求账号；"
+                  "只有 ha-private 能经过它")
         login = "<user>:<password>@" if inbound_users is not None else ""
         print(f"  4. 验证代理: curl -x http://{login}localhost:{http_port} -I https://www.google.com")
         socks = f"-x socks5h://{login}localhost:{socks_port}" if login else f"--socks5-hostname localhost:{socks_port}"
@@ -711,7 +713,7 @@ def main():
     )
     access.add_argument(
         '--private', dest='private', action='store_true',
-        help='私有代理：只有管理员账号可用，入站始终要求账号'
+        help='私有代理：管理员账号和被授权的账号 (proxy_accounts.py grant) 可用，入站始终要求账号'
     )
 
     parser.add_argument(

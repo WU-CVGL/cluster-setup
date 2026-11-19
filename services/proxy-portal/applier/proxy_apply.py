@@ -14,9 +14,10 @@ The spool (default /var/lib/proxy-portal/spool):
   status.json          the accounts without passwords, for the portal
 
 A request is {"id": ..., "op": "add|rotate|enable|disable|remove|admin-on|admin-off", "username": ...}
-and nothing else. Passwords are generated here, never taken from a request. svc-ha and svc-monitor are
-managed with proxy_accounts.py only; service accounts are never admins. Settings come from the environment (PROXY_APPLY_*) or the options below, never
-from a request. Python 3.8+, standard library only.
+and nothing else, or {"id": ..., "op": "grant|revoke", "username": ..., "proxy": ...}: the private proxy to grant
+to the account or to take back. Passwords are generated here, never taken from a request. svc-ha and svc-monitor are
+managed with proxy_accounts.py only; service accounts are never admins and never granted a proxy. Settings come from
+the environment (PROXY_APPLY_*) or the options below, never from a request. Python 3.8+, standard library only.
 """
 
 import argparse
@@ -43,8 +44,10 @@ sys.path.insert(0, str(SERVICES_DIR / "xray" / "scripts"))
 import proxy_accounts as pa  # noqa: E402
 
 DEFAULT_SPOOL = Path("/var/lib/proxy-portal/spool")
-OPS = ("add", "rotate", "enable", "disable", "remove", "admin-on", "admin-off")
+GRANT_OPS = ("grant", "revoke")  # carry the private proxy as "proxy"
+OPS = ("add", "rotate", "enable", "disable", "remove", "admin-on", "admin-off") + GRANT_OPS
 REQUEST_KEYS = {"id", "op", "username"}
+MAX_PROXY_NAME = 128
 ID_RE = re.compile(r"[a-z0-9][a-z0-9-]{7,63}")
 REQUEST_FILE_RE = re.compile(r"([a-z0-9][a-z0-9-]{7,63})\.json")
 MAX_REQUEST_BYTES = 4096
@@ -59,7 +62,9 @@ MANIFEST = "manifest.json"
 SEQUENCE_FILE = "sequence.json"  # in the spool: the last apply sequence number
 
 Run = Callable[[Sequence[str], Optional[str], float], Tuple[int, str, str]]
-Probe = Callable[[str, str, str], Tuple[str, Optional[int]]]  # (entry, user, password): ha-general or ha-private
+# (target, user, password): the target is ha-general, ha-private or a proxy's own entry, by its Compose service
+# (xray-<proxy>), whose address the applier finds in the Compose file
+Probe = Callable[[str, str, str], Tuple[str, Optional[int]]]
 ENTRIES = (pa.GENERAL, pa.HA_PRIVATE)
 Login = Tuple[str, str, str, str]  # (label, entry, user, password)
 
@@ -99,25 +104,36 @@ def parse_request(raw: bytes) -> Dict[str, str]:
         data = json.loads(raw.decode("utf-8"), object_pairs_hook=no_duplicates)
     except (UnicodeDecodeError, ValueError, RecursionError) as e:  # deep nesting raises RecursionError on 3.8
         raise RequestError(f"not UTF-8 JSON: {type(e).__name__}")
-    if not isinstance(data, dict) or set(data) != REQUEST_KEYS:
-        raise RequestError(f"must be an object with exactly the keys {sorted(REQUEST_KEYS)}")
+    keys = REQUEST_KEYS | {"proxy"} if isinstance(data, dict) and data.get("op") in GRANT_OPS else REQUEST_KEYS
+    if not isinstance(data, dict) or set(data) != keys:
+        raise RequestError(f"must be an object with exactly the keys {sorted(REQUEST_KEYS)}, and proxy for "
+                           f"{' and '.join(GRANT_OPS)}")
     if not all(isinstance(v, str) for v in data.values()):
         raise RequestError("every value must be a string")
     if not ID_RE.fullmatch(data["id"]):
         raise RequestError("invalid id")
     if data["op"] not in OPS:
         raise RequestError(f"op must be one of {', '.join(OPS)}")
+    if "proxy" in data and (len(data["proxy"]) > MAX_PROXY_NAME or not pa.PROXY_NAME_RE.fullmatch(data["proxy"])):
+        raise RequestError("invalid proxy name")
     try:
         pa.validate_name(data["username"])
     except pa.AccountsError as e:
         raise RequestError(str(e))
     if data["username"] in pa.PROTECTED:
         raise RequestError(f"{data['username']} is managed with proxy_accounts.py only")
-    return {"id": data["id"], "op": data["op"], "username": data["username"]}
+    request = {"id": data["id"], "op": data["op"], "username": data["username"]}
+    if "proxy" in data:
+        request["proxy"] = data["proxy"]
+    return request
 
 
-def apply_op(accounts: pa.Accounts, request: Dict[str, str]) -> Tuple[bool, Optional[str]]:
-    """Apply one request to the accounts in memory: (changed, new password or None). Raises AccountsError."""
+def apply_op(accounts: pa.Accounts, request: Dict[str, str],
+             private: Optional[Set[str]] = None) -> Tuple[bool, Optional[str]]:
+    """
+    Apply one request to the accounts in memory: (changed, new password or None). Raises AccountsError. private:
+    the private proxies that have a config, the only ones a grant may name (a revoke takes back any granted name).
+    """
     op, name = request["op"], request["username"]
     if name in pa.PROTECTED:  # parse_request refuses them already
         raise pa.AccountsError(f"{name} is managed with proxy_accounts.py only")
@@ -137,6 +153,10 @@ def apply_op(accounts: pa.Accounts, request: Dict[str, str]) -> Tuple[bool, Opti
         return True, None
     if op in ("admin-on", "admin-off"):
         return accounts.set_admin(name, op == "admin-on"), None
+    if op == "grant":
+        return accounts.grant(name, request["proxy"], private or set()), None
+    if op == "revoke":
+        return accounts.revoke(name, request["proxy"]), None
     return accounts.set_enabled(name, op == "enable"), None
 
 
@@ -368,6 +388,26 @@ class Compose:
             raise ApplyError(stage, f"no image for {service} in the compose config")
         return image
 
+    def published(self, service: str, container_port: int) -> Optional[Tuple[Optional[str], int]]:
+        """
+        (host IP or None for every address, host port) that the Compose file publishes service's container_port on,
+        or None when it publishes none or the Compose file cannot be read.
+        """
+        try:
+            ports = json.loads(self._ok("verify", "config", "--format", "json"))["services"][service].get("ports")
+        except (ApplyError, ValueError, KeyError, TypeError, AttributeError):
+            return None
+        for entry in ports or []:
+            try:
+                if int(entry.get("target")) != container_port or entry.get("protocol", "tcp") != "tcp":
+                    continue
+                port = int(str(entry.get("published")).split("-")[0])
+            except (TypeError, ValueError, AttributeError):
+                continue
+            host = entry.get("host_ip") or None
+            return (None if host in ("0.0.0.0", "::") else host), port
+        return None
+
     def pinned_image(self, service: str) -> str:
         image = self.image("test", service)
         if "@sha256:" not in image:
@@ -392,6 +432,8 @@ class Compose:
         return out.split()
 
     def restart(self, services: Sequence[str]) -> None:
+        if not services:  # docker compose restart without services restarts every service of the project
+            raise ApplyError("restart", "no services to restart")
         self._ok("restart", "restart", *services, timeout=300)
 
     def xray_test(self, image: str, config_text: str) -> Tuple[bool, str]:
@@ -457,8 +499,13 @@ def proxy_probe(proxy: Tuple[str, int], url: str, user: str, password: str, time
 class Applier:
     def __init__(self, base_dir: Path, spool: Spool, compose: Compose, probe: Probe,
                  verify_timeout: float = 60, verify_interval: float = 2,
-                 sleep: Callable[[float], None] = time.sleep, clock: Callable[[], float] = time.monotonic):
+                 sleep: Callable[[float], None] = time.sleep, clock: Callable[[], float] = time.monotonic,
+                 addresses: Optional[Dict[str, Tuple[str, int]]] = None, proxy_host: str = "127.0.0.1"):
         self.base = Path(base_dir)
+        # the probe's targets: the HA entries, and each private proxy's own entry once a check needs it, at its
+        # published HTTP port on proxy_host (or the host address the Compose file publishes it on)
+        self.addresses = addresses if addresses is not None else {}
+        self.proxy_host = proxy_host
         self.spool = spool
         self.compose = compose
         self.probe = probe
@@ -543,11 +590,13 @@ class Applier:
 
     def apply_batch(self, batch: List[Tuple[Dict[str, str], int]]) -> int:
         records = {request["id"]: dict(request, status="applying") for request, _ in batch}  # type: Dict[str, dict]
-        log("batch: " + ", ".join(f"{r['id']} {r['op']} {r['username']}" for r, _ in batch))
+        log("batch: " + ", ".join(f"{r['id']} {r['op']} {r['username']}" + (f" {r['proxy']}" if "proxy" in r else "")
+                                  for r, _ in batch))
 
         try:
             accounts = pa.Accounts(self.base)
             before = pa.Accounts(self.base)
+            private = pa.private_proxies(self.base) if any("proxy" in r for r, _ in batch) else set()
         except (pa.AccountsError, OSError, ValueError) as e:
             for record in records.values():
                 record.update(status="failed", stage="accounts", error=str(e), restored=True)
@@ -555,11 +604,12 @@ class Applier:
         old_passwords = dict(accounts.accounts)
         old_enabled = {name for name in accounts.accounts if accounts.enabled(name)}
         old_admins = set(accounts.admins)
+        old_grants = {name: set(proxies) for name, proxies in accounts.grants.items()}
         passwords = {}  # type: Dict[str, str]
         active, changed_any = [], False
         for request, uid in batch:
             try:
-                changed, password = apply_op(accounts, request)
+                changed, password = apply_op(accounts, request, private)
             except pa.AccountsError as e:
                 records[request["id"]].update(status="failed", stage="request", error=str(e), restored=True)
                 continue
@@ -583,9 +633,11 @@ class Applier:
                 raise ApplyError("render", str(e))
             outputs = [(path, text) for path, text in files
                        if not (path.exists() and path.read_text(encoding="utf-8") == text)]
+            requests = [r for r, _ in active]
             if not changed_any and not outputs and known:
                 # Nothing to change, by the record: still check each request's own account at the entries
-                outcome, detail = self.verify(*self.target_checks([r for r, _ in active], old_passwords, accounts))
+                accept, refuse, unverified = self.request_checks(requests, old_passwords, old_grants, accounts)
+                outcome, detail = unverified_outcome(self.verify(accept, refuse), unverified)
                 if outcome != "failed":
                     seq = self.next_sequence()
                     for request, _ in active:
@@ -605,7 +657,8 @@ class Applier:
                     if not ok:
                         last = ([line for line in output.splitlines() if line.strip()] or ["no output"])[-1]
                         raise ApplyError("test", f"{path.relative_to(self.base)}: {scrub(last, secrets_seen)}")
-            restart = self.restart_set(accounts, changed)
+            # a batch of grants and revokes only restarts what it changes: no more than the proxies they name
+            restart = self.restart_set(accounts, changed, grants_only=all(r["op"] in GRANT_OPS for r in requests))
             self.check_images(image, restart)
             try:
                 snapshot = self.backup(outputs, accounts_text, restart, [r["id"] for r, _ in active])
@@ -617,12 +670,15 @@ class Applier:
                 pa.write_private(accounts.path, accounts_text)
             except OSError as e:
                 raise ApplyError("swap", f"{type(e).__name__}: {e.strerror or e}")
-            log(f"files replaced; restarting {' '.join(restart)}")
-            self.compose.restart(restart)
+            if restart:
+                log(f"files replaced; restarting {' '.join(restart)}")
+                self.compose.restart(restart)
+            else:
+                log("files replaced; no config changed, nothing to restart")
             accept, refuse = self.expectations(old_passwords, old_enabled, old_admins, accounts)
-            accept, refuse = merge_logins((accept, refuse),
-                                          self.target_checks([r for r, _ in active], old_passwords, accounts))
-            outcome, detail = self.verify(accept, refuse)
+            checks = self.request_checks(requests, old_passwords, old_grants, accounts)
+            accept, refuse = merge_logins((accept, refuse), checks[:2])
+            outcome, detail = unverified_outcome(self.verify(accept, refuse), checks[2])
             if outcome == "failed":
                 raise ApplyError("verify", detail)
             status = "applied" if outcome == "ok" else "unconfirmed"
@@ -689,7 +745,10 @@ class Applier:
             return False
         if not isinstance(applied, dict) or applied.get("accounts_sha256") != pa.sha256_text(accounts.text()):
             return False
-        files = pa.render_files(accounts)
+        try:
+            files = pa.render_files(accounts)
+        except pa.AccountsError:  # e.g. a grant of a proxy since removed, which this batch may revoke
+            return False
         if any(not (path.exists() and path.read_text(encoding="utf-8") == text) for path, text in files):
             return False
         return applied.get("render_sha256") == pa.render_sha256(self.base, files)
@@ -765,17 +824,29 @@ class Applier:
             if record.get("result"):
                 self.delivered[record["username"]] = request_id
 
-    def restart_set(self, accounts: pa.Accounts, outputs: List[Tuple[Path, str]]) -> List[str]:
+    def restart_set(self, accounts: pa.Accounts, outputs: List[Tuple[Path, str]],
+                    grants_only: bool = False) -> List[str]:
         """
         xray-ha; with raw auth every proxy but the open ones, which hold no accounts; a proxy whose config changed (a
         private proxy whenever the admins it accepts change, an open proxy when its logins are removed); and
-        blackbox-exporter when its config did.
+        blackbox-exporter when its config did. grants_only, for a batch of grants and revokes only: just the
+        services whose config changed, which may be none (a grant to a disabled account changes no config).
+        xray-ha must run either way: the checks go through it.
         """
         running = self.compose.running()
         if HA_SERVICE not in running:
             raise ApplyError("precheck", f"{HA_SERVICE} is not running")
         known = self.compose.services()
         changed = {path for path, _ in outputs}
+        if grants_only:
+            restart = [HA_SERVICE] if self.base / pa.HA_CONFIG in changed else []
+            for path in sorted(self.base.glob(pa.RAW_CONFIG_GLOB)):
+                service = pa.PROXY_HOST_PREFIX + path.parent.parent.name
+                if path in changed and service in known and service in running:
+                    restart.append(service)
+            if self.base / pa.BLACKBOX_CONFIG in changed and BLACKBOX_SERVICE in running:
+                restart.append(BLACKBOX_SERVICE)
+            return restart
         try:
             open_ = pa.open_proxies(self.base, pa.public_proxies(self.base))
         except (pa.AccountsError, OSError) as e:
@@ -790,6 +861,80 @@ class Applier:
         if self.base / pa.BLACKBOX_CONFIG in changed and BLACKBOX_SERVICE in running:
             restart.append(BLACKBOX_SERVICE)
         return restart
+
+    def request_checks(self, requests: List[Dict[str, str]], old_passwords: Dict[str, str],
+                       old_grants: Dict[str, Set[str]], accounts: pa.Accounts) -> Tuple[List[Login], List[Login],
+                                                                                         List[str]]:
+        """(accept, refuse, unverified) for each request's own account: on both HA entries and at private proxies."""
+        accept, refuse = self.target_checks(requests, old_passwords, accounts)
+        proxy_accept, proxy_refuse, unverified = self.proxy_checks(requests, old_passwords, old_grants, accounts)
+        accept, refuse = merge_logins((accept, refuse), (proxy_accept, proxy_refuse))
+        return accept, refuse, unverified
+
+    def proxy_target(self, proxy: str, running: Set[str]) -> Optional[str]:
+        """The probe target of a private proxy's own entry (its Compose service), None when it is not running or
+        publishes no HTTP port."""
+        service = pa.PROXY_HOST_PREFIX + proxy
+        if service not in running:
+            return None
+        if service not in self.addresses:
+            published = self.compose.published(service, pa.PROXY_CONTAINER_PORTS["http"])
+            if published is None:
+                return None
+            host, port = published
+            self.addresses[service] = (host or self.proxy_host, port)
+        return service
+
+    def proxy_checks(self, requests: List[Dict[str, str]], old_passwords: Dict[str, str],
+                     old_grants: Dict[str, Set[str]], accounts: pa.Accounts) -> Tuple[List[Login], List[Login],
+                                                                                       List[str]]:
+        """
+        (accept, refuse, unverified) at the private proxies' own entries, where the grants count: for each request's
+        account, at every private proxy it was or is granted and at the one a grant or revoke names, its login passes
+        while it is enabled and an admin or granted that proxy and is refused otherwise, and a replaced password is
+        refused. The proxy a grant or revoke names also lets svc-monitor in and refuses a wrong password and one
+        enabled non-admin account not granted it. A private proxy that is not running or publishes no HTTP port
+        cannot be checked: unverified lists it, and the outcome is unconfirmed at best.
+        """
+        accept, refuse, unverified = [], [], []  # type: Tuple[List[Login], List[Login], List[str]]
+        wanted = []  # type: List[Tuple[Dict[str, str], str]]
+        for request in requests:
+            name, named = request["username"], request.get("proxy")
+            for proxy in sorted(old_grants.get(name, set()) | accounts.grants.get(name, set())
+                                | ({named} if named else set())):
+                wanted.append((request, proxy))
+        if not wanted:
+            return accept, refuse, unverified
+        private = pa.private_proxies(self.base)
+        try:
+            running = self.compose.running()
+        except ApplyError:  # then no proxy can be checked
+            running = set()
+        for request, proxy in wanted:
+            if proxy not in private:  # a revoke of a proxy that is no longer private: nothing there to check
+                continue
+            target = self.proxy_target(proxy, running)
+            if target is None:
+                if proxy not in unverified:
+                    unverified.append(proxy)
+                continue
+            name = request["username"]
+            new, old = accounts.accounts.get(name), old_passwords.get(name)
+            allowed = accounts.enabled(name) and (accounts.is_admin(name) or proxy in accounts.grants.get(name, ()))
+            if new is not None:
+                (accept if allowed else refuse).append((f"{name} on {proxy}", target, name, new))
+            if old is not None and old != new:
+                label = name if new is None else f"{name} (previous password)"
+                refuse.append((f"{label} on {proxy}", target, name, old))
+            if proxy == request.get("proxy"):
+                accept.append((f"{pa.MONITOR} on {proxy}", target, pa.MONITOR, accounts.accounts[pa.MONITOR]))
+                refuse.append((f"a wrong password on {proxy}", target, pa.MONITOR, "wrong-" + pa.new_password()))
+                other = next((n for n in sorted(accounts.accounts) if n not in pa.PROTECTED and n != name
+                              and accounts.enabled(n) and not accounts.is_admin(n)
+                              and proxy not in accounts.grants.get(n, ())), None)
+                if other is not None:
+                    refuse.append((f"{other} (not granted) on {proxy}", target, other, accounts.accounts[other]))
+        return accept, refuse, unverified
 
     @staticmethod
     def target_checks(requests: List[Dict[str, str]], old_passwords: Dict[str, str],
@@ -885,7 +1030,8 @@ class Applier:
                 return "ok", ""
             if self.clock() >= deadline:
                 if refuse:
-                    return "failed", f"no 407 from {HA_SERVICE} in {self.verify_timeout:.0f} s for " + \
+                    services = sorted({HA_SERVICE if target in ENTRIES else target for _, target, _, _ in refuse})
+                    return "failed", f"no 407 from {', '.join(services)} in {self.verify_timeout:.0f} s for " + \
                         ", ".join(f"{label} ({last.get(label, '-')})" for label, _, _, _ in refuse)
                 return "unconfirmed", "no 204 for " + ", ".join(f"{p} ({last.get(p, '-')})" for p, _, _, _ in accept)
             self.sleep(self.verify_interval)
@@ -937,8 +1083,10 @@ class Applier:
                 self.compose.restart(restart)
                 accounts = pa.Accounts(self.base)
                 monitor = accounts.accounts[pa.MONITOR]
-                outcome, detail = self.verify([(f"{pa.MONITOR} on {entry}", entry, pa.MONITOR, monitor)
-                                               for entry in ENTRIES], [])
+                # the HA entries, and each restarted private proxy whose address a check of this run found
+                targets = list(ENTRIES) + [service for service in restart if service in self.addresses]
+                outcome, detail = self.verify([(f"{pa.MONITOR} on {target}", target, pa.MONITOR, monitor)
+                                               for target in targets], [])
                 log(f"rollback: {outcome} {detail}".rstrip())
                 return outcome != "failed"
             return True
@@ -1009,6 +1157,14 @@ class Applier:
                 self.spool.write_status(path.stem, record)
 
 
+def unverified_outcome(result: Tuple[str, str], unverified: List[str]) -> Tuple[str, str]:
+    """An ok verification that left proxies unchecked is unconfirmed."""
+    outcome, detail = result
+    if outcome == "ok" and unverified:
+        return "unconfirmed", f"not checked: {', '.join(unverified)} (not running, or no published HTTP port)"
+    return outcome, detail
+
+
 def merge_logins(*pairs):
     """Join (accept, refuse) lists, each login (user and password) once, the first label kept."""
     accept, refuse, seen = [], [], set()
@@ -1059,6 +1215,8 @@ def main(argv: Optional[List[str]] = None) -> int:
                         help="ha-general's HTTP port")
     parser.add_argument("--ha-private-http", type=host_port,
                         default=env("PROXY_APPLY_HA_PRIVATE_HTTP") or "127.0.0.1:31889", help="ha-private's HTTP port")
+    parser.add_argument("--proxy-host", default=env("PROXY_APPLY_PROXY_HOST") or "127.0.0.1",
+                        help="where the proxies' own entries are reached, at their published HTTP ports")
     parser.add_argument("--probe-url", default=env("PROXY_APPLY_PROBE_URL") or "https://www.google.com/generate_204")
     parser.add_argument("--verify-timeout", type=float, default=float(env("PROXY_APPLY_VERIFY_TIMEOUT") or 60))
     parser.add_argument("command", choices=("init", "run", "status"))
@@ -1080,13 +1238,17 @@ def main(argv: Optional[List[str]] = None) -> int:
         return 0
     compose = Compose(args.compose_file or args.services_dir / "docker-compose.yml", args.compose_project)
 
-    entries = {pa.GENERAL: args.ha_http, pa.HA_PRIVATE: args.ha_private_http}
+    addresses = {pa.GENERAL: args.ha_http, pa.HA_PRIVATE: args.ha_private_http}  # the applier adds the proxies'
 
-    def probe(entry, user, password):
-        return proxy_probe(entries[entry], args.probe_url, user, password)
+    def probe(target, user, password):
+        address = addresses.get(target)
+        if address is None:
+            return "unreachable", None
+        return proxy_probe(address, args.probe_url, user, password)
 
     try:
-        return Applier(args.services_dir, spool, compose, probe, verify_timeout=args.verify_timeout).run()
+        return Applier(args.services_dir, spool, compose, probe, verify_timeout=args.verify_timeout,
+                       addresses=addresses, proxy_host=args.proxy_host).run()
     except (OSError, pa.AccountsError, ValueError) as e:
         print(f"error: {type(e).__name__}: {e}", file=sys.stderr)
         return 2
