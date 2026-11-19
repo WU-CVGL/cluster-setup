@@ -22,7 +22,7 @@ python3 xray/scripts/create_xray_service.py <share_url> <service_name> <http_por
 - `socks_port`: SOCKS5 代理的主机端口（容器内固定使用 1089）
 - `--public` 或 `--private`（必须二选一，没有默认值）：
   - `--public`：公共代理，所有用户可用，脚本把它加入 `xray/public-proxies.txt`
-  - `--private`：私有代理，只有管理员账号可用；入站始终要求账号（启用的管理员账号、`svc-ha`、`svc-monitor`），
+  - `--private`：私有代理，管理员账号可用，也可以用 `proxy_accounts.py grant` 授予单个账号；入站始终要求账号（启用的管理员账号、被授予的启用账号、`svc-ha`、`svc-monitor`），
     要求账号文件中已有 `svc-ha` 和 `svc-monitor`。名称已列在 `public-proxies.txt` 中时拒绝
   - 没有列在 `xray/public-proxies.txt` 中的代理都是私有代理，所以漏掉分类的代理只对管理员账号开放
     （[docs/00](../../../docs/00_Network_Proxy.md#classify-a-new-proxy)）
@@ -178,7 +178,8 @@ python3 xray/scripts/proxy_accounts.py remove <name>
 python3 xray/scripts/proxy_accounts.py disable <name>           # 保留账号和密码，所有要求账号的入口拒绝它
 python3 xray/scripts/proxy_accounts.py enable <name>
 python3 xray/scripts/proxy_accounts.py admin <name> on|off      # 管理员可以使用 ha-private 和私有代理
-python3 xray/scripts/proxy_accounts.py list                     # 账号名，管理员标为 admin
+python3 xray/scripts/proxy_accounts.py grant <name> <proxy>     # 该账号也可以使用这个私有代理的自身入口；revoke 收回
+python3 xray/scripts/proxy_accounts.py list                     # 账号名，管理员标为 admin，授予的私有代理标为 proxies=...
 python3 xray/scripts/proxy_accounts.py status [--json]          # 账号、类型、是否启用、是否管理员、代理的类别和端口、raw auth、上次应用的文件哈希；不含密码
 python3 xray/scripts/proxy_accounts.py raw-auth [on|off]        # 公共代理自身入口是否要求账号，默认 off
 python3 xray/scripts/proxy_accounts.py render
@@ -186,8 +187,14 @@ python3 xray/scripts/proxy_accounts.py render
 
 - 账号名：集群用户名，小写字母、数字、`.`、`_`、`-`，以字母或数字开头，最长 64 个字符。`svc-` 开头的是服务账号，
   只能是 `svc-ha`（HA 入口登录代理）、`svc-monitor`（探测）和 `svc-docker-<node>`（节点的 Docker daemon）。
-  `svc-ha` 和 `svc-monitor` 不能禁用或删除；服务账号不能是管理员
-- 文件格式（version 3）：`{"version": 3, "raw_auth": bool, "accounts": {name: {"password": str, "enabled": bool, "admin": bool}}}`。
+  `svc-ha` 和 `svc-monitor` 不能禁用或删除；服务账号不能是管理员，也不能被授予代理
+- 授予单个私有代理（`grant`）：账号可以用自己的密码直接使用该私有代理的自身入口，不会获得 `ha-private`，`ha-general` 不变。
+  只接受有配置（`xray/<proxy>/`）且不在 `public-proxies.txt` 中的私有代理；拒绝公共代理、开放代理、未知名称、服务账号和管理员账号
+  （管理员已可使用所有私有代理）。账号成为管理员后保留授予，取消管理员后重新生效；禁用的账号也保留，启用后生效。
+  某个授予的代理之后变成公共代理或被删除时，`render` 报错不写任何文件，先用 `revoke` 收回（`revoke` 接受任何已授予的名称）。
+  授予或收回只改变该代理的配置，之后只需重启它（[docs/00](../../../docs/00_Network_Proxy.md#private-proxies-for-single-accounts)）
+- 文件格式（version 3）：`{"version": 3, "raw_auth": bool, "accounts": {name: {"password": str, "enabled": bool, "admin": bool[, "proxies": [私有代理]]}}}`，
+  `proxies` 只在账号有授予时写入，没有它的文件与以前相同。
   version 2 的文件（没有 `admin`）照常读取，没有管理员；没有 `version` 的旧文件（`{name: password}`）照常读取，
   所有账号视为启用，没有管理员。下次修改时都写成 version 3
 - 代理的类别：`xray/public-proxies.txt` 列出公共代理，其余都是私有代理（文件缺失时报错）。`xray/open-proxies.txt`
@@ -209,7 +216,7 @@ python3 xray/scripts/proxy_accounts.py render
     且不带 `proxySettings`、`streamSettings` 等可以串联到其他出站的设置
   - `blackbox/config/blackbox.yml`：`blackbox/blackbox.example.yml` 中经过 `xray-ha` 和私有代理的 `proxy_url` 带上
     `svc-monitor`（percent-encode）；`raw-auth on` 时公共代理（包括开放代理，入站不要求账号时忽略它）的 `proxy_url` 也带上
-  - `xray/*/config/config.json`：私有代理的入站始终要求启用的管理员账号、`svc-ha` 和 `svc-monitor`；开放代理以外的
+  - `xray/*/config/config.json`：私有代理的入站始终要求启用的管理员账号、被授予该代理的启用账号、`svc-ha` 和 `svc-monitor`；开放代理以外的
     公共代理在 `raw-auth on` 时要求所有启用的账号（含 `svc-ha`），`off` 时（开放代理始终）带账号的入站恢复为无认证，
     其他文件不动。
     修改用的是 `XrayConfigHandler.set_inbound_users`，`build_xray_config(..., inbound_users=...)` 也用它；
@@ -220,7 +227,7 @@ python3 xray/scripts/proxy_accounts.py render
   换镜像后用 `docker compose up -d` 重新创建代理，`docker compose restart` 不会换
 - 缺少 `svc-monitor` 或 `svc-ha`、某个需要账号的代理配置没有 HTTP/SOCKS5 入站，或 HA 示例配置没有通过上面的检查时，
   `render` 报错，不写任何文件
-- 之后重启 `xray-ha` 和 `render` 写入了配置的代理（管理员变化时是私有代理，`raw-auth on` 时连同开放代理以外的所有代理一起），
+- 之后重启 `render` 写入了配置的服务：`xray-ha`（只授予或收回代理时不变）和写入了配置的代理（管理员变化时是私有代理，被授予代理的账号变化时是这些代理，`raw-auth on` 时连同开放代理以外的所有代理一起），
   并 `docker compose kill -s SIGHUP blackbox-exporter`；部署私有代理和 `raw-auth on` 之前，在每个相关代理上确认
   不带账号和带已撤销密码的请求得到 `407`（[docs/00](../../../docs/00_Network_Proxy.md#accounts-on-the-proxies)）
 
