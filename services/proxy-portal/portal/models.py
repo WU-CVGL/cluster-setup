@@ -72,8 +72,9 @@ class IncidentUpdate(models.Model):
 
 class AccountRequest(models.Model):
     """
-    A proxy account change an admin requested: the request file the portal wrote into the applier's spool, and the
-    outcome copied from the applier's status file (status/<id>.json). Never a password.
+    A proxy account change an admin requested, or a user's reset of their own password: the request file the portal
+    wrote into the applier's spool, and the outcome copied from the applier's status file (status/<id>.json). Never
+    a password.
     """
 
     OPS = [
@@ -97,7 +98,9 @@ class AccountRequest(models.Model):
     id = models.CharField(max_length=64, primary_key=True)
     op = models.CharField(max_length=16, choices=OPS)
     username = models.CharField(max_length=64, db_index=True)
-    requested_by = models.CharField(max_length=128, db_index=True)  # the admin's Determined username
+    requested_by = models.CharField(max_length=128, db_index=True)  # the Determined username that requested it
+    # a user's reset of their own password from My access: only that user may collect the result
+    self_service = models.BooleanField(default=False, db_default=False)  # also for the previous release's code
     requested_at = models.DateTimeField(default=timezone.now, db_index=True)
     # from the applier's status file
     state = models.CharField(max_length=16, choices=STATES, default="pending", db_index=True)
@@ -135,3 +138,18 @@ class SignInFailure(models.Model):
 
     class Meta:
         indexes = [models.Index(fields=["scope", "key", "at"])]
+
+
+class ClusterUser(models.Model):
+    """
+    A Determined user as the master listed them at the last admin sign-in (GET /api/v1/users with that admin's
+    token, which is never stored): the username and the active and admin flags, nothing else. Replaced as a whole.
+    """
+
+    username = models.CharField(max_length=128, primary_key=True)
+    active = models.BooleanField()
+    admin = models.BooleanField()
+    captured_at = models.DateTimeField()
+
+    class Meta:
+        ordering = ["username"]

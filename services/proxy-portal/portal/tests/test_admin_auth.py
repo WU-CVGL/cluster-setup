@@ -40,7 +40,7 @@ class AdminGuardTest(PortalTestCase):
         everything = {p.name for p in get_resolver().url_patterns}
         # every route named admin_* or api_admin_* is an admin view, and nothing else is
         self.assertEqual(names, {n for n in everything if n.startswith(("admin_", "api_admin_"))})
-        self.assertEqual(len(names), 11)
+        self.assertEqual(len(names), 13)
 
     def test_anonymous(self):
         for name, path, kind in admin_patterns():
@@ -68,22 +68,22 @@ class AdminGuardTest(PortalTestCase):
         # an admin account in the proxy accounts file is not a Determined admin
         self.master.users["carol"] = ("pw-carol", False, True)
         self.sign_in("carol")
-        self.assertEqual(self.client.get("/admin/accounts").status_code, 403)
-        self.assertNotContains(self.client.get("/"), 'href="/admin/accounts"')
+        self.assertEqual(self.client.get("/admin/users").status_code, 403)
+        self.assertNotContains(self.client.get("/"), 'href="/admin/users"')
 
     def test_admin_allowed(self):
         self.sign_in("carol")
         for name, path, kind in admin_patterns():
             response = self.client.get(path + ("?username=alice" if name == "admin_confirm" else ""))
-            self.assertIn(response.status_code, (200, 405), (name, path))
+            self.assertIn(response.status_code, (302,) if name == "admin_accounts" else (200, 405), (name, path))
 
     def test_nav_link_for_admins_only(self):
-        self.assertNotContains(self.client.get("/"), 'href="/admin/accounts"')
+        self.assertNotContains(self.client.get("/"), 'href="/admin/users"')
         self.sign_in("alice")
-        self.assertNotContains(self.client.get("/"), 'href="/admin/accounts"')
+        self.assertNotContains(self.client.get("/"), 'href="/admin/users"')
         admin = https_client()
         self.sign_in("carol", client=admin)
-        self.assertContains(admin.get("/"), 'href="/admin/accounts"')
+        self.assertContains(admin.get("/"), 'href="/admin/users"')
 
 
 class CsrfTest(PortalTestCase):
@@ -96,7 +96,7 @@ class CsrfTest(PortalTestCase):
         self.assertEqual(self.client.session["username"], "carol")
 
     def token(self):
-        page = self.client.get("/admin/accounts").content.decode()
+        page = self.client.get("/admin/users").content.decode()
         return page.split('name="csrfmiddlewaretoken" value="')[1].split('"')[0]
 
     def test_api_post_needs_the_token(self):

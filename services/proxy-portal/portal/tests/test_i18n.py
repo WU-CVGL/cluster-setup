@@ -54,7 +54,7 @@ class LanguageTest(PortalTestCase):
 
     def test_admin_pages_in_chinese(self):
         self.sign_in("carol")
-        page = self.client.get("/admin/accounts", HTTP_ACCEPT_LANGUAGE="zh-CN")
+        page = self.client.get("/admin/users", HTTP_ACCEPT_LANGUAGE="zh-CN")
         self.assertContains(page, "代理账号")
         self.assertContains(page, ">管理</a>")
         self.assertContains(page, "公共代理自己的入口不需要账号")

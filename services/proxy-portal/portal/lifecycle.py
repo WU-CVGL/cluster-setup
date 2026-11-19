@@ -13,12 +13,16 @@ password is judged by, never the order of the requests.
 """
 
 import datetime
+import logging
 
 from django.conf import settings
 from django.utils import timezone
 from django.utils.translation import gettext as _
+from django.views.decorators.debug import sensitive_variables
 
 from . import spool
+
+log = logging.getLogger("portal.requests")
 
 REVOKES = ("disable", "remove", "rotate", "admin-off")  # take an access away: the old one works until applied
 REPLACES = ("add", "rotate", "remove")  # a live one makes an earlier one-time password of the account invalid
@@ -176,6 +180,35 @@ def password_state(row, username):
     if superseded_by(row):
         return "superseded"
     return "ready" if row.requested_by == username else "other"
+
+
+@sensitive_variables("password")
+def collect(row, username):
+    """
+    Hand the one-time password of an add or rotate to username, who requested it: claim the row (one claim only:
+    a second response, or a reload, finds it claimed), read the result file and delete it at once. Returns
+    (state, password), the password None unless this call took it. The caller shows it and keeps no copy.
+    """
+    state = password_state(row, username)
+    if state == "superseded":
+        spool.drop_result(row.id)
+    if state != "ready":
+        return state, None
+    claimed = type(row).objects.filter(id=row.id, requested_by=username, result_state="") \
+        .update(result_state="claimed", result_at=timezone.now())
+    if not claimed:
+        row.refresh_from_db()
+        return password_state(row, username), None
+    password = None
+    try:
+        password = spool.take_result(row.id, row.username)
+        outcome = "shown"
+    except spool.ResultError as e:
+        outcome = "expired" if e.reason == "missing" else "unreadable"
+    type(row).objects.filter(id=row.id).update(result_state=outcome)
+    log.info("request %s: one-time result %s to %s", row.id, outcome, username)
+    row.refresh_from_db()
+    return outcome, password
 
 
 def password_text(state, row):

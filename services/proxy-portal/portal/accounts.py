@@ -3,11 +3,15 @@ The admins' account operations: which requests the portal may write, checked bef
 applier checks every request again (applier/proxy_apply.py); the accounts file stays the only record of accounts.
 """
 
+import logging
 import re
 
 from django.utils.translation import gettext as _
 
+from . import spool
 from .proxy_status import PROTECTED
+
+log = logging.getLogger("portal.requests")
 
 # proxy_accounts.py's validate_name, which the image does not contain; tests/test_admin_requests.py compares the two
 NAME_RE = re.compile(r"[a-z0-9][a-z0-9._-]{0,63}")
@@ -73,3 +77,34 @@ def suggestions(status, nodes):
     existing = {r.name for r in status.all_accounts}
     return [f"svc-docker-{node}" for node in nodes if valid_name(f"svc-docker-{node}")
             and f"svc-docker-{node}" not in existing]
+
+
+def submit(op, username, requested_by, self_service=False):
+    """Record and write one request, already checked. Raises Refused (503) when the spool cannot take it."""
+    from .models import AccountRequest
+
+    row = AccountRequest.objects.create(id=spool.new_id(), op=op, username=username, requested_by=requested_by,
+                                        self_service=self_service)
+    try:
+        spool.write_request(row.id, op, username)
+    except OSError as e:
+        request_id = row.id
+        row.delete()
+        log.error("request %s %s %s by %s: not written: %s", request_id, op, username, requested_by,
+                  type(e).__name__)
+        raise Refused(_("The request could not be written to the applier's spool. Nothing changed."), 503)
+    log.info("request %s: %s %s by %s%s", row.id, op, username, requested_by, " (self-service)" if self_service
+             else "")
+    return row
+
+
+def restart_text(op, row, status):
+    """What applying op restarts, for an account row (a status.AccountRow, or None for a new account)."""
+    if status.raw_auth:
+        services = _("the HA entries (xray-ha) and every proxy")
+    elif op in ("admin-on", "admin-off") or (row is not None and row.admin):
+        services = _("the HA entries (xray-ha) and the private proxies")
+    else:
+        services = _("the HA entries (xray-ha)")
+    return _("Applying restarts %(services)s. Established connections through them drop, and new ones fail for a "
+             "few seconds.") % {"services": services}

@@ -2,14 +2,14 @@
 {% block title %}{{ op|op_label }}{% endblock %}
 {% block content %}
 <div class="hero-head"><div>
-  <div class="eyebrow">{% translate "Admin" %} · {% translate "Accounts" %}</div>
+  <div class="eyebrow">{% translate "Admin" %} · {% translate "Users" %}</div>
   <h1>{{ op|op_label }}: <span class="mono">{{ username|default:"—" }}</span></h1>
 </div></div>
 {% include "portal/admin/_nav.html" %}
 
 {% if error and not effect %}
 <div class="notice bad" role="alert"><p>{{ error }}</p></div>
-<div class="form-actions"><a class="btn" href="{% url 'admin_accounts' %}">{% translate "Back to the accounts" %}</a></div>
+<div class="form-actions"><a class="btn" href="{% url 'admin_users' %}">{% translate "Back to the users" %}</a></div>
 {% else %}
 <form class="card card-pad" method="post" action="{% url 'admin_confirm' op %}">{% csrf_token %}
   <input type="hidden" name="username" value="{{ username }}">
@@ -27,7 +27,7 @@
   {% endif %}
   <div class="form-actions">
     <button class="btn {% if destructive %}danger{% else %}primary{% endif %}" type="submit">{% translate "Send the request" %}</button>
-    <a class="btn" href="{% url 'admin_accounts' %}">{% translate "Cancel" %}</a>
+    <a class="btn" href="{% url 'admin_users' %}">{% translate "Cancel" %}</a>
   </div>
 </form>
 {% endif %}

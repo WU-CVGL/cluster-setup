@@ -139,7 +139,8 @@ TIME_ZONE = env("TIME_ZONE", "Asia/Shanghai")
 
 DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
 
-# Upstreams. The master is asked once per sign-in; Prometheus with the fixed queries of portal/queries.py.
+# Upstreams. The master is asked at each sign-in (and, for an admin, for the user list); Prometheus with the fixed
+# queries of portal/queries.py.
 MASTER_URL = env("MASTER_URL", "http://192.168.233.6:8080").rstrip("/")
 PROMETHEUS_URL = env("PROMETHEUS_URL", "http://prometheus:9090").rstrip("/")
 UPSTREAM_TIMEOUT = float(env("UPSTREAM_TIMEOUT", "10"))
@@ -155,6 +156,8 @@ STATUS_FILE_MAX_AGE = int(env("STATUS_FILE_MAX_AGE", "900"))
 
 # The nodes whose Docker daemons get an account svc-docker-<node>, offered in the admins' add form.
 NODES = [n for n in env("NODES", ",".join(f"cvgl-node{i:02d}" for i in range(1, 9))).split(",") if n]
+# A user may reset their own proxy password from My access this many times per hour.
+SELF_RESET_MAX_PER_HOUR = int(env("SELF_RESET_MAX_PER_HOUR", "3"))
 # A request still pending after this many seconds is shown as not taken by the applier (its timer runs every 5 min).
 REQUEST_PENDING_WARN = int(env("REQUEST_PENDING_WARN", "360"))
 

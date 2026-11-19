@@ -8,7 +8,7 @@
 <title>{% block title %}{% endblock %} · {% translate "CVGL Proxy" %}</title>
 <style nonce="{{ csp_nonce }}">
 :root{--bg:#f7f8fa;--surface:#fff;--ink:#142231;--muted:#5c6b7a;--faint:#7d8a96;--border:#e1e7ed;--teal:#087968;--teal-dark:#066354;--teal-pale:#e8f6f1;--green:#067556;--amber:#9a5f0c;--amber-bg:#fff7e7;--red:#b03a40;--red-bg:#fdf0f0;--blue:#3a5fbf;--blue-bg:#f0f5ff;--grey:#5f6b77;--grey-bg:#eef1f4;--shadow:0 10px 34px rgba(23,45,64,.055);--radius:16px}
-*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--ink);font:14px/1.55 -apple-system,BlinkMacSystemFont,"Segoe UI","PingFang SC","Microsoft YaHei","Noto Sans CJK SC",sans-serif;min-width:320px}
+*{box-sizing:border-box}[hidden]{display:none!important}body{margin:0;background:var(--bg);color:var(--ink);font:14px/1.55 -apple-system,BlinkMacSystemFont,"Segoe UI","PingFang SC","Microsoft YaHei","Noto Sans CJK SC",sans-serif;min-width:320px}
 button,input,select{font:inherit}button{cursor:pointer}a{color:var(--teal);text-decoration:none}a:hover{text-decoration:underline}
 :focus-visible{outline:3px solid #2f8f7c;outline-offset:2px}
 code,pre,.mono{font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace}
@@ -47,6 +47,7 @@ h3{font-size:15px;line-height:1.4;margin:0;font-weight:690}
 .tag.admin{background:#f3eefb;color:#6a4f96}
 .btn{background:#fff;border:1px solid var(--border);border-radius:9px;padding:8px 13px;color:#33475a;font-weight:630;font-size:12px;display:inline-flex;align-items:center;justify-content:center;gap:7px;white-space:nowrap}
 .btn:hover{background:#f6f9f8;text-decoration:none}.btn.primary{background:var(--teal);border-color:var(--teal);color:#fff}.btn.primary:hover{background:var(--teal-dark)}.btn.sm{padding:5px 9px;font-size:11px}
+.btn:disabled{opacity:.55;cursor:default}.btn:disabled:hover{background:#fff}.btn.primary:disabled:hover{background:var(--teal)}
 .notice{border:1px solid #dfe9f0;background:#f4f8fb;color:#44566a;padding:12px 15px;border-radius:10px;font-size:13px;line-height:1.6}
 .notice+.notice{margin-top:10px}.notice.warn{background:#fff9ef;border-color:#f0dcb9;color:#7a5520}.notice.ok{background:#eff9f5;border-color:#ceeadf;color:#135f4f}.notice.bad{background:var(--red-bg);border-color:#f0d0d0;color:#8d2f34}
 .notice p{margin:0}.notice p+p{margin-top:6px}
@@ -111,6 +112,9 @@ select.input{padding:9px 10px}textarea.input{min-height:96px;resize:vertical;lin
 .card-head+.notice{margin-top:12px}.notice.section-gap{margin-bottom:14px}.kv{display:grid;grid-template-columns:max-content 1fr;gap:8px 18px;margin:16px 0 0;font-size:13px}.kv dt{color:var(--muted)}.kv dd{margin:0;overflow-wrap:anywhere}
 .secret-box{background:#142830;color:#e8fff8;border-radius:12px;padding:16px 18px;margin-top:14px;display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap}.secret-box code{font-size:17px;overflow-wrap:anywhere}
 .secret-box button{color:#d0e9e1;border:1px solid #3d575b;background:#223e44;border-radius:7px;padding:5px 11px;font-size:12px}
+dialog.modal{border:0;border-radius:var(--radius);padding:0;width:calc(100% - 32px);max-width:540px;max-height:calc(100% - 32px);overflow:auto;color:var(--ink);background:var(--surface);box-shadow:0 24px 70px rgba(10,30,40,.28)}
+dialog.modal::backdrop{background:rgba(20,34,49,.5)}.modal-body{padding:22px 24px}.modal-body h2{margin-bottom:14px}.modal-body .card-head{align-items:center;margin-bottom:10px}.modal-body .notice+.notice{margin-top:12px}.modal-body .reset-error{margin:12px 0 0}
+.section-gap-top{margin-top:14px}.reset-reason{margin-top:12px}
 .updates{list-style:none;margin:8px 0 0;padding:0 0 0 12px;border-left:2px solid var(--border)}.updates li{font-size:12px;color:var(--muted);margin-top:6px;white-space:pre-line}.updates b{color:var(--ink);font-weight:650}
 @media(max-width:1050px){.summary-grid{grid-template-columns:repeat(2,1fr)}.nav a{padding:0 11px}}
 @media(max-width:770px){.shell{padding:0 16px}.header-inner{flex-wrap:wrap;gap:8px;padding-top:10px}.brand{margin-right:auto}.nav{order:3;width:100%;height:44px}.nav a{flex:1;justify-content:center;padding:0 6px;font-size:13px}.header-right{margin-left:0}
@@ -129,7 +133,7 @@ main.shell{padding-top:24px}.hero-head{display:block}h1{font-size:26px}.status-h
       <a href="{% url 'status' %}"{% if nav == 'status' %} aria-current="page"{% endif %}>{% translate "Status" %}</a>
       <a href="{% url 'access' %}"{% if nav == 'access' %} aria-current="page"{% endif %}>{% translate "My access" %}</a>
       <a href="{% url 'usage' %}"{% if nav == 'usage' %} aria-current="page"{% endif %}>{% translate "My usage" %}</a>
-      {% if is_determined_admin %}<a href="{% url 'admin_accounts' %}"{% if nav == 'admin' %} aria-current="page"{% endif %}>{% translate "Admin" %}</a>{% endif %}
+      {% if is_determined_admin %}<a href="{% url 'admin_users' %}"{% if nav == 'admin' %} aria-current="page"{% endif %}>{% translate "Admin" %}</a>{% endif %}
     </nav>
     <div class="header-right">
       <form class="lang" action="{% url 'set_language' %}" method="post" aria-label="{% translate 'Language' %}">{% csrf_token %}

@@ -10,6 +10,7 @@ never changes the accounts file and never keeps a password.
 import functools
 import json
 import logging
+import urllib.parse
 
 from django import forms
 from django.conf import settings
@@ -23,8 +24,8 @@ from django.views.decorators.csrf import csrf_exempt, csrf_protect
 from django.views.decorators.debug import sensitive_variables
 from django.views.decorators.http import require_GET, require_http_methods, require_POST
 
-from . import accounts, lifecycle, proxy_status, spool
-from .models import AccountRequest, Incident, IncidentUpdate
+from . import accounts, lifecycle, proxy_status
+from .models import AccountRequest, ClusterUser, Incident, IncidentUpdate
 from .views import SESSION_ADMIN, _signin_redirect, session_user
 
 log = logging.getLogger("portal.admin")
@@ -63,15 +64,7 @@ def admin_only(kind):
 # ------------------------------------------------------------------ accounts
 
 
-def _restart_text(op, row, status):
-    if status.raw_auth:
-        services = _("the HA entries (xray-ha) and every proxy")
-    elif op in ("admin-on", "admin-off") or (row is not None and row.admin):
-        services = _("the HA entries (xray-ha) and the private proxies")
-    else:
-        services = _("the HA entries (xray-ha)")
-    return _("Applying restarts %(services)s. Established connections through them drop, and new ones fail for a "
-             "few seconds.") % {"services": services}
+_restart_text = accounts.restart_text
 
 
 def _effect_text(op, name):
@@ -121,32 +114,90 @@ def _account_rows(status, query):
 @admin_only("page")
 @require_GET
 def accounts_page(request):
+    """The accounts list is part of the Users page now."""
+    query = (request.GET.get("q") or "").strip()[:64]
+    return redirect(reverse("admin_users") + (f"?q={urllib.parse.quote(query)}" if query else ""))
+
+
+# ------------------------------------------------------------------ users
+
+USER_FILTERS = ("no-account", "disabled", "private", "inactive")
+
+
+def _user_filter_match(flt, row):
+    if flt == "no-account":
+        return row["account"] == "none"
+    if flt == "disabled":
+        return row["account"] == "disabled"
+    if flt == "private":
+        return row["private"]
+    if flt == "inactive":  # deactivated in Determined, proxy access still on
+        return row["active"] is False and row["account"] == "enabled"
+    return True
+
+
+def users_view(status, query="", flt=""):
+    """
+    Every cluster user of the list read at the last admin sign-in, and every user account in the accounts status
+    (also one whose name is not in that list), with their Determined flags, proxy account and the actions; the
+    service accounts apart. query matches the name; flt is one of USER_FILTERS.
+    """
+    cluster = {u.username: u for u in ClusterUser.objects.all()}
+    captured_at = max((u.captured_at for u in cluster.values()), default=None)
+    user_accounts = {r.name: r for r in status.all_accounts if r.kind == "user"} if status.available else {}
+    pending = _pending_by_account()
+    rows, counts = [], dict.fromkeys(USER_FILTERS, 0)
+    for name in sorted(set(cluster) | set(user_accounts)):
+        user, account = cluster.get(name), user_accounts.get(name)
+        if account is not None:
+            actions = accounts.actions(account)
+        elif status.available and accounts.valid_name(name) and accounts.kind(name) == "user":
+            actions = ["add"]
+        else:
+            actions = []
+        row = {"name": name, "listed": user is not None, "active": user.active if user else None,
+               "determined_admin": user.admin if user else None,
+               "account": None if not status.available else "none" if account is None
+               else "enabled" if account.enabled else "disabled",
+               "private": bool(account and account.admin), "protected": bool(account and account.protected),
+               "valid_name": accounts.valid_name(name), "actions": actions, "pending": pending.get(name)}
+        for key in USER_FILTERS:
+            counts[key] += _user_filter_match(key, row)
+        if query and query not in name.lower():
+            continue
+        if flt and not _user_filter_match(flt, row):
+            continue
+        rows.append(row)
+    services = [r for r in _account_rows(status, query) if r["kind"] == "service"] if status.available else []
+    return {"users": rows, "services": services, "counts": counts, "captured_at": captured_at,
+            "listed": len(cluster)}
+
+
+def _user_params(params):
+    query = (params.get("q") or "").strip().lower()[:64]
+    flt = params.get("filter") or ""
+    return query, flt if flt in USER_FILTERS else ""
+
+
+@admin_only("page")
+@require_GET
+def users_page(request):
     status = proxy_status.load()
-    query = (request.GET.get("q") or "").strip().lower()[:64]
-    return render(request, "portal/admin/accounts.html", {
-        "nav": "admin", "subnav": "accounts", "status": status, "query": query,
-        "rows": _account_rows(status, query) if status.available else [],
+    query, flt = _user_params(request.GET)
+    view = users_view(status, query, flt)
+    return render(request, "portal/admin/users.html", dict(view, **{
+        "nav": "admin", "subnav": "users", "status": status, "query": query, "filter": flt,
+        "filters": [(key, view["counts"][key]) for key in USER_FILTERS],
         "raw_auth_text": raw_auth_text(status), "suggestions": accounts.suggestions(status, settings.NODES),
         "recent": lifecycle.refresh_all(AccountRequest.objects.all()[:8]),
-    })
+    }))
 
 
 def _create(request, op, username):
     """Check, record and write one request. Raises accounts.Refused before anything is written."""
     status = proxy_status.load()
     accounts.check(op, username, status)
-    row = AccountRequest.objects.create(id=spool.new_id(), op=op, username=username,
-                                        requested_by=session_user(request))
-    try:
-        spool.write_request(row.id, op, username)
-    except OSError as e:
-        request_id = row.id
-        row.delete()
-        log.error("request %s %s %s by %s: not written: %s", request_id, op, username, row.requested_by,
-                  type(e).__name__)
-        raise accounts.Refused(_("The request could not be written to the applier's spool. Nothing changed."), 503)
-    log.info("request %s: %s %s by %s", row.id, op, username, row.requested_by)
-    return row
+    return accounts.submit(op, username, session_user(request))
 
 
 @admin_only("page")
@@ -158,7 +209,7 @@ def confirm_page(request, op):
     username = (source.get("username") or "").strip()[:128]
     status = proxy_status.load()
     row = next((r for r in status.all_accounts if r.name == username), None)
-    context = {"nav": "admin", "subnav": "accounts", "op": op, "username": username, "row": row, "status": status,
+    context = {"nav": "admin", "subnav": "users", "op": op, "username": username, "row": row, "status": status,
                "destructive": op in accounts.DESTRUCTIVE, "error": None}
     try:
         accounts.check(op, username, status)
@@ -200,29 +251,9 @@ def password_page(request, request_id):
     """Show the one-time password to the admin who made the request: claim, read, delete, render. Never kept."""
     username = session_user(request)
     row = lifecycle.refresh(get_object_or_404(AccountRequest, id=request_id))
-    state = lifecycle.password_state(row, username)
-    if state == "other":
+    if lifecycle.password_state(row, username) == "other":
         return render(request, "portal/admin/forbidden.html", {"nav": "admin"}, status=403)
-    if state == "superseded":
-        spool.drop_result(row.id)
-    password = None
-    if state == "ready":
-        # one claim only: a second response, or a reload of this one, finds it claimed
-        claimed = AccountRequest.objects.filter(id=row.id, requested_by=username, result_state="") \
-            .update(result_state="claimed", result_at=timezone.now())
-        if claimed:
-            try:
-                password = spool.take_result(row.id, row.username)
-                outcome = "shown"
-            except spool.ResultError as e:
-                outcome = "expired" if e.reason == "missing" else "unreadable"
-            AccountRequest.objects.filter(id=row.id).update(result_state=outcome)
-            log.info("request %s: one-time result %s to %s", row.id, outcome, username)
-            row.refresh_from_db()
-            state = outcome
-        else:
-            row.refresh_from_db()
-            state = lifecycle.password_state(row, username)
+    state, password = lifecycle.collect(row, username)
     response = render(request, "portal/admin/password.html", {
         "nav": "admin", "subnav": "log", "row": row, "password_value": password,
         "password_text": lifecycle.password_text(state, row) if password is None else None})
@@ -292,6 +323,25 @@ def api_accounts(request):
         "raw_auth_text": raw_auth_text(status) if status.available else None,
         "status_unapplied_changes": status.unapplied_changes if status.available else None,
         "accounts": rows,
+    })
+
+
+@admin_only("api")
+def api_users(request):
+    if request.method != "GET":
+        return HttpResponseNotAllowed(["GET"])
+    status = proxy_status.load()
+    query, flt = _user_params(request.GET)
+    view = users_view(status, query, flt)
+    for row in view["users"] + view["services"]:
+        pending = row.pop("pending")
+        row["pending"] = {"id": pending.id, "op": pending.op, "state": pending.state} if pending else None
+    return JsonResponse({
+        "users_captured_at": view["captured_at"].isoformat() if view["captured_at"] else None,
+        "status_available": status.available,
+        "status_stale": status.stale if status.available else None,
+        "raw_auth": status.raw_auth if status.available else None,
+        "counts": view["counts"], "users": view["users"], "service_accounts": view["services"],
     })
 
 

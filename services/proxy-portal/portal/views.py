@@ -1,7 +1,9 @@
 import datetime
+import logging
 import time
 
 from django.conf import settings
+from django.db import DatabaseError, transaction
 from django.http import HttpResponse, HttpResponseNotAllowed, JsonResponse
 from django.shortcuts import redirect, render
 from django.urls import reverse
@@ -15,7 +17,9 @@ from django.views.decorators.debug import sensitive_post_parameters, sensitive_v
 from django.views.decorators.http import require_GET, require_POST
 
 from . import access, charts, health, limits, master, usage
-from .models import Incident
+from .models import ClusterUser, Incident
+
+log = logging.getLogger("portal.signin")
 
 SESSION_USER = "username"
 SESSION_ADMIN = "is_determined_admin"
@@ -124,9 +128,21 @@ def access_page(request):
     username = session_user(request)
     if username is None:
         return _signin_redirect(request)
+    from . import self_reset  # it uses this module's session helpers
+
     view = access.build(username)
     return render(request, "portal/access.html", {"nav": "access", "view": view,
-                                                  "password_placeholder": "<password>"})
+                                                  "password_placeholder": "<password>",
+                                                  "reset": self_reset.page_context(username),
+                                                  "reset_texts": {
+                                                      "failed": _("The reset could not be started. Nothing "
+                                                                  "changed."),
+                                                      "state": _("The reset's state could not be read. Reload the "
+                                                                 "page to see it."),
+                                                      "network": _("The portal could not be reached. Try again."),
+                                                      "collecting": _("Getting the password…"),
+                                                      "signin": _("You are signed out. Sign in again to "
+                                                                  "continue.")}})
 
 
 @require_GET
@@ -181,12 +197,26 @@ def signin(request):
                             else _("Wrong username or password."))
         return render(request, "portal/signin.html", context, status=401 if result.result == master.INVALID
                       else 403)
+    if result.users is not None:
+        try:
+            store_users(result.users)
+        except DatabaseError as e:  # the sign-in goes on with the previous list
+            log.warning("cluster user list not stored: %s", type(e).__name__)
     request.session.flush()
     request.session.cycle_key()
     request.session[SESSION_USER] = result.username
     request.session[SESSION_ADMIN] = result.is_admin
     request.session[SESSION_AT] = int(time.time())
     return redirect(_next_url(request, next_url))
+
+
+def store_users(users):
+    """Replace the cluster user list with the one read at an admin's sign-in."""
+    now = timezone.now()
+    with transaction.atomic():
+        ClusterUser.objects.all().delete()
+        ClusterUser.objects.bulk_create([ClusterUser(username=name, active=active, admin=admin, captured_at=now)
+                                         for name, active, admin in users])
 
 
 @require_POST

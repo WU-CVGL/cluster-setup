@@ -206,12 +206,15 @@ class AccountsListTest(PortalTestCase):
     def test_search(self):
         names = [a["name"] for a in self.client.get("/api/admin/accounts?q=svc").json()["accounts"]]
         self.assertEqual(names, ["svc-docker-cvgl-node01", "svc-ha", "svc-monitor"])
-        page = self.client.get("/admin/accounts?q=car")
+        page = self.client.get("/admin/users?q=car")
         self.assertContains(page, ">carol<")
         self.assertNotContains(page, ">alice<")
+        # the accounts page is part of the Users page now
+        self.assertRedirects(self.client.get("/admin/accounts?q=car"), "/admin/users?q=car",
+                             fetch_redirect_response=False)
 
     def test_page(self):
-        page = self.client.get("/admin/accounts")
+        page = self.client.get("/admin/users")
         self.assertContains(page, "Changed with proxy_accounts.py only", count=2)
         self.assertContains(page, "Off at the HA entries", count=2)  # bob and erin
         self.assertContains(page, "own entry needs no account, so it still works for that user")
@@ -224,7 +227,7 @@ class AccountsListTest(PortalTestCase):
         changed = "holds a change made with proxy_accounts.py since the applier"
         for value, shown in ((None, unknown), (True, changed), (False, None)):
             self.write_status(lambda d: d.update(unapplied_changes=value))
-            page = self.client.get("/admin/accounts")
+            page = self.client.get("/admin/users")
             for text in (unknown, changed):
                 (self.assertContains if text == shown else self.assertNotContains)(page, text)
 
@@ -396,7 +399,7 @@ class RawAuthAndEscapingTest(PortalTestCase):
         self.assertIn(caveat, self.client.get(f"/api/admin/requests/{request_id}").json()["raw_auth_text"])
         self.assertIn(caveat, self.client.get("/api/admin/requests").json()["requests"][0]["raw_auth_text"])
         html = caveat.replace("'", "&#x27;")
-        for path in ("/admin/log", f"/admin/requests/{request_id}", "/admin/accounts",
+        for path in ("/admin/log", f"/admin/requests/{request_id}", "/admin/users",
                      "/admin/accounts/disable?username=bob"):
             self.assertContains(self.client.get(path), html, msg_prefix=path)
         self.write_status(lambda d: d.update(raw_auth=True))
@@ -407,7 +410,7 @@ class RawAuthAndEscapingTest(PortalTestCase):
 
     def test_reflected_input_is_escaped(self):
         tag = "<script>x</script>"
-        for path in (f"/admin/accounts?q={tag}", f"/admin/accounts/disable?username={tag}",
+        for path in (f"/admin/users?q={tag}", f"/admin/users?filter={tag}", f"/admin/accounts/disable?username={tag}",
                      f"/admin/accounts/add?username={tag}",
                      f"/admin/log?username={tag}&requested_by={tag}&op={tag}&state={tag}"):
             page = self.client.get(path).content.decode()
