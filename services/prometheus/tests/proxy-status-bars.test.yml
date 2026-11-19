@@ -1,0 +1,142 @@
+# The status bars' queries (services/proxy-portal/portal/queries.py BARS, the same as the Proxy Availability
+# dashboard's "Status bars" panels; the portal's tests check that the expressions below are those). Probes run every
+# 30 s, so a full hour has 120 samples and a full day 2880. A proxy reclassified between public and private gets new
+# pool and access labels, so its old and new series share one bucket: the rate pools their samples and the coverage
+# counts them together.
+rule_files: []
+evaluation_interval: 30s
+tests:
+  - name: a label change inside an hour pools the samples of both series
+    interval: 30s
+    input_series:
+      # failing for the first half hour on the old labels, passing for the second half on the new ones
+      - series: 'probe_success{job="proxy-probe",instance="p1_http",entry="p1",protocol="http",kind="raw",pool="ha-general",access="public"}'
+        values: '_ 0x59'
+      - series: 'probe_success{job="proxy-probe",instance="p1_socks",entry="p1",protocol="socks",kind="raw",pool="ha-general",access="public"}'
+        values: '_ 0x59'
+      - series: 'probe_success{job="proxy-probe",instance="p1_http",entry="p1",protocol="http",kind="raw",pool="ha-private",access="private"}'
+        values: '_x61 1x59'
+      - series: 'probe_success{job="proxy-probe",instance="p1_socks",entry="p1",protocol="socks",kind="raw",pool="ha-private",access="private"}'
+        values: '_x61 1x59'
+    promql_expr_test:
+      - expr: 'sum by (entry, protocol) (sum_over_time(probe_success{job="proxy-probe"}[1h])) / sum by (entry, protocol) (count_over_time(probe_success{job="proxy-probe"}[1h]))'
+        eval_time: 1h
+        exp_samples:
+          - labels: '{entry="p1",protocol="http"}'
+            value: 0.5
+          - labels: '{entry="p1",protocol="socks"}'
+            value: 0.5
+      - expr: 'clamp_max(sum by (entry, protocol) (count_over_time(probe_success{job="proxy-probe"}[1h])) / 120, 1)'
+        eval_time: 1h
+        exp_samples:
+          - labels: '{entry="p1",protocol="http"}'
+            value: 1
+          - labels: '{entry="p1",protocol="socks"}'
+            value: 1
+
+  - name: two series at once count no more than a full hour
+    interval: 30s
+    input_series:
+      # both label sets for the whole hour: 240 samples, 180 of them passing
+      - series: 'probe_success{job="proxy-probe",instance="p2_http",entry="p2",protocol="http",kind="raw",pool="ha-general",access="public"}'
+        values: '_ 1x119'
+      - series: 'probe_success{job="proxy-probe",instance="p2_http",entry="p2",protocol="http",kind="raw",pool="ha-private",access="private"}'
+        values: '_ 1x59 0x59'
+    promql_expr_test:
+      - expr: 'sum by (entry, protocol) (sum_over_time(probe_success{job="proxy-probe"}[1h])) / sum by (entry, protocol) (count_over_time(probe_success{job="proxy-probe"}[1h]))'
+        eval_time: 1h
+        exp_samples:
+          - labels: '{entry="p2",protocol="http"}'
+            value: 0.75
+      - expr: 'clamp_max(sum by (entry, protocol) (count_over_time(probe_success{job="proxy-probe"}[1h])) / 120, 1)'
+        eval_time: 1h
+        exp_samples:
+          - labels: '{entry="p2",protocol="http"}'
+            value: 1
+
+  - name: a partly probed hour, and an hour without samples
+    interval: 30s
+    input_series:
+      # 30 passing samples in the first quarter of the first hour, none in the second hour
+      - series: 'probe_success{job="proxy-probe",instance="p3_http",entry="p3",protocol="http",kind="raw",pool="ha-general",access="public"}'
+        values: '_ 1x29'
+    promql_expr_test:
+      - expr: 'sum by (entry, protocol) (sum_over_time(probe_success{job="proxy-probe"}[1h])) / sum by (entry, protocol) (count_over_time(probe_success{job="proxy-probe"}[1h]))'
+        eval_time: 1h
+        exp_samples:
+          - labels: '{entry="p3",protocol="http"}'
+            value: 1
+      - expr: 'clamp_max(sum by (entry, protocol) (count_over_time(probe_success{job="proxy-probe"}[1h])) / 120, 1)'
+        eval_time: 1h
+        exp_samples:
+          - labels: '{entry="p3",protocol="http"}'
+            value: 0.25
+      - expr: 'sum by (entry, protocol) (sum_over_time(probe_success{job="proxy-probe"}[1h])) / sum by (entry, protocol) (count_over_time(probe_success{job="proxy-probe"}[1h]))'
+        eval_time: 2h
+        exp_samples: []
+      - expr: 'clamp_max(sum by (entry, protocol) (count_over_time(probe_success{job="proxy-probe"}[1h])) / 120, 1)'
+        eval_time: 2h
+        exp_samples: []
+
+  - name: a label change inside a day pools the samples of both series
+    interval: 30s
+    input_series:
+      - series: 'probe_success{job="proxy-probe",instance="p4_http",entry="p4",protocol="http",kind="raw",pool="ha-general",access="public"}'
+        values: '_ 0x1439'
+      - series: 'probe_success{job="proxy-probe",instance="p4_socks",entry="p4",protocol="socks",kind="raw",pool="ha-general",access="public"}'
+        values: '_ 0x1439'
+      - series: 'probe_success{job="proxy-probe",instance="p4_http",entry="p4",protocol="http",kind="raw",pool="ha-private",access="private"}'
+        values: '_x1441 1x1439'
+      - series: 'probe_success{job="proxy-probe",instance="p4_socks",entry="p4",protocol="socks",kind="raw",pool="ha-private",access="private"}'
+        values: '_x1441 1x1439'
+    promql_expr_test:
+      - expr: 'sum by (entry, protocol) (sum_over_time(probe_success{job="proxy-probe"}[24h])) / sum by (entry, protocol) (count_over_time(probe_success{job="proxy-probe"}[24h]))'
+        eval_time: 24h
+        exp_samples:
+          - labels: '{entry="p4",protocol="http"}'
+            value: 0.5
+          - labels: '{entry="p4",protocol="socks"}'
+            value: 0.5
+      - expr: 'clamp_max(sum by (entry, protocol) (count_over_time(probe_success{job="proxy-probe"}[24h])) / 2880, 1)'
+        eval_time: 24h
+        exp_samples:
+          - labels: '{entry="p4",protocol="http"}'
+            value: 1
+          - labels: '{entry="p4",protocol="socks"}'
+            value: 1
+
+  - name: a partly probed day, two series at once, and a day without samples
+    interval: 30s
+    input_series:
+      # a quarter of the first day on one label set; the whole second day on both
+      - series: 'probe_success{job="proxy-probe",instance="p5_http",entry="p5",protocol="http",kind="raw",pool="ha-general",access="public"}'
+        values: '_ 1x719 _x2160 1x2879'
+      - series: 'probe_success{job="proxy-probe",instance="p5_http",entry="p5",protocol="http",kind="raw",pool="ha-private",access="private"}'
+        values: '_x2881 0x2879'
+    promql_expr_test:
+      - expr: 'sum by (entry, protocol) (sum_over_time(probe_success{job="proxy-probe"}[24h])) / sum by (entry, protocol) (count_over_time(probe_success{job="proxy-probe"}[24h]))'
+        eval_time: 24h
+        exp_samples:
+          - labels: '{entry="p5",protocol="http"}'
+            value: 1
+      - expr: 'clamp_max(sum by (entry, protocol) (count_over_time(probe_success{job="proxy-probe"}[24h])) / 2880, 1)'
+        eval_time: 24h
+        exp_samples:
+          - labels: '{entry="p5",protocol="http"}'
+            value: 0.25
+      - expr: 'sum by (entry, protocol) (sum_over_time(probe_success{job="proxy-probe"}[24h])) / sum by (entry, protocol) (count_over_time(probe_success{job="proxy-probe"}[24h]))'
+        eval_time: 48h
+        exp_samples:
+          - labels: '{entry="p5",protocol="http"}'
+            value: 0.5
+      - expr: 'clamp_max(sum by (entry, protocol) (count_over_time(probe_success{job="proxy-probe"}[24h])) / 2880, 1)'
+        eval_time: 48h
+        exp_samples:
+          - labels: '{entry="p5",protocol="http"}'
+            value: 1
+      - expr: 'sum by (entry, protocol) (sum_over_time(probe_success{job="proxy-probe"}[24h])) / sum by (entry, protocol) (count_over_time(probe_success{job="proxy-probe"}[24h]))'
+        eval_time: 72h
+        exp_samples: []
+      - expr: 'clamp_max(sum by (entry, protocol) (count_over_time(probe_success{job="proxy-probe"}[24h])) / 2880, 1)'
+        eval_time: 72h
+        exp_samples: []
