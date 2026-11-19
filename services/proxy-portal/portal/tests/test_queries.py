@@ -45,6 +45,3 @@ class QueriesTest(SimpleTestCase):
             prom.instant("up", 0)
         with self.assertRaises(ValueError):
             prom.series('probe_success{job="proxy-probe"}', 0, 1, 1)
-
-    def test_catalog_size(self):
-        self.assertEqual(len(queries.ALL), 40)

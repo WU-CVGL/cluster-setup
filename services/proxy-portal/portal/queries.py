@@ -8,20 +8,25 @@ every user, and the portal picks the session's username from the result.
 PROBE_STALE = "90"  # seconds, as in the dashboards
 
 
+def _fresh(metric, selector):
+    """The metric's series with a sample in the last 90 s. Each series is checked by its own labels, so a series that
+    ended without a staleness marker (old probe labels after a Prometheus restart) filters only itself."""
+    return f"{metric}{{{selector}}} unless (time() - timestamp({metric}{{{selector}}}) > {PROBE_STALE})"
+
+
 def _status(selector, by, labels=None):
     """
     1 passing, 0 failing, -1 unknown (no result in the last 90 s but a target that was up within a day), one row per
     `by`. With labels, the rows also carry those labels, which can change (a proxy's pool and access when it is
     reclassified): a probe result in the last 90 s counts first, then the labels the target has now, then any it had
-    within the day, so old labels add no second row once their probe stops reporting.
+    within the day, so old labels add no second row once their probe has no result in the last 90 s.
     """
+    fresh = _fresh("probe_success", selector)
     if labels is None:
-        return (f"(max by ({by}) (probe_success{{{selector}}} unless on (instance) "
-                f"(time() - timestamp(probe_success{{{selector}}}) > {PROBE_STALE}))) or "
+        return (f"(max by ({by}) ({fresh})) or "
                 f"(max by ({by}) (max_over_time(up{{{selector}}}[1d])) * 0 - 1)")
     keep = f"{by}, {labels}"
-    return (f"(max by ({keep}) (probe_success{{{selector}}} unless on (instance) "
-            f"(time() - timestamp(probe_success{{{selector}}}) > {PROBE_STALE}))) or on ({by}) "
+    return (f"(max by ({keep}) ({fresh})) or on ({by}) "
             f"(max by ({keep}) (up{{{selector}}}) * 0 - 1) or on ({by}) "
             f"(max by ({keep}) (max_over_time(up{{{selector}}}[1d])) * 0 - 1)")
 
@@ -40,15 +45,17 @@ def _ha(pool):
         "socks": _status(sel + ',protocol="socks"', "protocol"),
         "proxies_passing": f"count(({_status(raw, 'entry')}) == 1) or vector(0)",
         "proxies_configured": f"count(max by (entry) (max_over_time(up{{{raw}}}[1d])) unless on (entry) {moved})",
-        "duration": (f"max by (protocol) (probe_duration_seconds{{{sel}}} unless on (instance) "
-                     f"(time() - timestamp(probe_duration_seconds{{{sel}}}) > {PROBE_STALE}))"),
-        "last_check": f"max by (protocol) (time() - timestamp(probe_success{{{sel}}}))",
+        "duration": f"max by (protocol) ({_fresh('probe_duration_seconds', sel)})",
+        # the newest result of each protocol, also should the probe's labels change
+        "last_check": f"min by (protocol) (time() - timestamp(probe_success{{{sel}}}))",
         "rate_24h": f"max by (protocol) (avg_over_time(probe_success{{{sel}}}[24h]))",
         "coverage_24h": f"min by (protocol) (clamp_max(count_over_time(probe_success{{{sel}}}[24h]) / 2880, 1))",
     }
 
 
 _RAW = 'job="proxy-probe",kind="raw"'
+_RAW_HTTP = _RAW + ',protocol="http"'
+_RAW_SOCKS = _RAW + ',protocol="socks"'
 
 
 def _pooled_rate(selector, by, width):
@@ -62,13 +69,14 @@ STATUS = {
     "ha-general": _ha("ha-general"),
     "ha-private": _ha("ha-private"),
     "proxies": {
-        "http": _status(_RAW + ',protocol="http"', "entry", "pool, access"),
-        "socks": _status(_RAW + ',protocol="socks"', "entry"),
-        "duration_http": f'max by (entry) (probe_duration_seconds{{{_RAW},protocol="http"}})',
-        "duration_socks": f'max by (entry) (probe_duration_seconds{{{_RAW},protocol="socks"}})',
-        "last_check": f"max by (entry) (time() - timestamp(probe_success{{{_RAW}}}))",
-        "rate_24h_http": _pooled_rate(_RAW + ',protocol="http"', "entry", "24h"),
-        "rate_24h_socks": _pooled_rate(_RAW + ',protocol="socks"', "entry", "24h"),
+        "http": _status(_RAW_HTTP, "entry", "pool, access"),
+        "socks": _status(_RAW_SOCKS, "entry"),
+        "duration_http": f"max by (entry) ({_fresh('probe_duration_seconds', _RAW_HTTP)})",
+        "duration_socks": f"max by (entry) ({_fresh('probe_duration_seconds', _RAW_SOCKS)})",
+        # the newest result of each protocol (old probe labels can still have samples), then the older protocol's
+        "last_check": f"max by (entry) (min by (entry, protocol) (time() - timestamp(probe_success{{{_RAW}}})))",
+        "rate_24h_http": _pooled_rate(_RAW_HTTP, "entry", "24h"),
+        "rate_24h_socks": _pooled_rate(_RAW_SOCKS, "entry", "24h"),
         "coverage_24h": (f"min by (entry) (clamp_max(sum by (entry, protocol) "
                          f"(count_over_time(probe_success{{{_RAW}}}[24h])) / 2880, 1))"),
     },

@@ -40,11 +40,12 @@ def _by(rows, label):
     return {labels.get(label, ""): value for labels, value in rows}
 
 
-def _one_per_entry(rows):
+def _row_to_show(rows):
     """
-    The status rows by entry, one each: should an entry have two (a reclassified proxy's old and new probe labels), a
-    result (0 or 1) wins over unknown (-1 or none), then the lower value, then the labels in order, whatever the row
-    order.
+    The HTTP status rows by entry, one each. A reclassified proxy can have a row under its old labels and one under its
+    new labels (while both probes have a current result, or neither has); this picks the one to show: a result (0 or
+    1) wins over unknown (-1 or none), then the lower value. The label order after that only makes the choice
+    independent of the row order; it does not tell which labels are newer.
     """
     if rows is None:
         return None
@@ -87,12 +88,12 @@ def collect(at):
             "rate_24h": _by(r["rate_24h"], "protocol"), "coverage_24h": _by(r["coverage_24h"], "protocol"),
         }
     r = {key: results[("proxies", key)] for key in queries.STATUS["proxies"]}
-    http, socks = _one_per_entry(r["http"]), _one_per_entry(r["socks"])
+    http = _row_to_show(r["http"])  # SOCKS5 is one row per entry already
     proxies = {}
     for name, (labels, _) in (http or {}).items():
         proxies.setdefault(name, {})["labels"] = {"pool": labels.get("pool"), "access": labels.get("access")}
     proxies_data = {"http": None if http is None else {name: value for name, (_, value) in http.items()},
-                    "socks": None if socks is None else {name: value for name, (_, value) in socks.items()},
+                    "socks": _by(r["socks"], "entry"),
                     "duration_http": _by(r["duration_http"], "entry"),
                     "duration_socks": _by(r["duration_socks"], "entry"),
                     "last_check": _by(r["last_check"], "entry"),
