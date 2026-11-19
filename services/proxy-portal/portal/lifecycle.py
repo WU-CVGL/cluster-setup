@@ -26,7 +26,7 @@ from .templatetags.portal import names as list_names
 
 log = logging.getLogger("portal.requests")
 
-REVOKES = ("disable", "remove", "rotate", "admin-off")  # take an access away: the old one works until applied
+REVOKES = ("disable", "remove", "rotate", "admin-off", "revoke")  # take an access away: the old one works until applied
 REPLACES = ("add", "rotate", "remove")  # a live one makes an earlier one-time password of the account invalid
 ROLLBACK_RESTARTS = ("swap", "restart", "verify", "commit")  # stages whose rollback restarts the proxies
 # the applier's stages, as admins read them; the stored value stays the applier's
@@ -145,6 +145,9 @@ def describe(row, now=None):
             return _("Nothing to change: the account was already in that state. Nothing restarted.")
         return _("Applied and verified.")
     if row.state == "unconfirmed":
+        if row.op in ("grant", "revoke"):
+            return _("Live, but not confirmed yet: %(proxy)s did not answer the checks in time, or is not running.") \
+                % {"proxy": row.proxy or "—"}
         if row.op in ("disable", "remove", "admin-off"):
             return _("Live: the proxies refuse the old access (verified), but no proxy answered the checks that must "
                      "pass in time, so the proxies may not be passing traffic right now.")
@@ -273,7 +276,7 @@ def _superseded_text(row):
 def as_json(row, username):
     pw = password_state(row, username)
     return {
-        "id": row.id, "op": row.op, "username": row.username, "requested_by": row.requested_by,
+        "id": row.id, "op": row.op, "username": row.username, "proxy": row.proxy, "requested_by": row.requested_by,
         "requested_at": row.requested_at.isoformat(), "state": row.state, "final": row.final, "level": level(row),
         "text": describe(row), "stage": row.stage or None, "error": row.error or None, "restored": row.restored,
         "changed": row.changed, "restarted": row.restarted.split() if row.restarted else [],

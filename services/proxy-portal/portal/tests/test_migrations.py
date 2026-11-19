@@ -88,3 +88,37 @@ class UpgradeTest(TransactionTestCase):
         self.migrate(*MigrationExecutor(connection).loader.graph.leaf_nodes())
         self.assertEqual(self_service_column(), (1, "0"))
         self.assertEqual(self_service_of(kept.id), (0,))
+
+
+BEFORE_GRANTS = ("portal", "0006_incident_component_labels")  # the last migration before private proxy grants
+
+
+def proxy_of(request_id):
+    with connection.cursor() as cursor:
+        cursor.execute("SELECT proxy FROM portal_accountrequest WHERE id = %s", [request_id])
+        return cursor.fetchone()
+
+
+class GrantsRollbackTest(TestCase):
+    def test_code_before_grants_creates_account_requests(self):
+        model = MigrationLoader(connection).project_state(BEFORE_GRANTS).apps.get_model("portal", "AccountRequest")
+        row = create_request(model, "00000000-0000-4000-8000-000000000011", self_service=False)
+        self.assertEqual(proxy_of(row.id), (None,))
+
+
+class GrantsMigrationTest(TransactionTestCase):
+    def migrate(self, *targets):
+        MigrationExecutor(connection).migrate(list(targets))
+
+    def test_reverses(self):
+        self.addCleanup(lambda: self.migrate(*MigrationExecutor(connection).loader.graph.leaf_nodes()))
+        model = MigrationExecutor(connection).loader.project_state(
+            MigrationExecutor(connection).loader.graph.leaf_nodes()).apps.get_model("portal", "AccountRequest")
+        model.objects.create(id="00000000-0000-4000-8000-000000000012", op="grant", username="alice",
+                             proxy="jpty1-bwh-2tb", requested_by="carol", requested_at=timezone.now())
+        self.migrate(BEFORE_GRANTS)
+        with connection.cursor() as cursor:
+            cursor.execute("PRAGMA table_info(portal_accountrequest)")
+            self.assertNotIn("proxy", [row[1] for row in cursor.fetchall()])
+        self.migrate(*MigrationExecutor(connection).loader.graph.leaf_nodes())
+        self.assertEqual(proxy_of("00000000-0000-4000-8000-000000000012"), (None,))

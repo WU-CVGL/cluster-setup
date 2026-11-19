@@ -85,6 +85,8 @@ class AccountRequest(models.Model):
         ("remove", pgettext_lazy("account op", "Remove")),
         ("admin-on", pgettext_lazy("account op", "Admin account on")),
         ("admin-off", pgettext_lazy("account op", "Admin account off")),
+        ("grant", pgettext_lazy("account op", "Private proxy on")),
+        ("revoke", pgettext_lazy("account op", "Private proxy off")),
     ]
     STATES = [
         ("pending", pgettext_lazy("request state", "Pending")),
@@ -98,6 +100,7 @@ class AccountRequest(models.Model):
     id = models.CharField(max_length=64, primary_key=True)
     op = models.CharField(max_length=16, choices=OPS)
     username = models.CharField(max_length=64, db_index=True)
+    proxy = models.CharField(max_length=128, null=True, blank=True)  # the private proxy of a grant or revoke
     requested_by = models.CharField(max_length=128, db_index=True)  # the Determined username that requested it
     # a user's reset of their own password from My access: only that user may collect the result
     self_service = models.BooleanField(default=False, db_default=False)  # also for the previous release's code

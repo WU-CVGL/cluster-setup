@@ -26,12 +26,12 @@
   {% elif view.account.enabled %}
   <div class="notice ok">
     <p>{% blocktranslate with name=view.account.name %}Proxy access is <b>on</b> for the account <b>{{ name }}</b>.{% endblocktranslate %}</p>
-    {% if view.account.admin %}<p>{% translate "This is an admin account: it may also use the Private Auto-switching Proxy and the private proxies." %}</p>{% endif %}
+    {% if view.account.admin %}<p>{% translate "This is an admin account: it may also use the Private Auto-switching Proxy and the private proxies." %}</p>{% elif view.account.proxies %}<p>{% blocktranslate count n=view.account.proxies|length with proxies=view.account.proxies|names %}It may also use the private proxy {{ proxies }}, at its own address.{% plural %}It may also use the private proxies {{ proxies }}, each at its own address.{% endblocktranslate %}</p>{% endif %}
   </div>
   {% else %}
   <div class="notice warn">
     <p>{% blocktranslate with name=view.account.name %}Proxy access is <b>off</b> for the account <b>{{ name }}</b>.{% endblocktranslate %}
-    {% if view.raw_auth and view.open_proxies %}{% blocktranslate count n=view.open_proxies|length with open=view.open_proxies|names %}Every proxy refuses it, except {{ open }} at its own address, which needs no account.{% plural %}Every proxy refuses it, except {{ open }} at their own addresses, which need no account.{% endblocktranslate %}{% elif view.raw_auth %}{% translate "Every proxy refuses it, the public proxies' own addresses included." %}{% elif view.account.admin %}{% translate "The auto-switching proxies and the private proxies refuse it. The public proxies' own addresses still work for you: they need no account." %}{% else %}{% translate "The Auto-switching Proxy refuses it. The public proxies' own addresses still work for you: they need no account." %}{% endif %}</p>
+    {% if view.raw_auth and view.open_proxies %}{% blocktranslate count n=view.open_proxies|length with open=view.open_proxies|names %}Every proxy refuses it, except {{ open }} at its own address, which needs no account.{% plural %}Every proxy refuses it, except {{ open }} at their own addresses, which need no account.{% endblocktranslate %}{% elif view.raw_auth %}{% translate "Every proxy refuses it, the public proxies' own addresses included." %}{% elif view.account.admin %}{% translate "The auto-switching proxies and the private proxies refuse it. The public proxies' own addresses still work for you: they need no account." %}{% elif view.account.proxies %}{% translate "The Auto-switching Proxy and your private proxies refuse it. The public proxies' own addresses still work for you: they need no account." %}{% else %}{% translate "The Auto-switching Proxy refuses it. The public proxies' own addresses still work for you: they need no account." %}{% endif %}</p>
   </div>
   {% endif %}
   <div class="notice">
@@ -55,7 +55,7 @@
 </section>
 
 <section class="section" aria-labelledby="entries-title">
-  <div class="section-bar"><div><h2 id="entries-title">{% translate "Proxies" %}</h2><p>{% translate "Every account may use the Auto-switching Proxy and the public proxies; admin accounts also the Private Auto-switching Proxy and the private proxies. Same ports on both networks: the private network from the nodes, the campus network from the login node." %}</p></div></div>
+  <div class="section-bar"><div><h2 id="entries-title">{% translate "Proxies" %}</h2><p>{% translate "Every account may use the Auto-switching Proxy and the public proxies; admin accounts also the Private Auto-switching Proxy and the private proxies. Same ports on both networks: the private network from the nodes, the campus network from the login node." %}{% if view.account.proxies %} {% translate "An admin gave your account single private proxies as well: use each at its own address." %}{% endif %}</p></div></div>
   <div class="access-list">
     {% for entry in view.entries %}
     <div class="card access-card{% if not entry.usable %} locked{% endif %}">
@@ -67,7 +67,7 @@
         {% elif view.account is None %}<span class="chip">{% translate "Needs an account" %}</span>
         {% else %}<span class="chip warn">{% translate "Proxy access off" %}</span>{% endif %}
       </div>
-      <div class="small muted">{% if entry.kind == 'ha' %}{% if entry.id == 'ha-general' %}{% translate "Switches between the public proxies, with your account." %}{% else %}{% translate "Switches between every proxy, with your admin account." %}{% endif %}{% elif entry.requires_account %}{% translate "One proxy, no switching, with your account." %}{% else %}{% translate "One proxy, no switching, without an account." %}{% endif %}</div>
+      <div class="small muted">{% if entry.kind == 'ha' %}{% if entry.id == 'ha-general' %}{% translate "Switches between the public proxies, with your account." %}{% else %}{% translate "Switches between every proxy, with your admin account." %}{% endif %}{% elif entry.granted %}{% translate "One private proxy, no switching, given to your account." %}{% elif entry.requires_account %}{% translate "One proxy, no switching, with your account." %}{% else %}{% translate "One proxy, no switching, without an account." %}{% endif %}</div>
       {% for address in entry.addresses %}
       <div class="endpoint">
         <div><div class="tiny">{% if address.network == 'private' %}{% translate "Private network" %}{% else %}{% translate "Campus network" %}{% endif %}</div>
@@ -85,7 +85,7 @@
 </section>
 
 <section class="section" aria-labelledby="templates-title">
-  <div class="section-bar"><div><h2 id="templates-title">{% translate "Client settings" %}</h2><p>{% blocktranslate with placeholder=password_placeholder %}For the Auto-switching Proxy. Replace {{ placeholder }} with your account's password; socks5h lets the proxy resolve names.{% endblocktranslate %}</p></div>
+  <div class="section-bar"><div><h2 id="templates-title">{% translate "Client settings" %}</h2><p>{% if view.templates.proxies %}{% blocktranslate with placeholder=password_placeholder %}For the Auto-switching Proxy, then for each of your private proxies. Replace {{ placeholder }} with your account's password; socks5h lets the proxy resolve names.{% endblocktranslate %}{% else %}{% blocktranslate with placeholder=password_placeholder %}For the Auto-switching Proxy. Replace {{ placeholder }} with your account's password; socks5h lets the proxy resolve names.{% endblocktranslate %}{% endif %}</p></div>
     {% if view.templates %}<div class="seg" data-switch="network" data-default="private" hidden role="group" aria-label="{% translate 'Network' %}">
       <button type="button" data-value="private" aria-pressed="true">{% translate "Private network" %}</button>
       <button type="button" data-value="campus" aria-pressed="false">{% translate "Campus network" %}</button>
@@ -105,6 +105,20 @@
       </div>
       {% endfor %}
     </div>
+    {% endfor %}
+    {% for granted in view.templates.proxies %}
+    {% for network, items in granted.networks.items %}
+    <div data-panel="network" data-value="{{ network }}">
+      <h3 class="section"><code>{{ granted.id }}</code> · {% if network == 'private' %}{% translate "Private network (the nodes)" %}{% else %}{% translate "Campus network (the login node)" %}{% endif %}</h3>
+      {% for item in items %}
+      <div class="code-panel">
+        <div class="controls"><span>{% if item.kind == 'environment' %}{% translate "Environment variables" %}{% elif item.kind == 'curl' %}{% translate "curl over HTTP" %}{% elif item.kind == 'socks5h' %}{% translate "curl over SOCKS5 (socks5h)" %}{% elif item.kind == 'git' %}{% translate "git, for GitHub over HTTPS" %}{% else %}pip{% endif %}</span>
+          <button type="button" data-copy="tpl-{{ granted.id }}-{{ network }}-{{ item.kind }}" data-done="{% translate 'Copied' %}">{% translate "Copy" %}</button></div>
+        <pre id="tpl-{{ granted.id }}-{{ network }}-{{ item.kind }}">{{ item.text }}</pre>
+      </div>
+      {% endfor %}
+    </div>
+    {% endfor %}
     {% endfor %}
     {% elif view.account is None %}
     <div class="empty">{% translate "Client settings appear here once you have a proxy account." %}</div>

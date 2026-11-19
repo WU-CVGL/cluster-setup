@@ -2,7 +2,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: proxy-portal\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-11-18 16:38+0800\n"
+"POT-Creation-Date: 2026-11-19 20:55+0800\n"
 "PO-Revision-Date: 2026-11-18 00:00+0800\n"
 "Last-Translator: \n"
 "Language-Team: \n"
@@ -11,6 +11,24 @@ msgstr ""
 "Content-Type: text/plain; charset=UTF-8\n"
 "Content-Transfer-Encoding: 8bit\n"
 "Plural-Forms: nplurals=1; plural=0;\n"
+
+msgid "Only a private proxy change names a proxy."
+msgstr "只有开通或取消私有代理时才指定代理。"
+
+msgid "Choose a private proxy."
+msgstr "请选择一个私有代理。"
+
+#, python-format
+msgid "%(proxy)s is not a private proxy."
+msgstr "%(proxy)s 不是私有代理。"
+
+#, python-format
+msgid "%(name)s may use %(proxy)s already."
+msgstr "%(name)s 已经可以使用 %(proxy)s。"
+
+#, python-format
+msgid "%(name)s was not given %(proxy)s."
+msgstr "%(name)s 没有被授予 %(proxy)s。"
 
 msgid "Unknown operation."
 msgstr "未知操作。"
@@ -40,8 +58,47 @@ msgstr "没有账号 %(name)s。"
 msgid "A service account cannot be an admin account."
 msgstr "服务账号不能成为管理员账号。"
 
+msgid "A service account cannot be given a private proxy."
+msgstr "服务账号不能被授予私有代理。"
+
+#, python-format
+msgid "%(name)s is an admin account: it may use every private proxy already."
+msgstr "%(name)s 是管理员账号：已经可以使用所有私有代理。"
+
 msgid "The request could not be saved. Nothing changed."
 msgstr "无法保存请求。没有任何变更。"
+
+#, python-format
+msgid ""
+"Applying restarts %(proxy)s. Established connections through it drop, and "
+"new ones fail for a few seconds."
+msgstr "应用时会重启 %(proxy)s。经过它的已建立连接会断开，新连接会有几秒失败。"
+
+#, python-format
+msgid ""
+"Applying restarts no proxy: the change takes effect at %(proxy)s once the "
+"account's proxy access is on and it is not an admin account."
+msgstr "应用时不会重启任何代理：等该账号的代理访问开启、且它不是管理员账号时，变更才会在 %(proxy)s 生效。"
+
+#, python-format
+msgid ""
+"Applying restarts the Auto-switching Proxy, every public proxy but %(open)s, "
+"and %(proxies)s. Established connections through them drop, and new ones "
+"fail for a few seconds."
+msgstr "应用时会重启自动切换代理、除 %(open)s 以外的所有公共代理和 %(proxies)s。经过它们的已建立连接会断开，新连接会有几秒失败。"
+
+#, python-format
+msgid ""
+"Applying restarts the Auto-switching Proxy, every public proxy and "
+"%(proxies)s. Established connections through them drop, and new ones fail "
+"for a few seconds."
+msgstr "应用时会重启自动切换代理、所有公共代理和 %(proxies)s。经过它们的已建立连接会断开，新连接会有几秒失败。"
+
+#, python-format
+msgid ""
+"Applying restarts the Auto-switching Proxy and %(proxies)s. Established "
+"connections through them drop, and new ones fail for a few seconds."
+msgstr "应用时会重启自动切换代理和 %(proxies)s。经过它们的已建立连接会断开，新连接会有几秒失败。"
 
 #, python-format
 msgid ""
@@ -71,6 +128,10 @@ msgstr "两个自动切换代理和所有代理"
 msgid "both auto-switching proxies and the private proxies"
 msgstr "两个自动切换代理和私有代理"
 
+#, python-format
+msgid "both auto-switching proxies and %(proxies)s"
+msgstr "两个自动切换代理和 %(proxies)s"
+
 msgid "both auto-switching proxies"
 msgstr "两个自动切换代理"
 
@@ -79,6 +140,23 @@ msgid ""
 "Applying restarts %(services)s. Established connections through them drop, "
 "and new ones fail for a few seconds."
 msgstr "应用时会重启 %(services)s。经过它们的已建立连接会断开，新连接会有几秒失败。"
+
+#, python-format
+msgid ""
+"Lets %(name)s use the private proxy %(proxy)s at its own address. The "
+"Private Auto-switching Proxy and the other private proxies still refuse it."
+msgstr "允许 %(name)s 通过私有代理 %(proxy)s 自己的地址使用它。私有自动切换代理和其他私有代理仍会拒绝它。"
+
+#, python-format
+msgid ""
+"%(proxy)s stops accepting %(name)s. Nothing else changes for the account."
+msgstr "%(proxy)s 不再接受 %(name)s。该账号的其他访问不变。"
+
+#, python-format
+msgid ""
+"%(name)s stops being an admin account: the Private Auto-switching Proxy and "
+"the private proxies refuse it, except %(proxies)s, which it was given."
+msgstr "%(name)s 不再是管理员账号：私有自动切换代理和私有代理会拒绝它，已授予它的 %(proxies)s 除外。"
 
 #, python-format
 msgid ""
@@ -148,6 +226,10 @@ msgid_plural ""
 "%(open)s need no account at their own addresses even when the public proxies "
 "require one."
 msgstr[0] "即使公共代理需要账号，%(open)s 自己的地址也无需账号。"
+
+#, python-format
+msgid "There is no private proxy to choose for %(name)s."
+msgstr "没有可为 %(name)s 选择的私有代理。"
 
 msgid "Type the account name to confirm."
 msgstr "请输入账号名确认。"
@@ -286,6 +368,12 @@ msgstr "无需变更：账号已处于该状态。没有重启任何服务。"
 
 msgid "Applied and verified."
 msgstr "已应用并验证。"
+
+#, python-format
+msgid ""
+"Live, but not confirmed yet: %(proxy)s did not answer the checks in time, or "
+"is not running."
+msgstr "已生效，但尚未确认：%(proxy)s 没有及时响应检查，或者没有在运行。"
 
 msgid ""
 "Live: the proxies refuse the old access (verified), but no proxy answered "
@@ -434,6 +522,14 @@ msgstr "设为管理员账号"
 msgctxt "account op"
 msgid "Admin account off"
 msgstr "取消管理员账号"
+
+msgctxt "account op"
+msgid "Private proxy on"
+msgstr "开通私有代理"
+
+msgctxt "account op"
+msgid "Private proxy off"
+msgstr "取消私有代理"
 
 msgctxt "request state"
 msgid "Pending"
@@ -630,6 +726,12 @@ msgid ""
 msgstr "这是管理员账号：还可以使用私有自动切换代理和私有代理。"
 
 #, python-format
+msgid "It may also use the private proxy %(proxies)s, at its own address."
+msgid_plural ""
+"It may also use the private proxies %(proxies)s, each at its own address."
+msgstr[0] "它还可以使用私有代理 %(proxies)s，请通过各自的地址连接。"
+
+#, python-format
 msgid "Proxy access is <b>off</b> for the account <b>%(name)s</b>."
 msgstr "账号 <b>%(name)s</b> 的代理访问已<b>关闭</b>。"
 
@@ -649,6 +751,11 @@ msgid ""
 "The auto-switching proxies and the private proxies refuse it. The public "
 "proxies' own addresses still work for you: they need no account."
 msgstr "两个自动切换代理和私有代理都拒绝它。公共代理自己的地址仍可使用：这些地址无需账号。"
+
+msgid ""
+"The Auto-switching Proxy and your private proxies refuse it. The public "
+"proxies' own addresses still work for you: they need no account."
+msgstr "自动切换代理和你的私有代理都拒绝它。公共代理自己的地址仍可使用：这些地址无需账号。"
 
 msgid ""
 "The Auto-switching Proxy refuses it. The public proxies' own addresses still "
@@ -717,6 +824,11 @@ msgid ""
 "network from the login node."
 msgstr "每个账号都可以使用自动切换代理和公共代理；管理员账号还可以使用私有自动切换代理和私有代理。两个网络的端口相同：节点上用内网地址，登录节点上用校园网地址。"
 
+msgid ""
+"An admin gave your account single private proxies as well: use each at its "
+"own address."
+msgstr "管理员还为你的账号开通了单个私有代理：请通过各自的地址使用。"
+
 msgid "Private"
 msgstr "私有"
 
@@ -734,6 +846,9 @@ msgstr "在公共代理之间自动切换，使用你的账号。"
 
 msgid "Switches between every proxy, with your admin account."
 msgstr "在所有代理之间自动切换，使用你的管理员账号。"
+
+msgid "One private proxy, no switching, given to your account."
+msgstr "单个私有代理，不切换，已授予你的账号。"
 
 msgid "One proxy, no switching, with your account."
 msgstr "单个代理，不切换，使用你的账号。"
@@ -755,6 +870,13 @@ msgstr "没有代理"
 
 msgid "Client settings"
 msgstr "客户端设置"
+
+#, python-format
+msgid ""
+"For the Auto-switching Proxy, then for each of your private proxies. Replace "
+"%(placeholder)s with your account's password; socks5h lets the proxy resolve "
+"names."
+msgstr "依次适用于自动切换代理和你的每个私有代理。把 %(placeholder)s 换成你账号的密码；socks5h 表示由代理解析域名。"
 
 #, python-format
 msgid ""
@@ -890,6 +1012,22 @@ msgstr "没有请求"
 
 msgid "Back to the users"
 msgstr "返回用户列表"
+
+#, python-format
+msgid ""
+"Choose the private proxy that %(name)s may use at its own address. The "
+"Private Auto-switching Proxy stays for admin accounts only."
+msgstr "选择 %(name)s 可以通过它自己的地址使用的私有代理。私有自动切换代理仍只供管理员账号使用。"
+
+#, python-format
+msgid "Choose the private proxy that stops accepting %(name)s."
+msgstr "选择不再接受 %(name)s 的私有代理。"
+
+msgid "Private proxy"
+msgstr "私有代理"
+
+msgid "Continue"
+msgstr "继续"
 
 msgid ""
 "This is a node's Docker daemon: once the change is live, put the new "
@@ -1088,6 +1226,9 @@ msgstr "Determined"
 msgid "Proxy account"
 msgstr "代理账号"
 
+msgid "Private proxies"
+msgstr "私有代理"
+
 msgid "Pending request"
 msgstr "待处理请求"
 
@@ -1120,6 +1261,13 @@ msgstr "关闭"
 
 msgid "Off, except at public proxies"
 msgstr "已关闭（公共代理除外）"
+
+msgid "Every private proxy"
+msgstr "所有私有代理"
+
+#, python-format
+msgid "Also given: %(proxies)s"
+msgstr "另已授予：%(proxies)s"
 
 msgid "Changed outside the portal only"
 msgstr "只能在门户之外修改"
@@ -1159,9 +1307,6 @@ msgid ""
 "Lowercase letters, digits, '.', '_' and '-', starting with a letter or "
 "digit, at most 64 characters."
 msgstr "小写字母、数字、'.'、'_' 和 '-'，以字母或数字开头，最多 64 个字符。"
-
-msgid "Continue"
-msgstr "继续"
 
 msgid "Recent requests"
 msgstr "最近的请求"
@@ -1282,9 +1427,6 @@ msgstr "每个代理都在它自己的地址上探测。代理自己的地址不
 
 msgid "Public proxies"
 msgstr "公共代理"
-
-msgid "Private proxies"
-msgstr "私有代理"
 
 msgid "No proxy results"
 msgstr "没有代理结果"

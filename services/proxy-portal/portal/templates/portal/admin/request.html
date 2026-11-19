@@ -12,6 +12,7 @@
   <div class="notice{% if level == 'bad' %} bad{% elif level == 'warn' %} warn{% elif level == 'ok' %} ok{% endif %}" role="status"><p>{{ text }}</p>{% if raw_auth and row.state != 'failed' %}<p>{{ raw_auth }}</p>{% endif %}</div>
   <dl class="kv">
     <dt>{% translate "Request" %}</dt><dd class="mono">{{ row.id }}</dd>
+    {% if row.proxy %}<dt>{% translate "Private proxy" %}</dt><dd class="mono">{{ row.proxy }}</dd>{% endif %}
     <dt>{% translate "Requested" %}</dt><dd>{{ row.requested_at|date:"Y-m-d H:i:s" }} · {{ row.requested_by }}</dd>
     {% if row.status_at %}<dt>{% translate "Last update" %}</dt><dd>{{ row.status_at|date:"Y-m-d H:i:s" }}</dd>{% endif %}
     {% if row.stage %}<dt>{% translate "Stage" %}</dt><dd>{{ row.stage|stage_label }}</dd>{% endif %}

@@ -8,6 +8,8 @@ proxy-live-status.test.yml the proxies' live status and the HA entries' proxy co
 labels were up within the day, a probe without results, a removed probe, unchanged proxies, and proxies moved during a
 reload, when their old and new probes both report, and across a restart, whose old series end without a staleness
 marker), with the last check, the durations and the HA entries' own status across that restart.
+proxy-user-usage.test.yml runs the users' traffic totals: a user's traffic at a private proxy granted to the account,
+through the HA entry and at a public proxy adds up, and the service accounts' traffic is left out.
 test_status.py feeds the results this fixture expects to the portal through the Prometheus stub.
 """
 
@@ -33,6 +35,7 @@ FIXTURES = {
                                                             "duration_socks")} |
                                   {ha[key] for ha in HA for key in ("proxies_passing", "proxies_configured")} |
                                   {GENERAL[key] for key in ("http", "socks", "last_check", "duration")},
+    "proxy-user-usage.test.yml": set(queries.USAGE_TOTALS["24h"].values()),
 }
 
 

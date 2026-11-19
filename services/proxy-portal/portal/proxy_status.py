@@ -1,7 +1,7 @@
 """
 The applier's sanitized accounts status, status.json in its spool (proxy_accounts.py status --json): the accounts
-without passwords, raw auth, the proxies with their access, whether they are open (never require an account) and
-their ports, and the HA entries' ports. The applier writes
+without passwords (each with the private proxies granted to it), raw auth, the proxies with their access, whether they
+are open (never require an account) and their ports, and the HA entries' ports. The applier writes
 it after each of its runs from the accounts file; the portal only reads it.
 """
 
@@ -17,6 +17,7 @@ from django.conf import settings
 # proxy_accounts.py's account names; svc-* are service accounts, never a person's
 NAME_RE = re.compile(r"[a-z0-9][a-z0-9._-]{0,63}")
 PROXY_NAME_RE = re.compile(r"[a-z0-9][a-z0-9_-]*")
+MAX_PROXY_NAME = 128  # as the applier accepts it in a request
 PROTOCOLS = ("http", "socks")
 # changed with proxy_accounts.py only, never from the portal
 PROTECTED = ("svc-ha", "svc-monitor")
@@ -27,6 +28,9 @@ class Account:
     name: str
     enabled: bool
     admin: bool
+    # the private proxies granted to the account that are private proxies in this status, usable at their own
+    # addresses while it is enabled
+    proxies: List[str] = field(default_factory=list)
 
 
 @dataclass
@@ -37,6 +41,8 @@ class AccountRow:
     enabled: bool
     admin: bool
     protected: bool
+    # every proxy granted to the account, also one that is no longer private (which the admins can take back)
+    proxies: List[str] = field(default_factory=list)
 
 
 @dataclass
@@ -66,6 +72,11 @@ class ProxyStatus:
     unapplied_changes: Optional[bool] = None
 
     @property
+    def private_proxies(self) -> List[str]:
+        """The private proxies: an admin account may use them all, and other accounts those granted to them."""
+        return sorted(proxy.name for proxy in self.proxies if not proxy.public)
+
+    @property
     def open_proxies(self) -> List[str]:
         """The open proxies: their own entries never require an account."""
         return sorted(proxy.name for proxy in self.proxies if proxy.open)
@@ -80,6 +91,13 @@ def _ports(value):
     return {protocol: _port(value.get(protocol)) for protocol in PROTOCOLS}
 
 
+def _granted(value):
+    """An account's granted proxies: valid names, each once, sorted; [] for anything else (an older status)."""
+    if not isinstance(value, list):
+        return []
+    return sorted({p for p in value if isinstance(p, str) and len(p) <= MAX_PROXY_NAME and PROXY_NAME_RE.fullmatch(p)})
+
+
 def parse(data, now=None):
     if not isinstance(data, dict) or not isinstance(data.get("accounts"), list):
         return ProxyStatus(available=False)
@@ -92,25 +110,28 @@ def parse(data, now=None):
         pass
     now = time.time() if now is None else now
     stale = generated is None or now - generated.timestamp() > settings.STATUS_FILE_MAX_AGE
-    accounts, rows = {}, []
-    for entry in data["accounts"]:
-        if not isinstance(entry, dict) or not isinstance(entry.get("name"), str):
-            continue
-        name = entry["name"]
-        if NAME_RE.fullmatch(name):
-            kind = "service" if name.startswith("svc-") else "user"
-            rows.append(AccountRow(name=name, kind=kind, enabled=entry.get("enabled") is True,
-                                   admin=entry.get("admin") is True,
-                                   protected=entry.get("protected") is True or name in PROTECTED))
-        if not NAME_RE.fullmatch(name) or entry.get("kind") != "user" or name.startswith("svc-"):
-            continue  # service accounts are nobody's own account
-        accounts[name] = Account(name=name, enabled=entry.get("enabled") is True, admin=entry.get("admin") is True)
     proxies = []
     for entry in data.get("proxies") or []:
         if isinstance(entry, dict) and isinstance(entry.get("name"), str) and PROXY_NAME_RE.fullmatch(entry["name"]):
             public = entry.get("access") == "public"
             proxies.append(Proxy(name=entry["name"], public=public, ports=_ports(entry.get("ports")),
                                  open=public and entry.get("open") is True))
+    private = {proxy.name for proxy in proxies if not proxy.public}
+    accounts, rows = {}, []
+    for entry in data["accounts"]:
+        if not isinstance(entry, dict) or not isinstance(entry.get("name"), str):
+            continue
+        name = entry["name"]
+        granted = _granted(entry.get("proxies")) if not name.startswith("svc-") else []
+        if NAME_RE.fullmatch(name):
+            kind = "service" if name.startswith("svc-") else "user"
+            rows.append(AccountRow(name=name, kind=kind, enabled=entry.get("enabled") is True,
+                                   admin=entry.get("admin") is True,
+                                   protected=entry.get("protected") is True or name in PROTECTED, proxies=granted))
+        if not NAME_RE.fullmatch(name) or entry.get("kind") != "user" or name.startswith("svc-"):
+            continue  # service accounts are nobody's own account
+        accounts[name] = Account(name=name, enabled=entry.get("enabled") is True, admin=entry.get("admin") is True,
+                                 proxies=[proxy for proxy in granted if proxy in private])
     entries = data.get("entries") if isinstance(data.get("entries"), dict) else {}
     entry_ports = {name: _ports((entries.get(name) or {}).get("ports") if isinstance(entries.get(name), dict)
                                 else None)
