@@ -2,8 +2,11 @@
 The probe success queries evaluated by Prometheus itself, with promtool from PATH or from the Prometheus image
 docker-compose.yml pins (only when Docker has it already, and with no network); without either, that test is skipped.
 services/prometheus/tests/proxy-status-bars.test.yml runs the status bars' queries (a label change inside a bucket,
-two series at once, partly probed and empty buckets), and proxy-24h-success.test.yml the proxies' 24-hour success
-rates and coverage (a label change inside the 24 hours, two series at once, a partly probed protocol).
+two series at once, partly probed and empty buckets), proxy-24h-success.test.yml the proxies' 24-hour success
+rates and coverage (a label change inside the 24 hours, two series at once, a partly probed protocol), and
+proxy-live-status.test.yml the proxies' live status and the HA entries' proxy counts (reclassified proxies whose old
+labels were up within the day, a probe without results, a removed probe, unchanged proxies, and proxies moved during a
+reload, when their old and new probes both report, and across a restart).
 """
 
 import re
@@ -19,9 +22,12 @@ from portal import queries
 SERVICES = Path(__file__).resolve().parents[3]
 TESTS = SERVICES / "prometheus" / "tests"
 PROXIES = queries.STATUS["proxies"]
+HA = [queries.STATUS[entry] for entry in ("ha-general", "ha-private")]
 FIXTURES = {
     "proxy-status-bars.test.yml": {expr for exprs in queries.BARS.values() for expr in exprs.values()},
     "proxy-24h-success.test.yml": {PROXIES["rate_24h_http"], PROXIES["rate_24h_socks"], PROXIES["coverage_24h"]},
+    "proxy-live-status.test.yml": {PROXIES["http"], PROXIES["socks"]} |
+                                  {ha[key] for ha in HA for key in ("proxies_passing", "proxies_configured")},
 }
 
 

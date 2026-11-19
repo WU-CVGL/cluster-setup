@@ -400,6 +400,34 @@ class StatusTest(PortalTestCase):
         self.assertIsNone(data["last_check_age_seconds"])
         self.assertNotContains(self.client.get("/", HTTP_ACCEPT_LANGUAGE="zh-CN"), "从未")
 
+    def test_reclassified_proxy_keeps_its_current_result(self):
+        # usca6-bwh-1tb moved from public to private: its new probe passes, and its old probe labels still have
+        # samples within the day. Should two rows for it ever arrive, in either order, the current one counts.
+        name = "usca6-bwh-1tb"
+        http = queries.STATUS["proxies"]["http"]
+        current = ({"entry": name, "pool": "ha-private", "access": "private"}, 1)
+        old = ({"entry": name, "pool": "ha-general", "access": "public"}, -1)
+        others = [(row["metric"], row["value"][1]) for row in self.prometheus.answers[http]["result"]
+                  if row["metric"]["entry"] != name]
+
+        def private(data):
+            next(p for p in data["proxies"] if p["name"] == name)["access"] = "private"
+
+        for order in ((current, old), (old, current)):
+            for applier in ("moved", "missing"):
+                with self.subTest(order=[value for _, value in order], applier=applier):
+                    cache.clear()
+                    self.write_status(private)
+                    if applier == "missing":
+                        self.status_file.unlink()
+                    self.prometheus.answers[http] = vector(*others, *order)
+                    for path in ("/api/status", "/api/status/live"):
+                        proxy = {p["name"]: p for p in self.client.get(path).json()["proxies"]}[name]
+                        self.assertEqual(proxy["protocols"]["http"]["state"], "passing", path)
+                        self.assertEqual(proxy["protocols"]["socks"]["state"], "passing", path)
+                        self.assertEqual((proxy["pool"], proxy["access"]), ("ha-private", "private"), path)
+        self.assert_only_fixed_queries()
+
     def test_unknown_proxy_shows_no_duration(self):
         proxies = {proxy["name"]: proxy for proxy in self.client.get("/api/status").json()["proxies"]}
         stale = proxies["miyaip-jp-01_relay_jpty1-bwh-2tb"]["protocols"]
