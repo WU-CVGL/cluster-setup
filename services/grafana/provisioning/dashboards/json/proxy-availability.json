@@ -1250,7 +1250,7 @@
             "type": "prometheus",
             "uid": "${prometheus_source}"
           },
-          "expr": "max by (entry) (avg_over_time(probe_success{job=\"proxy-probe\",kind=\"raw\",protocol=\"http\"}[24h]))",
+          "expr": "sum by (entry) (sum_over_time(probe_success{job=\"proxy-probe\",kind=\"raw\",protocol=\"http\"}[24h])) / sum by (entry) (count_over_time(probe_success{job=\"proxy-probe\",kind=\"raw\",protocol=\"http\"}[24h]))",
           "legendFormat": "",
           "refId": "F",
           "instant": true,
@@ -1262,7 +1262,7 @@
             "type": "prometheus",
             "uid": "${prometheus_source}"
           },
-          "expr": "max by (entry) (avg_over_time(probe_success{job=\"proxy-probe\",kind=\"raw\",protocol=\"socks\"}[24h]))",
+          "expr": "sum by (entry) (sum_over_time(probe_success{job=\"proxy-probe\",kind=\"raw\",protocol=\"socks\"}[24h])) / sum by (entry) (count_over_time(probe_success{job=\"proxy-probe\",kind=\"raw\",protocol=\"socks\"}[24h]))",
           "legendFormat": "",
           "refId": "G",
           "instant": true,
@@ -1274,7 +1274,7 @@
             "type": "prometheus",
             "uid": "${prometheus_source}"
           },
-          "expr": "min by (entry) (clamp_max(count_over_time(probe_success{job=\"proxy-probe\",kind=\"raw\"}[24h]) / 2880, 1))",
+          "expr": "min by (entry) (clamp_max(sum by (entry, protocol) (count_over_time(probe_success{job=\"proxy-probe\",kind=\"raw\"}[24h])) / 2880, 1))",
           "legendFormat": "",
           "refId": "H",
           "instant": true,

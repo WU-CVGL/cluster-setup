@@ -310,7 +310,7 @@ The **Proxy Availability** dashboard in Grafana (linked from Flare) shows whethe
 - **Status bars:** each entry's probe success rate and coverage per hour over 96 hours and per day over 30 days, by protocol: the values of the portal's status bars.
 - **History:** probe results over time (a gap is a time without results), durations, the hourly probe success rate, the results per 5 minutes (10 expected; fewer means the exporter or Prometheus did not run) and the HA entry's traffic through each proxy, from its own counters (with Xray's small probe fetches through every proxy).
 
-A status is **Passing**, **Failing** or **Unknown**. Unknown means no result in the last 90 seconds; it is never the last known status. The probe success rate counts only the probes that ran, so read it together with the coverage. Reading the statuses together:
+A status is **Passing**, **Failing** or **Unknown**. Unknown means no result in the last 90 seconds; it is never the last known status. The probe success rate counts only the probes that ran, so read it together with the coverage. A proxy moved between public and private keeps one rate and coverage: they count the probes under its old and new labels together. Reading the statuses together:
 
 | HA entry | Pool proxies | Meaning |
 | :--- | :--- | :--- |

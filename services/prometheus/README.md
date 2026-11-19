@@ -293,12 +293,13 @@ Check the rules and run their fixtures (`promtool` of the same Prometheus versio
 cd services/prometheus
 promtool check rules rules/determined-task-resources.yml
 cd tests && promtool test rules determined-task-resources.test.yml
-promtool test rules proxy-status-bars.test.yml
+promtool test rules proxy-status-bars.test.yml proxy-24h-success.test.yml
 ```
 
 `proxy-status-bars.test.yml` checks the proxy portal's status bar queries (the Proxy Availability dashboard's
-"Status bars" panels) on probe samples, also across a change of a proxy's probe labels; the portal's tests run it
-too, with `promtool` or the pinned image, and check that its expressions are the portal's.
+"Status bars" panels) and `proxy-24h-success.test.yml` the proxies' 24-hour success rates and coverage (its Proxies
+table) on probe samples, also across a change of a proxy's probe labels; the portal's tests run them too, with
+`promtool` or the pinned image, and check that their expressions are the portal's.
 
 Fixtures stay outside `rules/`, so the production wildcard `/etc/prometheus/rules/*.yml` never loads
 them. The dashboard and the token writer have their own tests:
