@@ -30,7 +30,8 @@ The settings come from `/etc/default/proxy-apply` only, never from a request:
 | `PROXY_APPLY_COMPOSE_PROJECT` | Compose's default | |
 | `PROXY_APPLY_HA_HTTP` | `127.0.0.1:30889` | `ha-general`'s HTTP port on the host |
 | `PROXY_APPLY_HA_PRIVATE_HTTP` | `127.0.0.1:31889` | `ha-private`'s HTTP port on the host |
-| `PROXY_APPLY_PROBE_URL` | `https://www.google.com/generate_204` | fetched through the HA entries to verify |
+| `PROXY_APPLY_PROXY_HOST` | `127.0.0.1` | where a private proxy's own entry is checked, at the HTTP port the Compose file publishes (a port published on one host address is checked there) |
+| `PROXY_APPLY_PROBE_URL` | `https://www.google.com/generate_204` | fetched through the HA entries, and the private proxies' own entries, to verify |
 | `PROXY_APPLY_VERIFY_TIMEOUT` | `60` | seconds |
 
 `proxy-apply.path` starts the service while a request is waiting; `proxy-apply.timer` runs it every 5 minutes to expire results and to recover an interrupted apply. The service has no start limit, so a burst of quick runs does not stop the path unit; a failed run waits 30 seconds before it ends, so a request it cannot take is retried at that pace. It exits 1 when a rollback did not finish, and 2 when it cannot run (spool, accounts file, requester) or cannot remove a request entry; refused and rolled-back requests are reported in their status files. While a run cannot proceed, stop `proxy-apply.path` (`sudo systemctl stop proxy-apply.path`) until it is fixed. Its log is in `journalctl -u proxy-apply`. Files the applier replaces keep their owner, so the admins' `proxy_accounts.py` keeps working on them.

@@ -146,8 +146,8 @@ def describe(row, now=None):
         return _("Applied and verified.")
     if row.state == "unconfirmed":
         if row.op in ("grant", "revoke"):
-            return _("Live, but not confirmed yet: %(proxy)s did not answer the checks in time, or is not running.") \
-                % {"proxy": row.proxy or "—"}
+            return _("Live, but not confirmed yet: %(proxy)s or the auto-switching proxies did not answer the checks "
+                     "in time, or %(proxy)s is not running.") % {"proxy": row.proxy or "—"}
         if row.op in ("disable", "remove", "admin-off"):
             return _("Live: the proxies refuse the old access (verified), but no proxy answered the checks that must "
                      "pass in time, so the proxies may not be passing traffic right now.")

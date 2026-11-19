@@ -215,8 +215,9 @@ class GrantRequestTest(PortalTestCase):
         row = AccountRequest.objects.create(id="00000000-0000-4000-8000-0000000000aa", op="revoke", username="alice",
                                             proxy=UK, requested_by="carol", state="unconfirmed")
         with translation.override("en"):
-            self.assertEqual(lifecycle.describe(row), f"Live, but not confirmed yet: {UK} did not answer the checks "
-                                                      "in time, or is not running.")
+            self.assertEqual(lifecycle.describe(row), f"Live, but not confirmed yet: {UK} or the auto-switching "
+                                                      f"proxies did not answer the checks in time, or {UK} is not "
+                                                      "running.")
         self.assertIn("revoke", lifecycle.REVOKES)
 
 

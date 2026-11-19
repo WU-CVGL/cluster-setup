@@ -183,7 +183,7 @@ Before a private proxy takes clients, new or existing, start it with `docker com
 - **Public proxy:** listed; for `ha-general` and `ha-private`, a `pool-<proxy>` outbound in [`config.example.json`](../services/xray-ha/config.example.json) and the probe targets with `pool: ha-general`, `access: public`.
 - **Private proxy:** not listed; for `ha-private`, a `private-<proxy>` outbound and the probe targets with `pool: ha-private`, `access: private`. `render` adds `svc-monitor` to its probe modules; the example shows it as `svc-monitor:PASSWORD@`.
 
-To reclassify a proxy, edit the list, move its outbound between `pool-` and `private-`, update its probe labels, then `render` and restart `xray-ha` and the proxy.
+To reclassify a private proxy as public, first `revoke` it from every account it was given to ([Private proxies for single accounts](#private-proxies-for-single-accounts)). To reclassify a proxy, edit the list, move its outbound between `pool-` and `private-`, update its probe labels, then `render` and restart `xray-ha` and the proxy.
 
 ## Accounts
 
