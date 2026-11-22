@@ -10,6 +10,7 @@
 | My access `/access` | `/api/me/access`, `/api/me/reset` | signed in | the user's proxy account, the one named as their Determined username (none, on or off, admin or not), the entries it may use with their addresses on the private (`192.168.233.8`) and campus (`10.0.1.68`) networks (the private proxies given to it included; other private proxies stay hidden unless it is an admin account), client settings with `<password>` in place of the password for the Auto-switching Proxy and each private proxy given to it, and [a password reset](#password-reset) |
 | My usage `/usage` | `/api/me/usage` | signed in | the user's observed download, upload and total over 24 hours, 7 days and 30 days, and a trend chart |
 | Users `/admin/users` | `/api/admin/users`, `/api/admin/accounts`, `/api/admin/requests` | admins | every cluster user with their Determined flags, proxy account, private access, private proxies given and pending request, and the service accounts apart; filters and search; add, new password, turn on or off, admin account on or off, private proxy on or off, remove. `/admin/accounts` redirects here |
+| Private proxies `/admin/proxies` | | admins | choose a private proxy to see which accounts can use it and grant or revoke access for an individual account |
 | Request `/admin/requests/<id>` | `/api/admin/requests/<id>` | admins | one request's state, updated while it runs, and for an add or new password the one-time password |
 | Change log `/admin/log` | `/api/admin/requests?username=&requested_by=&op=&state=` | admins | every request, who made it and when, and its outcome; filters |
 | Incidents `/admin/incidents` | | admins | create and edit incidents and post updates |
@@ -102,6 +103,10 @@ Names are checked with the rules of `proxy_accounts.py` before anything is writt
 **Restart impact.** Every change restarts the affected entries: `xray-ha`; also the private proxies for a change to an admin account; also the private proxies given to an account for a change to it; also every proxy but the [open ones](../../docs/00_Network_Proxy.md#open-proxies) while raw auth is on. Private proxy on or off restarts only that proxy, and nothing while the account's proxy access is off or it is an admin account. Established connections through them drop, and new ones fail for a few seconds. The confirmation page says which.
 
 **Raw auth.** While raw auth is off, turning an account off stops only `ha-general`, `ha-private` and the private proxies: a public proxy's own entry needs no account and still accepts that user. While raw auth is on, the [open proxies'](../../docs/00_Network_Proxy.md#open-proxies) own entries still do. The list, the confirmation page and the request page say so.
+
+### Private proxy access
+
+On **Users**, choose a user and the private proxy to grant or revoke. On **Private proxies**, choose the proxy first, then the user. Both pages submit the same change to one account and one proxy. An enabled proxy admin account has access to every private proxy through its role. Removing an individual grant from such an account leaves that role-based access in effect. A disabled account can hold a grant and use it once its proxy access is enabled.
 
 ### Request states
 

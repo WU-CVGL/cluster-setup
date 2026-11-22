@@ -1,5 +1,6 @@
 {% load i18n %}<nav class="subnav" aria-label="{% translate 'Admin' %}">
   <a href="{% url 'admin_users' %}"{% if subnav == 'users' %} aria-current="page"{% endif %}>{% translate "Users" %}</a>
+  <a href="{% url 'admin_proxies' %}"{% if subnav == 'proxies' %} aria-current="page"{% endif %}>{% translate "Private proxies" %}</a>
   <a href="{% url 'admin_log' %}"{% if subnav == 'log' %} aria-current="page"{% endif %}>{% translate "Change log" %}</a>
   <a href="{% url 'admin_incidents' %}"{% if subnav == 'incidents' %} aria-current="page"{% endif %}>{% translate "Incidents" %}</a>
 </nav>

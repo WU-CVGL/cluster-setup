@@ -36,6 +36,7 @@ urlpatterns = [
     path("healthz", views.healthz, name="healthz"),
     # the admin console: every view checks the Determined admin flag of the session (admin_views.admin_only)
     path("admin/users", admin_views.users_page, name="admin_users"),
+    path("admin/proxies", admin_views.proxies_page, name="admin_proxies"),
     path("admin/accounts", admin_views.accounts_page, name="admin_accounts"),
     path("admin/accounts/<str:op>", admin_views.confirm_page, name="admin_confirm"),
     path("admin/requests/<rid:request_id>", admin_views.request_page, name="admin_request"),
