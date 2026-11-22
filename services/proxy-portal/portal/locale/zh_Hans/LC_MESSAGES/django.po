@@ -155,10 +155,8 @@ msgid ""
 msgstr "收回 %(name)s 的私有代理 %(proxy)s。作为管理员账号，它仍可使用 %(proxy)s 和其他所有私有代理。"
 
 #, python-format
-msgid ""
-"Takes the private proxy %(proxy)s back from %(name)s: %(proxy)s stops "
-"accepting it. The other private proxies it was given stay as they are."
-msgstr "收回 %(name)s 的私有代理 %(proxy)s：%(proxy)s 将不再接受它。为它开通的其他私有代理保持不变。"
+msgid "Removes the individual grant for %(name)s on %(proxy)s. Other permissions stay the same."
+msgstr "移除为 %(name)s 单独开通的 %(proxy)s 权限，其他权限不变。"
 
 #, python-format
 msgid ""

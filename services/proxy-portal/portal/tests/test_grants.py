@@ -100,8 +100,7 @@ class GrantRequestTest(PortalTestCase):
         page = self.client.get("/admin/accounts/revoke?username=alice")
         self.assertContains(page, f'<option value="{UK}">')
         page = self.client.get(f"/admin/accounts/revoke?username=alice&proxy={UK}")
-        self.assertContains(page, f"Takes the private proxy {UK} back from alice: {UK} stops accepting it. The "
-                                  "other private proxies it was given stay as they are.")
+        self.assertContains(page, f"Removes the individual grant for alice on {UK}. Other permissions stay the same.")
         self.assertContains(page, f"Applying restarts {UK}.")
         self.assertContains(page, 'name="confirm"')
         response = self.client.post("/admin/accounts/revoke", {"username": "alice", "proxy": UK, "confirm": "al"})
@@ -110,6 +109,18 @@ class GrantRequestTest(PortalTestCase):
         response = self.client.post("/admin/accounts/revoke", {"username": "alice", "proxy": UK, "confirm": "alice"})
         self.assertEqual(response.status_code, 302)
         self.assertEqual(AccountRequest.objects.get().proxy, UK)
+
+    def test_revoke_old_grant_on_public_proxy(self):
+        self.write_status(grant("alice", PUBLIC))
+        params = {"username": "alice", "proxy": PUBLIC}
+        for language, message in (
+                ("en", f"Removes the individual grant for alice on {PUBLIC}. Other permissions stay the same."),
+                ("zh-CN", f"移除为 alice 单独开通的 {PUBLIC} 权限，其他权限不变。")):
+            with self.subTest(language=language):
+                page = self.client.get("/admin/accounts/revoke", params, HTTP_ACCEPT_LANGUAGE=language)
+                self.assertContains(page, message)
+        self.assertEqual(self.client.post("/admin/accounts/revoke", {**params, "confirm": "alice"}).status_code, 302)
+        self.assertEqual(AccountRequest.objects.get().proxy, PUBLIC)
 
     def test_revoke_from_an_admin_account(self):
         """carol is an admin account with an explicit grant: taking it back leaves her access as an admin."""

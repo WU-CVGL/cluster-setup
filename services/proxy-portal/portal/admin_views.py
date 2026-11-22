@@ -79,8 +79,8 @@ def _effect_text(op, name, proxy=None, row=None):
         return _("Takes the private proxy %(proxy)s back from %(name)s. As an admin account, it still reaches "
                  "%(proxy)s and every other private proxy.") % {"name": name, "proxy": proxy}
     if op == "revoke":
-        return _("Takes the private proxy %(proxy)s back from %(name)s: %(proxy)s stops accepting it. The other "
-                 "private proxies it was given stay as they are.") % {"name": name, "proxy": proxy}
+        return _("Removes the individual grant for %(name)s on %(proxy)s. Other permissions stay the same.") % {
+            "name": name, "proxy": proxy}
     if op == "admin-off" and row is not None and row.proxies:
         return _("%(name)s stops being an admin account: the Private Auto-switching Proxy and the private proxies "
                  "refuse it, except %(proxies)s, which it was given.") % {"name": name, "proxies": names(row.proxies)}

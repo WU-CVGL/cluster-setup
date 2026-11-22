@@ -55,11 +55,11 @@ function setGrants(original, grants) {
     { lang: 'en', device: 'desktop', viewport: { width: 1280, height: 900 }, locale: 'en-US', header: 'en-US,en;q=0.9', proxy: JP,
       t: { grant: 'Private proxy on', revoke: 'Private proxy off', effect: `Gives alice the private proxy ${JP}, to use at its own address.`,
         restart: `Applying restarts ${JP}.`, applied: 'Applied', column: 'Private proxies', given: `It may also use the private proxy ${JP}, at its own address.`,
-        card: 'One private proxy, no switching, given to your account.', revokeEffect: `Takes the private proxy ${JP} back from alice: ${JP} stops accepting it.`, type: 'Type alice to confirm' } },
+        card: 'One private proxy, no switching, given to your account.', revokeEffect: `Removes the individual grant for alice on ${JP}. Other permissions stay the same.`, type: 'Type alice to confirm' } },
     { lang: 'zh', device: 'phone', viewport: { width: 390, height: 844 }, locale: 'zh-CN', header: 'zh-CN,zh;q=0.9', proxy: UK,
       t: { grant: '开通私有代理', revoke: '取消私有代理', effect: `为 alice 开通私有代理 ${UK}，通过它自己的地址使用。`,
         restart: `应用时会重启 ${UK}。`, applied: '已应用', column: '私有代理', given: `它还可以使用私有代理 ${UK}`,
-        card: '单个私有代理，不切换，已授予你的账号。', revokeEffect: `收回 alice 的私有代理 ${UK}：${UK} 将不再接受它。`, type: '输入 alice 以确认' } },
+        card: '单个私有代理，不切换，已授予你的账号。', revokeEffect: `移除为 alice 单独开通的 ${UK} 权限，其他权限不变。`, type: '输入 alice 以确认' } },
   ];
   try {
     for (const run of runs) {
