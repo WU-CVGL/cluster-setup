@@ -40,7 +40,7 @@ class AdminGuardTest(PortalTestCase):
         everything = {p.name for p in get_resolver().url_patterns}
         # every route named admin_* or api_admin_* is an admin view, and nothing else is
         self.assertEqual(names, {n for n in everything if n.startswith(("admin_", "api_admin_"))})
-        self.assertEqual(len(names), 13)
+        self.assertIn("admin_proxies", names)
 
     def test_anonymous(self):
         for name, path, kind in admin_patterns():

@@ -1,8 +1,8 @@
 // A private proxy granted to one account, in a browser against the e2e run (run.sh): an admin gives alice a private
-// proxy from the Users page (the proxy chosen first, then the confirmation page that names it and what restarts),
+// proxy from Users or Private proxies. The confirmation page names the user, proxy and what restarts,
 // the request file carries the proxy, the request page follows a stub applier status to applied, and once the
 // applier's account status lists the grant, the Users page shows it and alice's My access shows that proxy with its
-// addresses and client settings, and no other private proxy. Then the admin takes it back, typing the account name
+// addresses and client settings, and no other private proxy. The admin takes it back from the other view, typing the account name
 // to confirm. In English at desktop width and in Chinese at phone width, without horizontal overflow. Restores the
 // account status when done.
 //   node e2e/grants.cjs <base URL> <screenshot folder>   (run from e2e/, as run.sh does; Playwright in NODE_PATH)
@@ -55,11 +55,11 @@ function setGrants(original, grants) {
     { lang: 'en', device: 'desktop', viewport: { width: 1280, height: 900 }, locale: 'en-US', header: 'en-US,en;q=0.9', proxy: JP,
       t: { grant: 'Private proxy on', revoke: 'Private proxy off', effect: `Gives alice the private proxy ${JP}, to use at its own address.`,
         restart: `Applying restarts ${JP}.`, applied: 'Applied', column: 'Private proxies', given: `It may also use the private proxy ${JP}, at its own address.`,
-        card: 'One private proxy, no switching, given to your account.', revokeEffect: `Takes the private proxy ${JP} back from alice: ${JP} stops accepting it.`, type: 'Type alice to confirm' } },
+        card: 'One private proxy, no switching, given to your account.', revokeEffect: `Removes the individual grant for alice on ${JP}. Other permissions stay the same.`, type: 'Type alice to confirm' } },
     { lang: 'zh', device: 'phone', viewport: { width: 390, height: 844 }, locale: 'zh-CN', header: 'zh-CN,zh;q=0.9', proxy: UK,
       t: { grant: '开通私有代理', revoke: '取消私有代理', effect: `为 alice 开通私有代理 ${UK}，通过它自己的地址使用。`,
         restart: `应用时会重启 ${UK}。`, applied: '已应用', column: '私有代理', given: `它还可以使用私有代理 ${UK}`,
-        card: '单个私有代理，不切换，已授予你的账号。', revokeEffect: `收回 alice 的私有代理 ${UK}：${UK} 将不再接受它。`, type: '输入 alice 以确认' } },
+        card: '单个私有代理，不切换，已授予你的账号。', revokeEffect: `移除为 alice 单独开通的 ${UK} 权限，其他权限不变。`, type: '输入 alice 以确认' } },
   ];
   try {
     for (const run of runs) {
@@ -78,19 +78,35 @@ function setGrants(original, grants) {
       };
       const admin = await newPage('carol');
 
+      async function selectAccountForProxy(op) {
+        await admin.locator('a[href="/admin/proxies"]').first().click();
+        const selector = admin.locator('select[name=proxy]');
+        await selector.selectOption(run.proxy);
+        await admin.locator('form').filter({ has: selector }).locator('button[type=submit]').click();
+        check(`${tag}: selected proxy`, await selector.inputValue() === run.proxy, await selector.inputValue());
+        check(`${tag}: proxy page without overflow`, (await overflow(admin)) <= 0, await overflow(admin));
+        await admin.screenshot({ path: `${out}/grant-proxies-${run.lang}-${run.device}.png`, fullPage: true });
+        const row = admin.getByRole('row').filter({ has: admin.getByRole('rowheader', { name: 'alice', exact: true }) });
+        await row.locator(`a[href^="/admin/accounts/${op}?"]`).click();
+      }
+
       // the Users page: alice may be given a private proxy
       await admin.goto(base + '/admin/users', { waitUntil: 'networkidle' });
       check(`${tag}: the Private proxies column`, (await admin.locator('th', { hasText: run.t.column }).count()) >= 1, null);
       const grantLink = admin.locator('a[href="/admin/accounts/grant?username=alice"]');
       check(`${tag}: the grant action`, (await grantLink.textContent()).trim() === run.t.grant, await grantLink.textContent());
       check(`${tag}: no grant action for an admin account`, (await admin.locator('a[href="/admin/accounts/grant?username=carol"]').count()) === 0, null);
-      await Promise.all([admin.waitForNavigation({ waitUntil: 'networkidle' }), grantLink.click()]);
-      // first the proxy: only private proxies
-      const options = await admin.locator('select#proxy option').evaluateAll(os => os.map(o => o.value));
-      check(`${tag}: the private proxies to choose from`, options.includes(JP) && options.includes(UK) && !options.some(o => o.startsWith('usca')), options);
-      await admin.screenshot({ path: `${out}/grant-choose-${run.lang}-${run.device}.png`, fullPage: true });
-      await admin.selectOption('select#proxy', run.proxy);
-      await Promise.all([admin.waitForNavigation({ waitUntil: 'networkidle' }), admin.click('main form[method=get] button[type=submit]')]);
+      if (run.lang === 'zh') {
+        await selectAccountForProxy('grant');
+      } else {
+        await Promise.all([admin.waitForNavigation({ waitUntil: 'networkidle' }), grantLink.click()]);
+        // first the proxy: only private proxies
+        const options = await admin.locator('select#proxy option').evaluateAll(os => os.map(o => o.value));
+        check(`${tag}: the private proxies to choose from`, options.includes(JP) && options.includes(UK) && !options.some(o => o.startsWith('usca')), options);
+        await admin.screenshot({ path: `${out}/grant-choose-${run.lang}-${run.device}.png`, fullPage: true });
+        await admin.selectOption('select#proxy', run.proxy);
+        await Promise.all([admin.waitForNavigation({ waitUntil: 'networkidle' }), admin.click('main form[method=get] button[type=submit]')]);
+      }
       const notice = await text(admin, 'main form[method=post] .notice');
       check(`${tag}: the confirmation names the proxy`, notice.includes(run.t.effect), notice);
       check(`${tag}: the confirmation says what restarts`, notice.includes(run.t.restart), notice);
@@ -138,8 +154,12 @@ function setGrants(original, grants) {
       await admin.goto(base + '/admin/users', { waitUntil: 'networkidle' });
       const revokeLink = admin.locator('a[href="/admin/accounts/revoke?username=alice"]');
       check(`${tag}: the revoke action`, (await revokeLink.textContent()).trim() === run.t.revoke, await revokeLink.textContent());
-      await Promise.all([admin.waitForNavigation({ waitUntil: 'networkidle' }), revokeLink.click()]);
-      await Promise.all([admin.waitForNavigation({ waitUntil: 'networkidle' }), admin.click('main form[method=get] button[type=submit]')]);
+      if (run.lang === 'en') {
+        await selectAccountForProxy('revoke');
+      } else {
+        await Promise.all([admin.waitForNavigation({ waitUntil: 'networkidle' }), revokeLink.click()]);
+        await Promise.all([admin.waitForNavigation({ waitUntil: 'networkidle' }), admin.click('main form[method=get] button[type=submit]')]);
+      }
       const revokeNotice = await text(admin, 'main form[method=post] .notice');
       check(`${tag}: the revoke confirmation`, revokeNotice.includes(run.t.revokeEffect) && revokeNotice.includes(run.t.restart), revokeNotice);
       check(`${tag}: the name to type`, (await text(admin, 'label[for=confirm]')) === run.t.type, await text(admin, 'label[for=confirm]'));
@@ -147,7 +167,8 @@ function setGrants(original, grants) {
       await admin.fill('#confirm', 'alice');
       await Promise.all([admin.waitForNavigation({ waitUntil: 'networkidle' }), admin.click('main form[method=post] button[type=submit]')]);
       const revokeId = admin.url().split('/').pop();
-      check(`${tag}: the revoke request file`, readRequest(revokeId).op === 'revoke' && readRequest(revokeId).proxy === run.proxy, readRequest(revokeId));
+      const revoke = readRequest(revokeId);
+      check(`${tag}: the revoke request file`, revoke.op === 'revoke' && revoke.username === 'alice' && revoke.proxy === run.proxy, revoke);
       writeStatus(revokeId, { op: 'revoke', username: 'alice', proxy: run.proxy, status: 'applied', changed: true,
         restarted: [`xray-${run.proxy}`], applied_seq: 2 });
       check(`${tag}: the revoke is applied`, await waitText(admin, '#request-state .chip', run.t.applied), await text(admin, '#request-state .chip'));

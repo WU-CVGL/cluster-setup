@@ -155,10 +155,8 @@ msgid ""
 msgstr "收回 %(name)s 的私有代理 %(proxy)s。作为管理员账号，它仍可使用 %(proxy)s 和其他所有私有代理。"
 
 #, python-format
-msgid ""
-"Takes the private proxy %(proxy)s back from %(name)s: %(proxy)s stops "
-"accepting it. The other private proxies it was given stay as they are."
-msgstr "收回 %(name)s 的私有代理 %(proxy)s：%(proxy)s 将不再接受它。为它开通的其他私有代理保持不变。"
+msgid "Removes the individual grant for %(name)s on %(proxy)s. Other permissions stay the same."
+msgstr "移除为 %(name)s 单独开通的 %(proxy)s 权限，其他权限不变。"
 
 #, python-format
 msgid ""
@@ -1234,6 +1232,46 @@ msgstr "Determined"
 msgid "Proxy account"
 msgstr "代理账号"
 
+msgid "Access to this proxy"
+msgstr "访问状态"
+
+msgid "Allowed"
+msgstr "可访问"
+
+msgid "Back to the proxy"
+msgstr "返回该代理"
+
+msgid "Editing is paused on this page until the account information is refreshed."
+msgstr "账号信息已过期，更新后即可继续编辑。"
+
+msgid "Individual permission"
+msgstr "单独授权"
+
+msgid "No access"
+msgstr "无访问权限"
+
+msgid "No private proxies are configured."
+msgstr "尚未配置私有代理。"
+
+msgid "Permission"
+msgstr "授权来源"
+
+msgid "Private proxy access"
+msgstr "私有代理访问权限"
+
+msgid "Proxy account disabled"
+msgstr "代理账号已停用"
+
+msgid "Search users"
+msgstr "搜索用户"
+
+msgid "Show users"
+msgstr "查看用户"
+
+#, python-format
+msgid "User accounts for %(proxy)s"
+msgstr "%(proxy)s 的用户账号"
+
 msgid "Private proxies"
 msgstr "私有代理"
 
@@ -1273,9 +1311,8 @@ msgstr "已关闭（公共代理除外）"
 msgid "Every private proxy"
 msgstr "所有私有代理"
 
-#, python-format
-msgid "Also given: %(proxies)s"
-msgstr "另已授予：%(proxies)s"
+msgid "Also given:"
+msgstr "另已授予："
 
 msgid "Changed outside the portal only"
 msgstr "只能在门户之外修改"

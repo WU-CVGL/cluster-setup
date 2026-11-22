@@ -79,8 +79,8 @@ def _effect_text(op, name, proxy=None, row=None):
         return _("Takes the private proxy %(proxy)s back from %(name)s. As an admin account, it still reaches "
                  "%(proxy)s and every other private proxy.") % {"name": name, "proxy": proxy}
     if op == "revoke":
-        return _("Takes the private proxy %(proxy)s back from %(name)s: %(proxy)s stops accepting it. The other "
-                 "private proxies it was given stay as they are.") % {"name": name, "proxy": proxy}
+        return _("Removes the individual grant for %(name)s on %(proxy)s. Other permissions stay the same.") % {
+            "name": name, "proxy": proxy}
     if op == "admin-off" and row is not None and row.proxies:
         return _("%(name)s stops being an admin account: the Private Auto-switching Proxy and the private proxies "
                  "refuse it, except %(proxies)s, which it was given.") % {"name": name, "proxies": names(row.proxies)}
@@ -216,10 +216,44 @@ def users_page(request):
     view = users_view(status, query, flt)
     return render(request, "portal/admin/users.html", dict(view, **{
         "nav": "admin", "subnav": "users", "status": status, "query": query, "filter": flt,
+        "private_proxies": set(status.private_proxies) if status.available and not status.stale else set(),
         "filters": [(key, view["counts"][key]) for key in USER_FILTERS],
         "raw_auth_text": raw_auth_text(status), "suggestions": accounts.suggestions(status, settings.NODES),
         "recent": lifecycle.refresh_all(AccountRequest.objects.all()[:8]),
     }))
+
+
+@admin_only("page")
+@require_GET
+def proxies_page(request):
+    status = proxy_status.load()
+    private = status.private_proxies
+    selected = request.GET.get("proxy") or next(iter(private), None)
+    if status.available and selected is not None and selected not in private:
+        raise Http404()
+    query = (request.GET.get("q") or "").strip().lower()[:64]
+    rows = []
+    if status.available and selected:
+        pending = _pending_by_account()
+        for account in status.all_accounts:
+            if account.kind != "user" or query not in account.name:
+                continue
+            given = selected in account.proxies
+            waiting = pending.get(account.name)
+            op = None
+            if not status.stale and not waiting and not account.protected:
+                if given:
+                    op = "revoke"
+                elif not account.admin:
+                    op = "grant"
+            rows.append({"account": account, "given": given, "allowed": account.enabled and (given or account.admin),
+                         "pending": waiting, "op": op})
+        # Within each group the status already orders accounts by name.
+        rows.sort(key=lambda r: (not r["allowed"], not (r["given"] or r["account"].admin)))
+    return render(request, "portal/admin/proxies.html", {
+        "nav": "admin", "subnav": "proxies", "status": status, "private": private,
+        "selected": selected, "query": query, "rows": rows,
+    })
 
 
 def _create(request, op, username, proxy=None):
@@ -241,7 +275,11 @@ def confirm_page(request, op):
         proxy = (source.get("proxy") or "").strip()[:200] or None
     status = proxy_status.load()
     row = next((r for r in status.all_accounts if r.name == username), None)
-    context = {"nav": "admin", "subnav": "users", "op": op, "username": username, "row": row, "status": status,
+    from_proxy = source.get("from") == "proxies" and proxy in status.private_proxies
+    back = (reverse("admin_proxies") + "?" + urllib.parse.urlencode({"proxy": proxy})
+            if from_proxy else reverse("admin_users"))
+    context = {"nav": "admin", "subnav": "proxies" if from_proxy else "users", "back": back,
+               "op": op, "username": username, "row": row, "status": status,
                "destructive": op in accounts.DESTRUCTIVE, "error": None, "proxy": proxy, "choices": None}
     try:
         if op in accounts.GRANT_OPS and proxy is None and request.method == "GET":
@@ -280,6 +318,7 @@ def request_page(request, request_id):
     return render(request, "portal/admin/request.html", {
         "nav": "admin", "subnav": "log", "row": row, "level": lifecycle.level(row), "text": lifecycle.describe(row),
         "password": pw, "password_text": lifecycle.password_text(pw, row) if pw else None,
+        "private_proxy": row.proxy in status.private_proxies,
         "raw_auth": raw_auth_text(status) if row.op in ACCESS_OPS and status.available else None,
     })
 

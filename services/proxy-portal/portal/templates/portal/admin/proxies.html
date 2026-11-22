@@ -1,0 +1,63 @@
+{% extends "portal/base.html" %}{% load i18n portal %}
+{% block title %}{% translate "Private proxy access" %}{% endblock %}
+{% block content %}
+<div class="hero-head"><div>
+  <div class="eyebrow">{% translate "Admin" %}</div>
+  <h1>{% translate "Private proxy access" %}</h1>
+</div></div>
+{% include "portal/admin/_nav.html" %}
+
+{% if not status.available %}
+<div class="notice bad" role="status"><p>{% translate "Account information is unavailable right now, so no change can be requested." %}</p></div>
+{% else %}
+{% if status.stale %}<div class="notice warn" role="status"><p>{% translate "Editing is paused on this page until the account information is refreshed." %}</p></div>{% endif %}
+{% if status.unapplied_changes %}<div class="notice warn" role="status"><p>{% translate "An account change made outside the portal has not been applied yet: it may not be live." %}</p></div>{% elif status.unapplied_changes is None %}<div class="notice warn" role="status"><p>{% translate "An account change made outside the portal may not be applied yet." %}</p></div>{% endif %}
+{% if private %}
+<form class="filters section" method="get" action="{% url 'admin_proxies' %}">
+  <div class="field"><label for="proxy">{% translate "Private proxy" %}</label>
+    <select class="input mono" id="proxy" name="proxy">{% for p in private %}<option value="{{ p }}"{% if p == selected %} selected{% endif %}>{{ p }}</option>{% endfor %}</select></div>
+  <div class="field"><label for="q">{% translate "Search users" %}</label>
+    <input class="input" id="q" name="q" value="{{ query }}" maxlength="64" autocomplete="off"></div>
+  <button class="btn" type="submit">{% translate "Show users" %}</button>
+</form>
+<section class="section" aria-labelledby="proxy-title">
+  <div class="section-bar"><h2 class="mono" id="proxy-title">{{ selected }}</h2></div>
+  <div class="card table-scroll">
+    <table class="table">
+      <caption class="sr-only">{% blocktranslate with proxy=selected %}User accounts for {{ proxy }}{% endblocktranslate %}</caption>
+      <thead><tr>
+        <th scope="col">{% translate "User" %}</th><th scope="col">{% translate "Permission" %}</th>
+        <th scope="col">{% translate "Access to this proxy" %}</th><th scope="col">{% translate "Actions" %}</th>
+      </tr></thead>
+      <tbody>
+      {% for r in rows %}
+      <tr>
+        <th scope="row" class="mono">{{ r.account.name }}</th>
+        <td>
+          {% if r.account.admin %}<span class="tag admin">{% translate "Admin account" %}</span>{% endif %}
+          {% if r.given %}<span class="tag">{% translate "Individual permission" %}</span>{% elif not r.account.admin %}<span class="muted">—</span>{% endif %}
+        </td>
+        <td>
+          {% if not r.account.enabled %}<span class="chip warn">{% translate "Proxy account disabled" %}</span>
+          {% elif r.allowed %}<span class="chip ok">{% translate "Allowed" %}</span>
+          {% else %}<span class="muted">{% translate "No access" %}</span>{% endif %}
+        </td>
+        <td>
+          {% if r.pending %}<a href="{% url 'admin_request' r.pending.id %}">{{ r.pending.op|op_label }} · {{ r.pending.get_state_display }}</a>
+          {% elif r.op %}<a class="btn sm" href="{% url 'admin_confirm' r.op %}?username={{ r.account.name|urlencode }}&amp;proxy={{ selected|urlencode }}&amp;from=proxies">{{ r.op|op_label }}</a>
+          {% elif r.account.protected %}<span class="small muted">{% translate "Changed outside the portal only" %}</span>
+          {% else %}<span class="muted">—</span>{% endif %}
+        </td>
+      </tr>
+      {% empty %}
+      <tr><td colspan="4"><div class="empty">{% translate "No user matches." %}</div></td></tr>
+      {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</section>
+{% else %}
+<div class="empty">{% translate "No private proxies are configured." %}</div>
+{% endif %}
+{% endif %}
+{% endblock %}

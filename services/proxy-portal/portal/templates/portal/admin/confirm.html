@@ -2,14 +2,14 @@
 {% block title %}{{ op|op_label }}{% endblock %}
 {% block content %}
 <div class="hero-head"><div>
-  <div class="eyebrow">{% translate "Admin" %} · {% translate "Users" %}</div>
+  <div class="eyebrow">{% translate "Admin" %} · {% if subnav == 'proxies' %}{% translate "Private proxies" %}{% else %}{% translate "Users" %}{% endif %}</div>
   <h1>{{ op|op_label }}: <span class="mono">{{ username|default:"—" }}</span></h1>
 </div></div>
 {% include "portal/admin/_nav.html" %}
 
 {% if error and not effect %}
 <div class="notice bad" role="alert"><p>{{ error }}</p></div>
-<div class="form-actions"><a class="btn" href="{% url 'admin_users' %}">{% translate "Back to the users" %}</a></div>
+<div class="form-actions"><a class="btn" href="{{ back }}">{% if subnav == 'proxies' %}{% translate "Back to the proxy" %}{% else %}{% translate "Back to the users" %}{% endif %}</a></div>
 {% elif choices %}
 <form class="card card-pad" method="get" action="{% url 'admin_confirm' op %}">
   <input type="hidden" name="username" value="{{ username }}">
@@ -24,6 +24,7 @@
 {% else %}
 <form class="card card-pad" method="post" action="{% url 'admin_confirm' op %}">{% csrf_token %}
   <input type="hidden" name="username" value="{{ username }}">
+  {% if subnav == 'proxies' %}<input type="hidden" name="from" value="proxies">{% endif %}
   {% if proxy %}<input type="hidden" name="proxy" value="{{ proxy }}">
   <dl class="kv"><dt>{% translate "Private proxy" %}</dt><dd class="mono">{{ proxy }}</dd></dl>{% endif %}
   {% if error %}<div class="notice bad" role="alert"><p>{{ error }}</p></div>{% endif %}
@@ -40,7 +41,7 @@
   {% endif %}
   <div class="form-actions">
     <button class="btn {% if destructive %}danger{% else %}primary{% endif %}" type="submit">{% translate "Send the request" %}</button>
-    <a class="btn" href="{% url 'admin_users' %}">{% translate "Cancel" %}</a>
+    <a class="btn" href="{{ back }}">{% translate "Cancel" %}</a>
   </div>
 </form>
 {% endif %}

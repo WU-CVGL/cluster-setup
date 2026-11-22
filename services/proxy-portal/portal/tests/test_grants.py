@@ -1,5 +1,6 @@
 """Single private proxies granted to an account: the status, the admins' requests, and My access."""
 
+import datetime
 import json
 import os
 import re
@@ -91,7 +92,7 @@ class GrantRequestTest(PortalTestCase):
                                                         "proxy": JP})
         page = self.client.get(f"/admin/requests/{row.id}")
         self.assertContains(page, "Private proxy on: <span class=\"mono\">alice</span>")
-        self.assertContains(page, f'<dd class="mono">{JP}</dd>')
+        self.assertContains(page, f'<a href="/admin/proxies?proxy={JP}">{JP}</a>', html=True)
         self.assertContains(self.client.get("/admin/log"), f"Private proxy on · <code>{JP}</code>")
         self.assertEqual(self.client.get(f"/api/admin/requests/{row.id}").json()["proxy"], JP)
 
@@ -99,8 +100,7 @@ class GrantRequestTest(PortalTestCase):
         page = self.client.get("/admin/accounts/revoke?username=alice")
         self.assertContains(page, f'<option value="{UK}">')
         page = self.client.get(f"/admin/accounts/revoke?username=alice&proxy={UK}")
-        self.assertContains(page, f"Takes the private proxy {UK} back from alice: {UK} stops accepting it. The "
-                                  "other private proxies it was given stay as they are.")
+        self.assertContains(page, f"Removes the individual grant for alice on {UK}. Other permissions stay the same.")
         self.assertContains(page, f"Applying restarts {UK}.")
         self.assertContains(page, 'name="confirm"')
         response = self.client.post("/admin/accounts/revoke", {"username": "alice", "proxy": UK, "confirm": "al"})
@@ -109,6 +109,18 @@ class GrantRequestTest(PortalTestCase):
         response = self.client.post("/admin/accounts/revoke", {"username": "alice", "proxy": UK, "confirm": "alice"})
         self.assertEqual(response.status_code, 302)
         self.assertEqual(AccountRequest.objects.get().proxy, UK)
+
+    def test_revoke_old_grant_on_public_proxy(self):
+        self.write_status(grant("alice", PUBLIC))
+        params = {"username": "alice", "proxy": PUBLIC}
+        for language, message in (
+                ("en", f"Removes the individual grant for alice on {PUBLIC}. Other permissions stay the same."),
+                ("zh-CN", f"移除为 alice 单独开通的 {PUBLIC} 权限，其他权限不变。")):
+            with self.subTest(language=language):
+                page = self.client.get("/admin/accounts/revoke", params, HTTP_ACCEPT_LANGUAGE=language)
+                self.assertContains(page, message)
+        self.assertEqual(self.client.post("/admin/accounts/revoke", {**params, "confirm": "alice"}).status_code, 302)
+        self.assertEqual(AccountRequest.objects.get().proxy, PUBLIC)
 
     def test_revoke_from_an_admin_account(self):
         """carol is an admin account with an explicit grant: taking it back leaves her access as an admin."""
@@ -198,23 +210,26 @@ class GrantRequestTest(PortalTestCase):
         self.assertEqual(set(accounts.OPS), set(ap.OPS))
 
     def test_users_page(self):
-        self.write_status(lambda d: [grant("alice", UK, JP)(d), grant("carol", JP)(d)])
+        self.write_status(lambda d: [grant("alice", UK, JP, "former-proxy")(d), grant("carol", JP)(d)])
         page = self.client.get("/admin/users")
         self.assertContains(page, "<th scope=\"col\">Private proxies</th>")
-        self.assertContains(page, f"<code>{JP}</code> <code>{UK}</code>")
+        self.assertContains(page, f'<a href="/admin/proxies?proxy={JP}"><code>{JP}</code></a>', count=2, html=True)
+        self.assertContains(page, f'<a href="/admin/proxies?proxy={UK}"><code>{UK}</code></a>', count=1, html=True)
+        self.assertContains(page, "<code>former-proxy</code>", html=True)
+        self.assertNotContains(page, 'href="/admin/proxies?proxy=former-proxy"')
         self.assertContains(page, "Every private proxy")
-        self.assertContains(page, f"Also given: {JP}")
+        self.assertContains(page, "Also given:")
         self.assertContains(page, 'href="/admin/accounts/grant?username=alice"')
         self.assertContains(page, 'href="/admin/accounts/revoke?username=alice"')
         self.assertNotContains(page, 'href="/admin/accounts/grant?username=carol"')  # an admin: nothing to grant
         self.assertNotContains(page, 'href="/admin/accounts/grant?username=svc-docker-cvgl-node01"')
         rows = {r["name"]: r for r in self.client.get("/api/admin/users").json()["users"]}
-        self.assertEqual(rows["alice"]["proxies"], [JP, UK])
+        self.assertEqual(rows["alice"]["proxies"], ["former-proxy", JP, UK])
         self.assertEqual(rows["alice"]["actions"], ["rotate", "disable", "admin-on", "grant", "revoke", "remove"])
         self.assertEqual(rows["carol"]["actions"], ["rotate", "disable", "admin-off", "revoke", "remove"])
         zh = self.client.get("/admin/users", HTTP_ACCEPT_LANGUAGE="zh-CN")
         self.assertContains(zh, "<th scope=\"col\">私有代理</th>")
-        self.assertContains(zh, f"<code>{JP}</code> <code>{UK}</code>")
+        self.assertContains(zh, f'href="/admin/proxies?proxy={JP}"', count=2)
 
     def test_restart_texts_for_a_granted_account(self):
         status = proxy_status.load()
@@ -240,6 +255,61 @@ class GrantRequestTest(PortalTestCase):
                                                       f"proxies did not answer the checks in time, or {UK} is not "
                                                       "running.")
         self.assertIn("revoke", lifecycle.REVOKES)
+
+
+class ProxyPermissionsPageTest(PortalTestCase):
+    def setUp(self):
+        super().setUp()
+        self.sign_in("carol")
+        self.write_status(lambda d: [grant("alice", UK)(d), grant("bob", JP)(d), grant("erin", JP)(d)])
+
+    def test_selected_proxy_shows_individual_and_inherited_access(self):
+        page = self.client.get("/admin/proxies", {"proxy": JP})
+        self.assertEqual(page.status_code, 200)
+        rows = {r["account"].name: (r["given"], r["allowed"], r["op"]) for r in page.context["rows"]}
+        self.assertEqual(rows, {
+            "alice": (False, False, "grant"),  # UK only
+            "bob": (True, False, "revoke"),   # access disabled
+            "carol": (False, True, None),      # all private proxies through the admin flag
+            "erin": (True, False, "revoke"),  # disabled admin with an individual grant
+        })
+        self.assertContains(page, "Proxy account disabled", count=2)
+        self.assertContains(page, f'href="/admin/accounts/grant?username=alice&amp;proxy={JP}&amp;from=proxies"')
+        self.assertContains(page, f'href="/admin/accounts/revoke?username=bob&amp;proxy={JP}&amp;from=proxies"')
+        self.assertNotContains(page, "svc-docker-cvgl-node01")
+        page = self.client.get("/admin/proxies", {"proxy": UK, "q": "ALI"})
+        self.assertEqual([r["account"].name for r in page.context["rows"]], ["alice"])
+        self.assertContains(page, f'href="/admin/accounts/revoke?username=alice&amp;proxy={UK}&amp;from=proxies"')
+        for selected in (PUBLIC, "us-west-racknerd-12tb", "ha-private", "absent"):
+            with self.subTest(selected=selected):
+                self.assertEqual(self.client.get("/admin/proxies", {"proxy": selected}).status_code, 404)
+
+    def test_pending_and_missing_or_stale_status(self):
+        row = AccountRequest.objects.create(id="00000000-0000-4000-8000-0000000000ab",
+                                            username="alice", requested_by="carol", op="rotate")
+        page = self.client.get("/admin/proxies", {"proxy": JP, "q": "alice"})
+        self.assertContains(page, f'href="/admin/requests/{row.id}"')
+        self.assertNotContains(page, "/admin/accounts/grant?")
+        stale = datetime.datetime.now(datetime.timezone.utc) - datetime.timedelta(days=30)
+        self.write_status(grant("bob", JP), generated_at=stale)
+        page = self.client.get("/admin/proxies", {"proxy": JP})
+        self.assertContains(page, "Editing is paused")
+        self.assertNotContains(page, "/admin/accounts/grant?")
+        self.assertNotContains(page, "/admin/accounts/revoke?")
+        self.status_file.unlink()
+        page = self.client.get("/admin/proxies", {"proxy": JP})
+        self.assertContains(page, "Account information is unavailable")
+        self.assertNotContains(page, 'name="proxy"')
+        self.assertNotContains(page, "/admin/accounts/grant?")
+
+    def test_confirm_links_back_and_rechecks_a_changed_grant(self):
+        params = {"username": "alice", "proxy": JP, "from": "proxies"}
+        page = self.client.get("/admin/accounts/grant", params)
+        self.assertContains(page, f'href="/admin/proxies?proxy={JP}"')
+        self.write_status(grant("alice", JP))
+        page = self.client.post("/admin/accounts/grant", params)
+        self.assertContains(page, f"alice may use {JP} already.", status_code=409)
+        self.assertEqual(requests_in(self.spool), [])
 
 
 class MyAccessTest(PortalTestCase):
