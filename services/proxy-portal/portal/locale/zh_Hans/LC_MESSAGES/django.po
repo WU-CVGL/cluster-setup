@@ -1490,3 +1490,24 @@ msgstr "这个 Determined 账号已停用。"
 
 msgid "Wrong username or password."
 msgstr "用户名或密码错误。"
+
+msgid "Line status"
+msgstr "线路状态"
+
+msgid "Direct"
+msgstr "直连"
+
+msgid "Backup path"
+msgstr "备用路径"
+
+msgid "Abnormal"
+msgstr "异常"
+
+msgid "Paused"
+msgstr "暂停"
+
+msgid "Available · path unknown"
+msgstr "可用 · 路径未知"
+
+msgid "Each fixed address keeps its VPS. Backup path means new connections reach that VPS through WS."
+msgstr "每条固定线路始终连接自己的 VPS。「备用路径」表示新连接通过 WS 到达同一台 VPS。"

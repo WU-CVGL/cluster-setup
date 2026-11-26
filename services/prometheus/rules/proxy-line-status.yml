@@ -1,0 +1,21 @@
+groups:
+  - name: proxy-line-status
+    interval: 15s
+    rules:
+      - record: cvgl:line_protocol_ok
+        expr: |
+          max by (entry, protocol) (
+            probe_success{job="proxy-probe",kind="raw",protocol=~"http|socks"}
+            and (time() - timestamp(probe_success{job="proxy-probe",kind="raw",protocol=~"http|socks"}) < 90)
+          )
+      - record: cvgl:line_both_ok
+        expr: |
+          (min by (entry) (cvgl:line_protocol_ok) == 1)
+          and (count by (entry) (cvgl:line_protocol_ok) == 2)
+      - record: cvgl:line_status
+        expr: |
+          (max by (entry) (cvgl_line_paused_at_seconds > time() - 90) * 0 + 4)
+          or (min by (entry) (cvgl:line_protocol_ok) == 0)
+          or (cvgl:line_both_ok * on (entry)
+            (max by (entry) (cvgl_line_uses_backup and (cvgl_line_observed_at_seconds > time() - 90)) + 1))
+          or (cvgl:line_both_ok * 3)

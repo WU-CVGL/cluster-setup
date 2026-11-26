@@ -4,10 +4,11 @@
   {% include "portal/_status_cells.html" with http_age=p|add:".protocols.http.last_check_age_seconds" socks_age=p|add:".protocols.socks.last_check_age_seconds" %}
 </tr>{% endwith %}{% else %}{% with p="proxy:"|add:row.name %}
 <tr class="row-main" data-row="{{ row.name }}">
-  <th scope="row"><span class="proxy-name">{{ row.name }}</span>{% if row.account_required is False %} <span class="tag">{% translate "No account needed" %}</span>{% endif %}</th>
+  <th scope="row"><span class="proxy-name">{{ row.name }}</span>{% if row.account_required is False %} <span class="tag">{% translate "No account needed" %}</span>{% endif %}<div class="line-phone">{% include "portal/_line_status.html" %}</div></th>
+  <td class="wide">{% include "portal/_line_status.html" %}</td>
   {% include "portal/_status_cells.html" with http_age=p|add:".last_check_age_seconds" socks_age=p|add:".last_check_age_seconds" %}
 </tr>{% endwith %}{% endif %}
-{% with items=data.bar_items|get:row.name %}<tr class="row-bars"><td colspan="7">
+{% with items=data.bar_items|get:row.name %}<tr class="row-bars"><td colspan="{% if ha %}7{% else %}8{% endif %}">
   <ol class="bars" data-panel="bars" data-value="hours" aria-label="{% blocktranslate with name=label|default:row.name %}{{ name }}, last 96 hours{% endblocktranslate %}">{% for b in items.hours %}<li class="bar {{ b.state }}" aria-label="{{ b.label }}"{% if forloop.last %} tabindex="0"{% endif %}></li>{% endfor %}</ol>
   <ol class="bars days" data-panel="bars" data-value="days" hidden aria-label="{% blocktranslate with name=label|default:row.name %}{{ name }}, last 30 days{% endblocktranslate %}">{% for b in items.days %}<li class="bar {{ b.state }}" aria-label="{{ b.label }}"{% if forloop.last %} tabindex="0"{% endif %}></li>{% endfor %}</ol>
 </td></tr>{% endwith %}

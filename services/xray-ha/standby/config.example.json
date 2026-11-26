@@ -1,0 +1,10 @@
+{
+  "probe_url": "https://health.example.org/generate_204",
+  "paths": [
+    {"name": "campus", "address": "relay.example.org", "listener": "192.0.2.10", "sources": ["192.0.2.20/32"]},
+    {"name": "remote", "address": "reverse-relay", "control": {"host": "control.example.org", "port": 7000, "server_name": "control.example.org"}}
+  ],
+  "lines": {
+    "example-line": {"host": "peer.example.org", "port": 443, "ports": {"campus": 21001, "remote": 31001}}
+  }
+}

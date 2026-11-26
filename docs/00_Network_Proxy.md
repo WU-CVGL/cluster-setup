@@ -141,6 +141,8 @@ The ports are on `192.168.233.8` and `10.0.1.68`, as for `ha-general`. The priva
 - **A disabled admin account** is refused everywhere accounts are required, like any disabled account. The open proxies' own entries, and while raw auth is off every public proxy's own entry, still accept them.
 - **Every private proxy runs the pinned image.** A proxy not listed in `public-proxies.txt` is private from its first `render`, which writes the admin accounts into its config, existing proxies included. Recreate each one with `docker compose up -d xray-<name>` on the image pinned in `docker-compose.yml`, not with `docker compose restart`: a restart keeps the container's old image, and older Xray versions ignore the accounts ([Accounts on the proxies](#accounts-on-the-proxies), step 1). Then check its own entry as in step 5 there: no account, a non-admin account and a revoked password get `407`, an admin account `204`. The restart pipelines below are for proxies that already run that image.
 
+For optional per-line failover to the same peer, see [Per-line standby paths](../services/xray-ha/standby/README.md).
+
 ### Admin accounts
 
 An admin account is a proxy account with the admin flag: it may use `ha-private` and the private proxies' own entries. The flag is set per account, with `proxy_accounts.py admin` or the portal's `admin-on` and `admin-off`, and does not follow the Determined admin role. Service accounts cannot be admin accounts.
