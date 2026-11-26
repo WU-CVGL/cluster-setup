@@ -90,6 +90,17 @@ class StateTest(SimpleTestCase):
 
 
 class StatusTest(PortalTestCase):
+    def test_line_status_matches_recording_rule_in_page_and_live_api(self):
+        public = stubs.PUBLIC_PROXIES[0]
+        self.prometheus.answers[queries.STATUS["proxies"]["line_status"]] = vector(({"entry": public}, 2))
+        page = self.client.get("/", HTTP_ACCEPT_LANGUAGE="zh-Hans")
+        self.assertContains(page, "线路状态")
+        self.assertContains(page, 'data-live-line="proxy:' + public + '">备用路径</span>')
+        data = self.client.get("/api/status/live").json()
+        rows = {r["name"]: r["line_status"] for r in data["proxies"]}
+        self.assertEqual(rows[public], "backup")
+        self.assertEqual(rows[stubs.PRIVATE_PROXIES[0]], "unknown")
+
     def test_page_is_public(self):
         response = self.client.get("/")
         self.assertEqual(response.status_code, 200)
@@ -476,7 +487,7 @@ class StatusTest(PortalTestCase):
         self.client.get("/api/status?query=up&target=evil&entry=x")
         self.client.get("/?query=up")
         self.assert_only_fixed_queries()
-        self.assertEqual(len({q[1] for q in self.prometheus.queries}), 28)
+        self.assertEqual(len({q[1] for q in self.prometheus.queries}), 29)
 
     def test_status_is_cached(self):
         self.client.get("/api/status")

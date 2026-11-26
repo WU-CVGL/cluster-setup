@@ -110,6 +110,8 @@ def _live_texts():
     """The page script's texts, in the page's language."""
     return {
         "passing": _("Passing"), "failing": _("Failing"), "unknown": _("Unknown"),
+        "abnormal": _("Abnormal"), "direct": _("Direct"), "backup": _("Backup path"),
+        "paused": _("Paused"), "path_unknown": _("Available · path unknown"),
         "s_ago": _("%(n)d s ago"), "min_ago": _("%(n)d min ago"), "h_ago": _("%(n)d h ago"),
         "days_ago": _("%(n)d days ago"),
         "headline_unknown": _("Status unknown: no recent probe results for the Auto-switching Proxy"),

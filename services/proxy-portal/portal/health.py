@@ -17,6 +17,7 @@ from .headline import FAILING, PASSING, UNKNOWN, headline
 
 log = logging.getLogger("portal.status")
 PROTOCOLS = ("http", "socks")
+LINE_STATUS = {0: "abnormal", 1: "direct", 2: "backup", 3: "path_unknown", 4: "paused"}
 HA_ENTRIES = ("ha-general", "ha-private")
 
 # Status bar thresholds: a bucket needs probe results for at least half of it, or it is grey; then it is green from
@@ -94,6 +95,7 @@ def collect(at):
         proxies.setdefault(name, {})["labels"] = {"pool": labels.get("pool"), "access": labels.get("access")}
     proxies_data = {"http": None if http is None else {name: value for name, (_, value) in http.items()},
                     "socks": _by(r["socks"], "entry"),
+                    "line_status": _by(r["line_status"], "entry"),
                     "duration_http": _by(r["duration_http"], "entry"),
                     "duration_socks": _by(r["duration_socks"], "entry"),
                     "last_check": _by(r["last_check"], "entry"),
@@ -192,6 +194,10 @@ def proxies_view(data, status, now):
                 "duration_seconds": None if current == UNKNOWN else _seconds(proxy.get("duration_" + protocol)),
                 "success_rate_24h": _ratio(proxy.get("rate_24h_" + protocol)),
             }
+        status_age = max(0, now - data["time"])
+        row["line_status"] = (LINE_STATUS.get(proxy.get("line_status"), UNKNOWN)
+                              if status_age <= settings.STALE_SECONDS else UNKNOWN)
+        row["line_status_age_seconds"] = round(status_age)
         rows.append(row)
     rows.sort(key=lambda row: (row["access"] != "public", row["name"]))
     return rows

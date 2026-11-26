@@ -618,9 +618,9 @@ class XrayServiceCreator:
         written_files = []  # type: List[Tuple[Path, str]]
         config_written = False
         try:
-            for directory in (self.xray_dir, service_dir, config_dir, log_dir):
+            for directory in (self.xray_dir, service_dir, config_dir, log_dir, config_dir / ".line-monitor"):
                 if not directory.exists():
-                    directory.mkdir()
+                    directory.mkdir(mode=0o700 if directory.name == ".line-monitor" else 0o777)
                     created_dirs.append(directory)
 
             # 先登记再写入: 写到一半失败 (文件已被截断) 时也能恢复

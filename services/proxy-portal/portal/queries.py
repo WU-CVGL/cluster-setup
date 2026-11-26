@@ -69,6 +69,7 @@ STATUS = {
     "ha-general": _ha("ha-general"),
     "ha-private": _ha("ha-private"),
     "proxies": {
+        "line_status": "cvgl:line_status",
         "http": _status(_RAW_HTTP, "entry", "pool, access"),
         "socks": _status(_RAW_SOCKS, "entry"),
         "duration_http": f"max by (entry) ({_fresh('probe_duration_seconds', _RAW_HTTP)})",

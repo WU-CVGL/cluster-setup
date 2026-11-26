@@ -56,6 +56,7 @@ from pathlib import Path
 from typing import Dict, Iterator, List, Optional, Set, Tuple
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
+import line_ha
 from XrayConfigHandler import XrayConfigHandler  # noqa: E402
 
 SERVICES_DIR = Path(__file__).resolve().parents[2]
@@ -614,17 +615,20 @@ def render_files(accounts: Accounts) -> List[Tuple[Path, str]]:
     outputs.append((base / HA_CONFIG, json.dumps(ha, indent=4) + "\n"))
     outputs.append((base / BLACKBOX_CONFIG,
                     render_blackbox((base / BLACKBOX_EXAMPLE).read_text(encoding="utf-8"), accounts, public)))
+    try:
+        site = line_ha.load(base / line_ha.CONFIG)
+    except ValueError as exc:
+        raise AccountsError(f"{line_ha.CONFIG}: {exc}") from exc
     for path in sorted(base.glob(RAW_CONFIG_GLOB)):
         name = path.parent.parent.name
         raw_users = accounts.proxy_users(private=name not in public, open_=name in open_)
         old_text = path.read_text(encoding="utf-8")
         old = json.loads(old_text)
-        if raw_users is None and not has_logins(old):
-            outputs.append((path, old_text))
-            continue  # a public proxy that requires no account, with no accounts there: leave its config as it is
         new = json.loads(json.dumps(old))
         try:
-            XrayConfigHandler.set_inbound_users(new, raw_users)
+            if raw_users is not None or has_logins(old):
+                XrayConfigHandler.set_inbound_users(new, raw_users)
+            line_ha.configure(new, site, name)
         except ValueError as e:
             raise AccountsError(f"{path.relative_to(base)}: {e}")
         # The format create_xray_service.py writes

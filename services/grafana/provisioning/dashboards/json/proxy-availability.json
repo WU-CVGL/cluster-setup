@@ -7,7 +7,7 @@
   ],
   "timezone": "browser",
   "schemaVersion": 39,
-  "version": 1,
+  "version": 2,
   "editable": true,
   "graphTooltip": 1,
   "refresh": "30s",
@@ -1304,6 +1304,18 @@
           "instant": true,
           "range": false,
           "format": "table"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${prometheus_source}"
+          },
+          "expr": "cvgl:line_status",
+          "legendFormat": "",
+          "refId": "K",
+          "instant": true,
+          "range": false,
+          "format": "table"
         }
       ],
       "transformations": [
@@ -1345,22 +1357,24 @@
               "Value #J": "Traffic 24h",
               "entry": "Proxy",
               "pool": "Pool",
-              "access": "Access"
+              "access": "Access",
+              "Value #K": "\u7ebf\u8def\u72b6\u6001"
             },
             "indexByName": {
               "entry": 0,
-              "access": 1,
-              "pool": 2,
-              "Value #A": 3,
-              "Value #B": 4,
-              "Value #C": 5,
-              "Value #D": 6,
-              "Value #E": 7,
-              "Value #F": 8,
-              "Value #G": 9,
-              "Value #H": 10,
-              "Value #I": 11,
-              "Value #J": 12
+              "access": 2,
+              "pool": 3,
+              "Value #A": 4,
+              "Value #B": 5,
+              "Value #C": 6,
+              "Value #D": 7,
+              "Value #E": 8,
+              "Value #F": 9,
+              "Value #G": 10,
+              "Value #H": 11,
+              "Value #I": 12,
+              "Value #J": 13,
+              "Value #K": 1
             }
           }
         },
@@ -1666,6 +1680,75 @@
               {
                 "id": "unit",
                 "value": "bytes"
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "\u7ebf\u8def\u72b6\u6001"
+            },
+            "properties": [
+              {
+                "id": "mappings",
+                "value": [
+                  {
+                    "type": "value",
+                    "options": {
+                      "0": {
+                        "text": "\u5f02\u5e38",
+                        "color": "red",
+                        "index": 0
+                      },
+                      "1": {
+                        "text": "\u76f4\u8fde",
+                        "color": "green",
+                        "index": 1
+                      },
+                      "2": {
+                        "text": "\u5907\u7528\u8def\u5f84",
+                        "color": "orange",
+                        "index": 2
+                      },
+                      "3": {
+                        "text": "\u53ef\u7528 \u00b7 \u8def\u5f84\u672a\u77e5",
+                        "color": "semi-dark-blue",
+                        "index": 3
+                      },
+                      "4": {
+                        "text": "\u6682\u505c",
+                        "color": "gray",
+                        "index": 4
+                      }
+                    }
+                  },
+                  {
+                    "type": "special",
+                    "options": {
+                      "match": "null",
+                      "result": {
+                        "text": "\u672a\u77e5",
+                        "color": "gray",
+                        "index": 5
+                      }
+                    }
+                  }
+                ]
+              },
+              {
+                "id": "custom.cellOptions",
+                "value": {
+                  "type": "color-background",
+                  "mode": "basic"
+                }
+              },
+              {
+                "id": "noValue",
+                "value": "\u672a\u77e5"
+              },
+              {
+                "id": "custom.width",
+                "value": 145
               }
             ]
           }

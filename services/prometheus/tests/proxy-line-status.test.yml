@@ -1,0 +1,42 @@
+rule_files:
+  - ../rules/proxy-line-status.yml
+evaluation_interval: 15s
+tests:
+  - interval: 15s
+    input_series:
+      - series: 'probe_success{job="proxy-probe",kind="raw",entry="a",protocol="http"}'
+        values: '1+0x10'
+      - series: 'probe_success{job="proxy-probe",kind="raw",entry="a",protocol="socks"}'
+        values: '1 1 1 0 1 1 1 1 1 1 1'
+      - series: 'cvgl_line_uses_backup{entry="a"}'
+        values: '0 1 1 1 1 1 1 1 1 1 1'
+      - series: 'cvgl_line_observed_at_seconds{entry="a"}'
+        values: '0+0x10'
+      - series: 'probe_success{job="proxy-probe",kind="raw",entry="hold",protocol="http"}'
+        values: '0+0x10'
+      - series: 'cvgl_line_paused_at_seconds{entry="hold"}'
+        values: '0+0x10'
+      - series: 'probe_success{job="proxy-probe",kind="raw",entry="partial",protocol="http"}'
+        values: '1+0x10'
+    promql_expr_test:
+      - expr: 'cvgl:line_status{entry="a"}'
+        eval_time: 0m
+        exp_samples: [{labels: 'cvgl:line_status{entry="a"}', value: 1}]
+      - expr: 'cvgl:line_status{entry="a"}'
+        eval_time: 15s
+        exp_samples: [{labels: 'cvgl:line_status{entry="a"}', value: 2}]
+      - expr: 'cvgl:line_status{entry="a"}'
+        eval_time: 45s
+        exp_samples: [{labels: 'cvgl:line_status{entry="a"}', value: 0}]
+      - expr: 'cvgl:line_status{entry="a"}'
+        eval_time: 2m
+        exp_samples: [{labels: 'cvgl:line_status{entry="a"}', value: 3}]
+      - expr: 'cvgl:line_status{entry="hold"}'
+        eval_time: 15s
+        exp_samples: [{labels: 'cvgl:line_status{entry="hold"}', value: 4}]
+      - expr: 'cvgl:line_status{entry="hold"}'
+        eval_time: 2m
+        exp_samples: [{labels: 'cvgl:line_status{entry="hold"}', value: 0}]
+      - expr: 'cvgl:line_status{entry="partial"}'
+        eval_time: 15s
+        exp_samples: []

@@ -44,18 +44,18 @@
 </section>
 
 <section class="section" aria-labelledby="proxies-title">
-  <div class="section-bar"><div><h2 id="proxies-title">{% translate "Proxies" %}</h2><p>{% translate "Each proxy probed at its own address. A proxy's own address does not switch: when it fails, use the Auto-switching Proxy." %}</p></div></div>
+  <div class="section-bar"><div><h2 id="proxies-title">{% translate "Proxies" %}</h2><p>{% translate "Each fixed address keeps its VPS. Backup path means new connections reach that VPS through WS." %}</p></div></div>
   <div class="card table-scroll">
     <table class="table status-table">
       <caption class="sr-only">{% translate "Proxies" %}</caption>
-      {% include "portal/_status_head.html" %}
+      {% include "portal/_status_head.html" with line_status=True %}
       <tbody>
       {% regroup data.proxies by access as groups %}
       {% for group in groups %}
-        <tr><th class="group" colspan="7" scope="colgroup">{% if group.grouper == 'public' %}{% translate "Public proxies" %}{% else %}{% translate "Private proxies" %}{% endif %}</th></tr>
+        <tr><th class="group" colspan="8" scope="colgroup">{% if group.grouper == 'public' %}{% translate "Public proxies" %}{% else %}{% translate "Private proxies" %}{% endif %}</th></tr>
         {% for proxy in group.list %}{% include "portal/_status_row.html" with row=proxy ha=False %}{% endfor %}
       {% empty %}
-        <tr><td colspan="7"><div class="empty">{% translate "No proxy results" %}</div></td></tr>
+        <tr><td colspan="8"><div class="empty">{% translate "No proxy results" %}</div></td></tr>
       {% endfor %}
       </tbody>
     </table>
@@ -127,6 +127,11 @@ function render(){
   var old=(performance.now()-fetched)/1000>stale;
   if(typeof data.monitoring_available==='boolean')document.querySelectorAll('[data-live-monitoring]').forEach(function(el){
     el.hidden=(el.getAttribute('data-live-monitoring')==='on')!==data.monitoring_available;});
+  document.querySelectorAll('[data-live-line]').forEach(function(el){
+    var path=el.getAttribute('data-live-line'),a=age(path+'.line_status_age_seconds');
+    var code=a!==null&&a<=stale?get(path+'.line_status'):'unknown';
+    if(!texts[code])code='unknown';
+    el.className='chip line-'+code;el.textContent=texts[code];});
   document.querySelectorAll('[data-live-state]').forEach(function(el){chip(el,state(el));});
   document.querySelectorAll('[data-live-age]').forEach(function(el){el.textContent=ageText(age(el.getAttribute('data-live-age')));});
   document.querySelectorAll('[data-live-pct]').forEach(function(el){el.textContent=pct(get(el.getAttribute('data-live-pct')),+(el.getAttribute('data-live-digits')||1));});

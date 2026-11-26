@@ -664,7 +664,7 @@ class DefaultBaseDirTest(unittest.TestCase):
         scripts = base / 'xray' / 'scripts'
         scripts.mkdir(parents=True)
         (base / 'prometheus').mkdir()
-        for name in ('create_xray_service.py', 'XrayConfigHandler.py', 'proxy_accounts.py'):
+        for name in ('create_xray_service.py', 'XrayConfigHandler.py', 'proxy_accounts.py', 'line_ha.py'):
             shutil.copyfile(str(SCRIPTS_DIR / name), str(scripts / name))
         shutil.copyfile(str(FIXTURES_DIR / 'compose_sample.yml'), str(base / 'docker-compose.yml'))
         shutil.copyfile(str(FIXTURES_DIR / 'prometheus_sample.yml'), str(base / 'prometheus' / 'prometheus.yml'))
